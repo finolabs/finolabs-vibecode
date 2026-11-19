@@ -42,7 +42,9 @@ SETTINGS_LIMIT = 16384
 SETTINGS_APPROVED = 'state/settings-approved'
 SETTING_KEYS = ('ledger', 'tasks', 'parallel', 'parallel-caps', 'label', 'autopilot')
 # The project-scoped away keys (docs/specs/autopilot.md "Project scope"), in stored order; every other autopilot
-# key is user scope only, so a project file cannot carry it.
+# key is user scope only, so a project file cannot carry it. Since 0.3.3 (docs/specs/afk-one-mode.md) only
+# LIVE_AUTOPILOT_KEYS are written or read; the others stay valid in an approved file written before, so that file keeps
+# its other settings, and nothing reads them.
 AUTOPILOT_KEYS = {'mode': ('open', 'strict'), 'third-party-instructions': ('guard', 'open'),
                   'default-branch': ('guard', 'open'), 'task-choice': ('choose', 'listed'), 'push-and-pull-requests': ('yes', 'no'),
                   # `decide`: the decider may merge here under any lease when MERGE OK holds (docs/specs/afk-decider.md C)
@@ -52,6 +54,7 @@ AUTOPILOT_KEYS = {'mode': ('open', 'strict'), 'third-party-instructions': ('guar
                   'skill-repository': ('yes',), 'decide': None, 'non-production-targets': None,
                   'production-targets': None, 'test-commands': None, 'top-level-files': None,
                   'release-targets': None}
+LIVE_AUTOPILOT_KEYS = ('third-party-instructions', 'default-branch')
 # The commands a `release-targets` entry may start with: those `afk.py check` files under Tags and releases or Publishing.
 RELEASE_FORMS = (('git', 'tag'), ('gh', 'release'), ('npm', 'publish'), ('pnpm', 'publish'))
 # Categories a repository may let the agent decide (docs/specs/afk-per-project.md B); real users and customer data, and
@@ -383,11 +386,12 @@ def valid_autopilot(value):
 
 
 def autopilot_value(text):
-    """The canonical `autopilot` object of a JSON string (fixed key order); ValueError when it is not valid."""
+    """The canonical `autopilot` object of a JSON string to write (fixed key order); ValueError when it is not valid
+    or names a key that is no longer written (`mode`, the limits and the other keys only `strict` read)."""
     if not isinstance(text, str) or len(text) > 4096:
         raise ValueError('invalid project setting')
     value = json.loads(text, object_pairs_hook=_object, parse_constant=_constant)
-    if not valid_autopilot(value):
+    if not valid_autopilot(value) or not set(value) <= set(LIVE_AUTOPILOT_KEYS):
         raise ValueError('invalid project setting')
     return {key: value[key] for key in AUTOPILOT_KEYS if key in value}
 

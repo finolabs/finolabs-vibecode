@@ -710,8 +710,13 @@ class RouterMarkerTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
 
+RECORDED_FALLBACK = "## Reviews\n- Rework limit: 3\n- Same-family security fallback: yes (2026-11-17)\n"
+
+
 class SameFamilyFallbackTest(unittest.TestCase):
-    """docs/specs/afk-per-project.md D: same-family markers count only with all five conditions."""
+    """docs/specs/afk-per-project.md D: outside a lease, with the recorded same-family security fallback, same-family
+    markers count only with every condition (the strict lease that also ran them was removed in 0.3.3,
+    docs/specs/afk-one-mode.md)."""
     FAMILIES = dict(author="claude", code="claude", security="claude")
     LINE = "Reviewer: claude (same family as the author; no other family reachable)"
 
@@ -727,9 +732,9 @@ class SameFamilyFallbackTest(unittest.TestCase):
                     f"Quota agy: rate-limit marker {iso(timedelta(minutes=-5))}; out of quota until {iso(timedelta(hours=1))} (advisory)"]
         self.iso = iso
         self.quota = list(self.out)
-        self.lease = patch.object(away_lease, "live_lease", return_value={"start": 1})
+        self.lease = patch.object(away_lease, "live_lease", return_value=None)
         self.present = patch.object(review_config, "present_families", return_value={"claude", "codex", "antigravity"})
-        self.host = patch.object(review_config, "host_text", return_value="synthetic")
+        self.host = patch.object(review_config, "host_text", return_value=RECORDED_FALLBACK)
         self.status = patch.object(quota_probe, "status_lines", side_effect=lambda: self.out)
         self.installs = {agent: {"configs": {"default": None}} for agent in ("agy", "claude", "codex")}
         self.config = patch.object(quota_probe, "canonical_config", side_effect=lambda: self.installs)
@@ -751,21 +756,19 @@ class SameFamilyFallbackTest(unittest.TestCase):
     def test_all_five_conditions_pass(self):
         ok, lines = self.evaluate()
         self.assertTrue(ok, lines)
-        self.assertIn("ok    same-family review: no other family reachable (antigravity, codex)", lines)
+        self.assertIn("ok    same-family review: outside a lease, by the recorded same-family security fallback: "
+                      "no other family reachable (antigravity, codex)", lines)
         self.assertTrue(mc.evaluate(self.data(self.LINE), lambda who: who in WRITERS, adopted=False, independent=True,
                                     families=self.FAMILIES, fallback_family="claude", changed_files=lambda: self.files)[0])
 
     def test_each_failed_condition_blocks(self):
         import away_lease
-        with patch.object(away_lease, "live_lease", return_value=None):
-            self.assertFalse(self.evaluate()[0])
+        import review_config
+        with patch.object(review_config, "host_text", return_value="synthetic"):
+            self.assertFalse(self.evaluate()[0])  # no recorded fallback
         with patch.object(away_lease, "live_lease", side_effect=OSError):
             self.assertFalse(self.evaluate()[0])
         self.assertFalse(self.evaluate(family="codex")[0])  # not the author's family
-        for trigger in ("security", "permission", "privacy"):
-            with self.subTest(trigger=trigger):
-                self.assertFalse(self.evaluate(self.data(trigger=trigger))[0])
-        self.assertFalse(self.evaluate(pr(comments=self.data()["comments"], body="no marker"))[0])
         for name in ("skills/delegate/scripts/afk.py", "skills/x/SKILL.md", "CLAUDE.md", "sub/AGENTS.md",
                      "skills/review-gate/scripts/Merge_Check.py"):
             with self.subTest(name=name):
@@ -796,8 +799,9 @@ class SameFamilyFallbackTest(unittest.TestCase):
                 self.files = [{"filename": "docs/notes.md"}, {"filename": name}]
                 ok, lines = self.evaluate(self.models(("opus-5", "APPROVE", first), ("Sonnet-5", "APPROVE", first)))
                 self.assertTrue(ok, lines)
-                self.assertIn("ok    same-family review: no other family reachable (antigravity, codex); "
-                              "two models approved each kind", lines)
+                self.assertIn("ok    same-family review: outside a lease, by the recorded same-family security "
+                              "fallback: no other family reachable (antigravity, codex); two models approved each "
+                              "kind", lines)
         cases = {
             "one model only": self.models(("opus-5", "APPROVE", first)),
             "same model twice": self.models(("opus-5", "APPROVE", first), ("OPUS-5", "APPROVE", later)),
@@ -818,10 +822,7 @@ class SameFamilyFallbackTest(unittest.TestCase):
         data = self.models(("opus-5", "APPROVE", first), ("sonnet-5", "APPROVE", first))
         data["comments"] = [c for c in data["comments"] if "kind=code" in c["body"] or "model=opus-5" in c["body"]]
         self.assertFalse(self.evaluate(data)[0])
-        # The other conditions still hold: the router trigger and the out-of-quota evidence.
-        data = self.models(("opus-5", "APPROVE", first), ("sonnet-5", "APPROVE", first))
-        data["body"] = "Summary\n<!-- fnl-router depth=NORMAL trigger=permission -->\n"
-        self.assertFalse(self.evaluate(data)[0])
+        # The out-of-quota evidence still holds.
         self.out = [self.out[1]]
         self.assertFalse(self.evaluate(self.models(("opus-5", "APPROVE", first), ("sonnet-5", "APPROVE", first)))[0])
 
@@ -914,11 +915,10 @@ class SameFamilyFallbackTest(unittest.TestCase):
         self.assertFalse(self.evaluate(pr(comments=[], body=self.data()["body"]))[0])
         self.assertFalse(self.evaluate(dict(self.data(), statusCheckRollup=[]))[0])
 
-    def test_the_enforcer_list_matches_afk(self):
-        source = (SCRIPT.parents[2] / "delegate/scripts/afk.py").read_text()
-        start = source.index("ENFORCERS = {")
-        names = set(__import__("re").findall(r"'([^']+)'", source[start:source.index("}", start)]))
-        self.assertEqual(mc.ENFORCERS, names)
+    def test_the_enforcer_list_names_the_away_and_review_enforcers(self):
+        # Frozen here since afk.py's own copy went with `strict` (docs/specs/afk-one-mode.md).
+        self.assertLessEqual({"afk.py", "away_lease.py", "afk_stop_hook.py", "afk_permit_hook.py", "merge_check.py",
+                              "afk_overlay.py", "project_store.py"}, mc.ENFORCERS)
 
     def test_cli_needs_independent(self):
         import contextlib
@@ -936,7 +936,7 @@ class RecordedSecurityFallbackTest(unittest.TestCase):
     setUp = SameFamilyFallbackTest.setUp
     data = SameFamilyFallbackTest.data
     evaluate = SameFamilyFallbackTest.evaluate
-    RECORDED = "## Reviews\n- Rework limit: 3\n- Same-family security fallback: yes (2026-11-17)\n"
+    RECORDED = RECORDED_FALLBACK
 
     def outside(self, text=None):
         import away_lease
@@ -957,13 +957,16 @@ class RecordedSecurityFallbackTest(unittest.TestCase):
         ok, lines = self.evaluate(pr(comments=self.data()["comments"], body="no marker"))
         self.assertTrue(ok, lines)
 
-    def test_a_live_lease_keeps_the_trigger_condition_with_the_recorded_yes(self):
+    def test_a_live_lease_takes_the_lease_fallback_whatever_the_trigger(self):
+        import away_lease
         import review_config
-        with patch.object(review_config, "host_text", return_value=self.RECORDED):
+        with patch.object(away_lease, "live_lease", return_value={"start": 1}), \
+                patch.object(review_config, "read_roles", return_value={"judge": "host"}):
             for trigger in ("security", "permission", "privacy"):
                 with self.subTest(trigger=trigger):
-                    self.assertFalse(self.evaluate(self.data(trigger=trigger))[0])
-            self.assertTrue(self.evaluate()[0])
+                    ok, lines = self.evaluate(self.data(trigger=trigger))
+                    self.assertTrue(ok, lines)
+                    self.assertIn("ok    same-family review: open lease: code same family; security same family", lines)
 
     def test_without_the_recorded_yes_outside_a_lease_refuses(self):
         import away_lease
@@ -1008,16 +1011,18 @@ class RecordedSecurityFallbackTest(unittest.TestCase):
 
 
 class OpenLeaseFallbackTest(SameFamilyFallbackTest):
-    """docs/specs/afk-autonomy.md D and acceptance 7: under a lease whose effective mode is `open` the fallback needs
-    only the lease, the author's family and the fallback line (or a non-author configured role) on each kind."""
+    """docs/specs/afk-autonomy.md D and acceptance 7: under a live lease (one mode since 0.3.3,
+    docs/specs/afk-one-mode.md) the fallback needs only the lease, the author's family and the fallback line (or a
+    non-author configured role) on each kind."""
 
     def setUp(self):
         super().setUp()
+        import away_lease
         import review_config
-        self.mode = "open"
-        patcher = patch.object(mc, "lease_mode", side_effect=lambda repo: self.mode)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for patcher in (patch.object(away_lease, "live_lease", return_value={"start": 1}),
+                        patch.object(review_config, "host_text", return_value="synthetic")):
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.roles = {"judge": "host"}
         patcher = patch.object(review_config, "read_roles", side_effect=lambda text: self.roles)
         patcher.start()
@@ -1098,24 +1103,7 @@ class OpenLeaseFallbackTest(SameFamilyFallbackTest):
         ok, lines = self.evaluate(data)
         self.assertTrue(ok, lines)
 
-    def test_a_strict_lease_keeps_todays_conditions(self):
-        self.mode = "strict"
-        self.assertFalse(self.evaluate()[0])  # no quota evidence
-        self.out = list(self.quota)
-        self.assertTrue(self.evaluate()[0])
-        self.assertFalse(self.evaluate(self.data(trigger="permission"))[0])
-        self.files = [{"filename": "skills/delegate/scripts/afk.py"}]
-        self.assertFalse(self.evaluate(self.data(self.LINE + " model=opus-5"))[0])  # an enforcer change, one model
-        # The per-family dispatch contracts stay instruction files after their move out of agents.md (review of PR 333).
-        self.files = [{"filename": "skills/delegate/references/agents/zcode.md"}]
-        self.assertFalse(self.evaluate(self.data(self.LINE + " model=opus-5"))[0])
-        self.roles = {"judge": "host", "code review": "codex", "security review": "codex"}
-        self.files = [{"filename": "docs/notes.md"}]
-        self.assertFalse(self.evaluate(pr(comments=[comment(marker("code", "APPROVE") + "\nreport"),
-                                                    comment(marker("security", "APPROVE") + "\n" + self.LINE)],
-                                          body=ROUTED))[0])
-
-    # The strict-only cases of the parent class do not apply under an open lease.
+    # The outside-a-lease cases of the parent class do not apply under a lease.
     def test_an_enforcer_or_instruction_change_needs_two_models_of_each_kind(self):
         pass
 
@@ -1131,120 +1119,6 @@ class OpenLeaseFallbackTest(SameFamilyFallbackTest):
 
     def test_partial_or_unknown_evidence_refuses(self):
         pass
-
-
-class LeaseModeTest(unittest.TestCase):
-    """lease_mode reads the `## afk` Mode line and the approved repository mode; any doubt is `strict`."""
-    SETUP = "## afk\n- Hosts: Claude Code\n- Merge: yes\n"
-    ORIGIN = ("[core]\n\trepositoryformatversion = 0\n\tbare = false\n"
-              "[remote \"origin\"]\n\turl = https://github.com/example/demo.git\n"
-              "\tfetch = +refs/heads/*:refs/remotes/origin/*\n")
-
-    def setUp(self):
-        from tests.data_root_fixture import account
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.home = account(self, Path(tmp.name) / "home")
-        self.root = self.home / ".finolabs/vibecode"
-        self.root.mkdir(parents=True, mode=0o700)
-        self.repo = self.repository("checkout")
-        sys.path.insert(0, str(SCRIPT.parent))
-        import project_store
-        self.store = project_store
-
-    def repository(self, name, origin=None):
-        repo = self.home / name
-        (repo / ".git/refs/remotes/origin").mkdir(parents=True)
-        (repo / ".git/HEAD").write_text("ref: refs/heads/topic\n")
-        (repo / ".git/config").write_text(origin or self.ORIGIN)
-        return repo
-
-    def host(self, text):
-        (self.root / "host.md").write_text(text)
-        (self.root / "host.md").chmod(0o600)
-
-    def mode(self, repo="example/demo", cwd=None):
-        with patch("os.getcwd", return_value=str(cwd or self.repo)):
-            return mc.lease_mode(repo)
-
-    def approve(self, value, repo=None):
-        found, ident = self.store.identity(str(repo or self.repo))
-        self.assertEqual(found, "found")
-        self.store.write_setting(str(repo or self.repo), "autopilot", value, ident=ident)
-
-    def test_the_user_mode_line(self):
-        self.host(self.SETUP)
-        self.assertEqual(self.mode(), "open")  # a missing Mode line is open
-        self.host(self.SETUP + "- Mode: open\n")
-        self.assertEqual(self.mode(), "open")
-        self.assertEqual(self.mode("Example/Demo"), "open")
-        self.host(self.SETUP + "- Mode: strict\n")
-        self.assertEqual(self.mode(), "strict")
-
-    def test_any_doubt_is_strict(self):
-        for text in ("", "## Other\n", self.SETUP + "- Mode: closed\n", self.SETUP + "- Mode: open\n- Mode: open\n",
-                     self.SETUP + "garbled\n", "## afk\n- Mode: open\n## afk\n- Mode: open\n",
-                     self.SETUP + "- Bogus: x\n", self.SETUP + "- Default branch: off\n",
-                     "```\n## afk\n- Mode: open\n"):
-            with self.subTest(text=text):
-                self.host(text)
-                self.assertEqual(self.mode(), "strict")
-        self.host(self.SETUP)
-        for repo in ("example/other", "nobody", None, "a/b/c"):
-            with self.subTest(repo=repo):
-                self.assertEqual(self.mode(repo), "strict")
-        self.assertEqual(self.mode(cwd=self.home), "strict")  # no checkout in the working folder
-        other = self.repository("other", self.ORIGIN.replace("example/demo", "example/other"))
-        self.assertEqual(self.mode(cwd=other), "strict")  # its origin is not --repo
-        with patch.object(self.store, "autopilot_binding", side_effect=OSError):
-            self.assertEqual(self.mode(), "strict")
-
-    def test_the_repository_mode_wins_there_only(self):
-        self.host(self.SETUP)
-        self.approve({"mode": "strict"})
-        self.assertEqual(self.mode(), "strict")
-        self.host(self.SETUP + "- Mode: strict\n")
-        self.approve({"mode": "open"})
-        self.assertEqual(self.mode(), "open")
-        self.approve({"default-branch": "open"})  # no mode key: the user's line applies
-        self.assertEqual(self.mode(), "strict")
-        self.host(self.SETUP)
-        self.assertEqual(self.mode(), "open")
-
-    def test_the_key_set_matches_afk(self):
-        source = (SCRIPT.parents[2] / "delegate/scripts/afk.py").read_text()
-        afk = importlib.util.spec_from_file_location("afk_keys", SCRIPT.parents[2] / "delegate/scripts/afk.py")
-        module = importlib.util.module_from_spec(afk)
-        afk.loader.exec_module(module)
-        self.assertIn("def settings()", source)
-        self.assertEqual(mc.AFK_KEYS, {*module.DEFAULTS, "Merge", *module.CHOICES, *module.CATEGORIES, module.CONSENT,
-                                       module.TARGETS, *module.LISTS})
-        self.assertEqual(mc.AFK_CHOICES, module.CHOICES)
-
-    def test_a_repository_cannot_flip_itself_to_open(self):
-        # A settings file the branch carries, with no approval record, is not an approval: the user's strict holds.
-        self.host(self.SETUP + "- Mode: strict\n")
-        folder = self.repo / ".finolabs/vibecode"
-        folder.mkdir(parents=True)
-        (folder / "settings.json").write_text(json.dumps({"autopilot": {"mode": "open"}}))
-        self.assertEqual(self.mode(), "strict")
-
-    def test_an_approval_bound_to_another_checkout_is_strict(self):
-        self.host(self.SETUP)
-        self.approve({"mode": "open"})
-        other = self.repository("copy")
-        folder = other / ".finolabs/vibecode"
-        folder.parent.mkdir(parents=True, exist_ok=True)
-        import shutil
-        shutil.copytree(self.repo / ".finolabs/vibecode", folder)
-        self.host(self.SETUP + "- Mode: strict\n")
-        self.assertEqual(self.mode(cwd=other), "strict")  # the copied record carries the first checkout's digest
-
-    def test_an_unbound_approval_is_strict(self):
-        self.host(self.SETUP)
-        self.approve({"mode": "open"})
-        (self.repo / ".git/config").write_text(self.ORIGIN.replace("example/demo", "example/moved"))
-        self.assertEqual(self.mode("example/moved"), "strict")  # the approval was bound to another origin
 
 
 class IndependentMergeTest(unittest.TestCase):

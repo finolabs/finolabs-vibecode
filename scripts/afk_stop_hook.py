@@ -5,10 +5,10 @@ so the turn ends as usual.
 Only while a valid, unexpired away lease exists and FNL_AFK_STOP is not off, it sends the agent back once with one
 fixed reason when its turn ends. It lets the stop through when the host says a stop hook already continued this turn
 (`stop_hook_active`), when the lease log holds an `idle` or `parked` record for this session written since its
-previous stop, when the lease's limits for the session's repository are reached (judged as `afk.py check` judges
-them), and on any error. It reads only the lease, the lease log, the setup that `check` reads and the hook's
-`session_id`, `cwd` and `stop_hook_active`; it keeps one mark per session (a hash of its id and the time of its last
-stop, no content) and sends nothing anywhere.
+previous stop, when the lease lets no action run any more (judged as `afk.py check` judges it: a setup change after
+the lease started counts; Lease hours is the only limit), and on any error. It reads only the lease, the lease log,
+the setup that `check` reads and the hook's `session_id`, `hook_event_name` and `stop_hook_active`; it keeps one mark
+per session (a hash of its id and the time of its last stop, no content) and sends nothing anywhere.
 """
 
 import os
@@ -84,15 +84,15 @@ def recorded_since(name, since, current):
     return False
 
 
-def limit_reached(cwd, current):
-    """True when the lease's limits stop any action in `cwd`'s repository (afk.py `limit_reached`)."""
+def lease_over(current):
+    """True when the lease lets no action run any more (afk.py `lease_over`)."""
     from pathlib import Path
     import away_lease
     import data_root as dr
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'skills/delegate/scripts'))
     import afk
     with dr.data_folder(away_lease.STATE, private=True) as folder:
-        return afk.limit_reached(folder, cwd, current)
+        return afk.lease_over(folder, current)
 
 
 def main():
@@ -133,10 +133,7 @@ def main():
         since = lease['start'] if previous is None or previous < lease['start'] else previous
         if recorded_since(name, since, current):
             return 0
-        cwd = event.get('cwd')
-        if not isinstance(cwd, str) or not os.path.isabs(cwd) or not os.path.isdir(cwd):
-            return 0
-        if limit_reached(cwd, current):
+        if lease_over(current):
             return 0
         # Claude Code's documented Stop decision, with exit 0.
         os.write(1, (json.dumps({'decision': 'block', 'reason': REASON}, separators=(',', ':')) + '\n').encode())

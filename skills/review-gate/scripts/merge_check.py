@@ -39,9 +39,9 @@ https or ssh URL) names the `--repo` repository; otherwise the line says
 With the mode off nothing changes.
 
 With --independent during a live away lease, MERGE OK also writes a receipt
-(repository, number, head, time) to the lease's private state folder; afk.py
-allows `gh pr merge` for that number and head only with a receipt younger than
-15 minutes.
+(repository, number, head, time) to the lease's private state folder. Since
+0.3.3 afk has one mode and `afk.py check` no longer reads it
+(docs/specs/afk-one-mode.md).
 
 With --independent, independent_families uses review_route.author_family's
 head-bound local ledger and consistent base..head commit trailers, and the
@@ -54,33 +54,31 @@ route and associating each posted marker with that run remain agent judgment,
 advisory. This flag does not establish trusted authors, local test results or
 Tier 3 path eligibility; those are the afk caller's separate gates.
 
-With --fallback-family <family> as well, current-head markers from the author's
-own family count only when all of these hold (docs/specs/afk-per-project.md D):
-a live away lease; <family> is the author's family; every other present family
+With --fallback-family <family> as well, under a live away lease the fallback
+needs only the lease, <family> as the author's family, and for each kind either a
+counted marker whose second line starts with the exact fallback reviewer line or,
+inside this branch only, a marker without any fallback line whose kind's
+configured review role names a family other than <family>; no quota evidence,
+router trigger or two-model condition applies (docs/specs/afk-autonomy.md D; afk
+has one mode since 0.3.3, docs/specs/afk-one-mode.md).
+
+Outside a lease, current-head markers from the author's own family count only
+when the canonical host config's `## Reviews` section records
+`- Same-family security fallback: yes (YYYY-MM-DD)` (set in setup; owner decision
+17/11/2026, `review-gate` "Who reviews") and all of these hold
+(docs/specs/afk-per-project.md D): <family> is the author's family; every other present family
 has positive evidence of being out (a reading under 8 hours old for every
 configured install, with every pool below the routing floor, or a live rate-limit
-marker; no reading or a partial one is no evidence);
-the router trigger is not security, permission or privacy; and each counted
+marker; no reading or a partial one is no evidence); and each counted
 marker's second line starts with the exact fallback reviewer line. When an
 enforcer script or instruction file changed, each kind also needs approvals at
 the head from two different models, each named as ` model=<name>` right after
 the fallback reviewer line; every counted marker of that kind must name its
 model, and the latest marker of each model must be APPROVE. The flag runs these checks on both reviews
 whatever routing would pick now. Without the flag, a counted marker carrying a
-fallback reviewer line blocks. Anything unknown refuses.
-
-Outside a lease the same conditions apply, except the router trigger, only when the canonical host config's
-`## Reviews` section records `- Same-family security fallback: yes (YYYY-MM-DD)` (set in setup; owner decision
-17/11/2026, `review-gate` "Who reviews"); the ok line then starts with "outside a lease, by the recorded same-family
-security fallback". Without that line, or with `no`, outside a lease the flag refuses as before.
-
-Under a lease whose effective mode for --repo is `open` (docs/specs/afk-autonomy.md D), the fallback needs only the
-live lease, <family> as the author's family, and for each kind either a counted marker whose second line starts with
-the exact fallback reviewer line or, inside this branch only, a marker without any fallback line whose kind's
-configured review role names a family other than <family>; no quota evidence, router trigger or two-model condition
-applies. The mode is the `## afk` `Mode` line of the canonical host config (a missing line is `open`), replaced by the
-approved `mode` of the checkout in the working folder whose origin is --repo, read through this skill's copy of
-`project_store.py`; any doubt counts as `strict`, which keeps the conditions above. Outside a lease nothing changes.
+fallback reviewer line blocks. Anything unknown refuses. The ok line then starts
+with "outside a lease, by the recorded same-family security fallback". Without
+that line, or with `no`, outside a lease the flag refuses.
 
 With --ci-context <name> (the repository's merge-check workflow, which posts
 the result as the commit status <name>), the status named <name> is left out of
@@ -120,9 +118,9 @@ ADOPTION_TOKEN = re.compile(r"(?<![\w-])(?:fnl-)?review-gate(?![\w-])")  # the o
 ADOPTION_CAP = 256 * 1024  # maximum size in bytes of one adoption file
 SHA = re.compile(r"[0-9a-f]{40}")
 
-# Same-family fallback (docs/specs/afk-per-project.md D). ENFORCERS is the list of `afk.py` in `delegate`; a test
-# keeps the two equal, since each skill folder stands alone.
-FALLBACK_TRIGGERS = ("security", "permission", "privacy")
+# Same-family fallback outside a lease (docs/specs/afk-per-project.md D): a change to one of these enforcer scripts
+# needs two models of the family. The list `afk.py` in `delegate` kept until 0.3.3, frozen here since its strict
+# classification was removed (docs/specs/afk-one-mode.md).
 ENFORCERS = {'afk.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
@@ -532,11 +530,11 @@ def out_families(lines, current=None, configured=None):
     return out
 
 
-def fallback(pr, family, families, files, verdicts_found, markers=None, repo=None):
+def fallback(pr, family, families, files, verdicts_found, markers=None):
     """(granted, detail) for the same-family fallback; every unknown refuses and the detail never echoes text.
     `markers` is `head_markers` of the pull request; without it a changed enforcer or instruction file refuses.
-    Under a lease whose effective mode for `repo` is `open` (`lease_mode`), only `open_fallback` applies. Outside a
-    lease it applies only with the recorded same-family security fallback, without the router-trigger condition."""
+    Under a live lease only `open_fallback` applies (afk has one mode since 0.3.3). Outside a lease it applies only
+    with the recorded same-family security fallback."""
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
@@ -544,12 +542,12 @@ def fallback(pr, family, families, files, verdicts_found, markers=None, repo=Non
         import quota_probe
         import review_config
         leased = away_lease.live_lease(time.time()) is not None
-        # Outside a lease only the recorded `## Reviews` choice opens the strict branch (owner decision 17/11/2026).
+        # Outside a lease only the recorded `## Reviews` choice opens the fallback (owner decision 17/11/2026).
         if not leased and not review_config.security_fallback(review_config.host_text()):
             return False, "no live away lease"
         if not isinstance(families, dict) or families.get("author") != family:
             return False, f"{family} is not the pull request author's family"
-        if leased and lease_mode(repo) == "open":
+        if leased:
             return open_fallback(family, verdicts_found)
         present = set(review_config.present_families(review_config.host_text()))
         if family not in present:
@@ -558,10 +556,6 @@ def fallback(pr, family, families, files, verdicts_found, markers=None, repo=Non
         reachable = sorted(others - out_families(quota_probe.status_lines()))
         if reachable:
             return False, f"no evidence that {', '.join(reachable)} is out"
-        marked, detail = router_marker(pr.get("body"))
-        trigger = detail.rsplit("trigger=", 1)[-1] if marked else None
-        if leased and (trigger is None or trigger in FALLBACK_TRIGGERS):
-            return False, "router trigger is missing or needs the user"
         listed = files()
         if not isinstance(listed, list) or not listed or any(
                 not isinstance(entry, dict) or not isinstance(entry.get("filename"), str) or not entry["filename"]
@@ -577,8 +571,8 @@ def fallback(pr, family, families, files, verdicts_found, markers=None, repo=Non
             second = found[3] if found and len(found) > 3 else ""
             if not (second == expected or second.startswith(expected + " ")):
                 return False, f"{kind} marker lacks the fallback reviewer line"
-        reachable = (("" if leased else "outside a lease, by the recorded same-family security fallback: ")
-                     + f"no other family reachable ({', '.join(sorted(others)) or 'none present'})")
+        reachable = ("outside a lease, by the recorded same-family security fallback: "
+                     f"no other family reachable ({', '.join(sorted(others)) or 'none present'})")
         if sensitive:
             # An enforcer script or instruction file changed: two different models of the family must approve each
             # kind at the head (owner decision 15/11/2026, docs/specs/afk-per-project.md D).
@@ -589,68 +583,6 @@ def fallback(pr, family, families, files, verdicts_found, markers=None, repo=Non
         return True, reachable
     except (ImportError, OSError, ValueError, KeyError, TypeError, AttributeError, Unknown):
         return False, "fallback evidence cannot be read"
-
-
-AFK_LINE = re.compile(r"- ([A-Za-z -]+): (.+)")
-# The closed key set of `afk.py` `settings()` (a test keeps the two equal, since each skill folder stands alone); a
-# section with any other key fails there, so it reads as `strict` here.
-AFK_KEYS = {'Hosts', 'Task choice', 'Push and pull requests', 'Trusted authors', 'Lease hours', 'Max runs',
-            'Max runtime minutes', 'Max actions per hour', 'Quota floor percent', 'Merge', 'Mode',
-            'Third-party instructions', 'Default branch', 'Production', 'Real users and customer data',
-            'Unrecoverable deletion', 'Messages outside the repository', 'Tags and releases', 'Publishing',
-            'Shared settings', 'Recoverable deletion', 'Repository comments', 'Excerpts leave the machine',
-            'Non-production targets', 'Production targets', 'Test commands', 'Top-level files', 'Release targets'}
-AFK_CHOICES = {'Mode': ('open', 'strict'), 'Third-party instructions': ('guard', 'open'),
-               'Default branch': ('guard', 'open')}
-
-
-def lease_mode(repo):
-    """The away lease's effective mode for `repo` (owner/name), read as `afk.py` reads it
-    (docs/specs/afk-autonomy.md A and D): the `## afk` `Mode` line of the canonical host config (a missing line is
-    `open`), replaced by the approved `mode` of the checkout in the working folder when its origin is `repo`.
-    `strict` on any doubt: no or an unreadable section, a malformed or repeated line, a key `afk.py` does not read,
-    an invalid mode or guard value, no validated
-    checkout, another origin, an unreadable, invalid or unbound approval, or any error."""
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    try:
-        import project_progress
-        import project_store as store
-        import review_config
-        if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
-            return "strict"
-        text = review_config.host_text()
-        start, body, end = project_progress.host_section(text, "afk")
-        if start == body == end:
-            return "strict"
-        user, seen = "open", set()
-        for line in text[body:end].splitlines():
-            if not line.strip():
-                continue
-            match = AFK_LINE.fullmatch(line)
-            if not match or match[1] in seen or match[1] not in AFK_KEYS:
-                return "strict"
-            seen.add(match[1])
-            if match[1] in AFK_CHOICES and match[2] not in AFK_CHOICES[match[1]]:
-                return "strict"
-            if match[1] == "Mode":
-                user = match[2]
-        owner, name = repo.split("/")
-        target = store.repository_target("github.com", owner, name)
-        found, ident = store.identity(str(Path.cwd()))
-        if target is None or found != "found" or store.origin_target(ident) != target:
-            return "strict"
-        state, values, _, record = store.autopilot_binding(ident)
-        if state == "unset" or state == "approved" and "autopilot" not in values:
-            return user
-        project = values.get("autopilot") if state == "approved" else None
-        if (not store.valid_autopilot(project) or not isinstance(record, dict) or record.get("target") != target
-                or not store.bound(record, ident)):
-            return "strict"
-        mode = project.get("mode", user)
-        return mode if mode in ("open", "strict") else "strict"
-    except Exception:  # any doubt is strict, never a relaxation
-        return "strict"
 
 
 # The whole name word after `Reviewer:`, so a look-alike letter from another script (`Сlaude`) is caught, not skipped.
@@ -799,7 +731,7 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
                 # A fallback request treats both reviews as same-family, whatever routing would pick now.
                 same = ["code", "security"]
                 granted, detail = fallback(pr, fallback_family, families, changed_files or (lambda: []), found,
-                                           head_markers(pr, can_write), repo=repo)
+                                           head_markers(pr, can_write))
                 lines.append(f"{'ok   ' if granted else 'BLOCK'} same-family review: {detail}")
                 ok = ok and granted
             else:

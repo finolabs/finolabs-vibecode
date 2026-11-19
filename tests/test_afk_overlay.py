@@ -64,7 +64,7 @@ class OverlayTest(unittest.TestCase):
         return path
 
     def lease(self, mode=None):
-        if mode is not None:
+        if mode is not None:  # a Mode line is no longer read (docs/specs/afk-one-mode.md)
             (self.data / "host.md").write_text("## afk\n- Mode: %s\n" % mode)
             (self.data / "host.md").chmod(0o600)
         folder = self.data / "state/autopilot"
@@ -73,7 +73,7 @@ class OverlayTest(unittest.TestCase):
         folder.chmod(0o700)
         now = time.time()
         (folder / "lease.json").write_text(json.dumps({"id": "a" * 32, "start": now - 60, "expiry": now + 3600,
-                                                       "settings_hash": "b" * 64, "counters": {}}))
+                                                       "settings_hash": "b" * 64}))
         (folder / "lease.json").chmod(0o600)
 
 
@@ -162,107 +162,6 @@ class ReaderTest(OverlayTest):
         self.assertFalse(ov.is_name("AGENTS.md"))
 
 
-class ModeTest(OverlayTest):
-    def test_mode_from_the_account_section(self):
-        for text, expected in (("## afk\n- Mode: strict\n", "strict"), ("## afk\n- Hosts: Codex\n", "open")):
-            with self.subTest(text=text):
-                (self.data / "host.md").write_text(text)
-                (self.data / "host.md").chmod(0o600)
-                self.assertEqual(ov.mode(self.ident), expected)
-        for text in ("## afk\n- Mode: loose\n", "# nothing\n"):
-            with self.subTest(text=text):
-                (self.data / "host.md").write_text(text)
-                with self.assertRaises(ValueError):
-                    ov.mode(self.ident)
-
-    def test_a_fenced_example_heading_is_not_the_section(self):
-        # The same section reader as afk.py settings(): a fenced `## afk` example is skipped, a `# ` heading ends it.
-        host = self.data / "host.md"
-        for text, expected in (("```\n## afk\n- Mode: open\n```\n## afk\n- Mode: strict\n", "strict"),
-                               ("## afk\n- Mode: strict\n# Notes\n- Mode: open\n", "strict")):
-            with self.subTest(text=text):
-                host.write_text(text)
-                host.chmod(0o600)
-                self.assertEqual(ov.mode(self.ident), expected)
-        for text in ("## afk\n```\n- Mode: strict\n", "## afk\n- Mode: open\n## afk\n- Mode: strict\n",
-                     "## afk\n- Mode:strict\n", "## afk\n - Mode: strict\n",
-                     "## afk\n- Mode: strict\n- Mode: strict\n"):
-            with self.subTest(text=text):
-                host.write_text(text)
-                with self.assertRaises(ValueError):
-                    ov.mode(self.ident)
-
-    def test_a_key_or_value_afk_refuses_raises(self):
-        # The same closed keys and values as afk.py settings() (security review of PR 326): any other fails closed.
-        host = self.data / "host.md"
-        for line in ("- Foo: bar", "- Merge: maybe", "- Task choice: any", "- Push and pull requests: maybe",
-                     "- Trusted authors: all", "- Third-party instructions: off", "- Default branch: off",
-                     "- Lease hours: 0", "- Max runs: many", "- Quota floor percent: 101", "- Hosts: Codex, Codex",
-                     "- Hosts: Elsewhere", "- Test commands: git status"):
-            with self.subTest(line=line):
-                host.write_text("## afk\n- Mode: open\n%s\n" % line)
-                host.chmod(0o600)
-                with self.assertRaises(ValueError):
-                    ov.mode(self.ident)
-        for line in ("- Merge: no", "- Lease hours: 8", "- Hosts: Claude Code, Codex", "- Production: decide",
-                     "- Test commands: npm test", "- Excerpts leave the machine: yes"):
-            with self.subTest(line=line):
-                host.write_text("## afk\n- Mode: open\n%s\n" % line)
-                self.assertEqual(ov.mode(self.ident), "open")
-        # Under a live lease the writer refuses, so an invalid line can never read as open.
-        self.lease()
-        host.write_text("## afk\n- Mode: open\n- Foo: bar\n")
-        self.assertIsNotNone(ov.write_refused(self.ident))
-
-    def test_the_key_set_matches_afk(self):
-        spec = importlib.util.spec_from_file_location("afk_keys_overlay", ROOT / "skills/delegate/scripts/afk.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        self.assertEqual(ov.AFK_KEYS, {*module.DEFAULTS, "Merge", *module.CHOICES, *module.CATEGORIES,
-                                       module.CONSENT, module.TARGETS, *module.LISTS})
-        self.assertEqual(ov.AFK_CHOICES, {**module.CHOICES, **module.VALUE_CHOICES})
-        self.assertEqual(ov.AFK_HOSTS, module.AFK_HOSTS)
-        self.assertEqual(ov.AFK_NUMBERS, module.NUMBERS)
-        self.assertEqual(ov.AFK_LISTS, module.LISTS)
-
-    def test_a_bound_project_mode_replaces_the_account_mode(self):
-        import project_store as store
-        git(self.repo, "remote", "add", "origin", "https://github.com/example/demo.git")
-        host = self.data / "host.md"
-        for account_mode, project_mode in (("strict", "open"), ("open", "strict")):
-            with self.subTest(account=account_mode, project=project_mode):
-                host.write_text("## afk\n- Mode: %s\n" % account_mode)
-                host.chmod(0o600)
-                store.write_setting(self.repo, "autopilot", {"mode": project_mode}, ident=self.ident)
-                self.assertEqual(ov.mode(self.ident), project_mode)
-        # A new origin unbinds the approval, so the account mode applies again.
-        git(self.repo, "remote", "set-url", "origin", "https://github.com/example/other.git")
-        self.assertEqual(ov.mode(self.ident), "open")
-
-    def test_an_approval_without_a_target_binds_no_project_mode(self):
-        # As afk.py effective(): a hand-edited approval record without `target` keeps the account mode.
-        import project_store as store
-        host = self.data / "host.md"
-        host.write_text("## afk\n- Mode: strict\n")
-        host.chmod(0o600)
-        store.write_setting(self.repo, "autopilot", {"mode": "open"}, ident=self.ident)
-        self.assertEqual(ov.mode(self.ident), "open")
-        record = self.data / store.SETTINGS_APPROVED / (store.code_of(self.ident.main) + ".json")
-        value = json.loads(record.read_text())
-        del value["target"]
-        record.write_text(json.dumps(value))
-        self.assertEqual(ov.mode(self.ident), "strict")
-
-    def test_write_refused_only_under_a_strict_or_unreadable_lease(self):
-        self.assertIsNone(ov.write_refused(self.ident))
-        self.lease("open")
-        self.assertIsNone(ov.write_refused(self.ident))
-        self.lease("strict")
-        self.assertIn("strict", ov.write_refused(self.ident))
-        (self.data / "state/autopilot/lease.json").chmod(0o644)
-        self.assertIsNotNone(ov.write_refused(self.ident))
-
-
 class WriterTest(OverlayTest):
     def preview_apply(self, data):
         draft = self.repo.parent / "draft.md"
@@ -306,11 +205,8 @@ class WriterTest(OverlayTest):
         with self.assertRaises(iw.Refusal):
             iw.preview(str(self.repo / ov.NAME), str(draft), None)
         git(self.repo, "rm", "-q", "--cached", ov.NAME)
-        self.lease("strict")
-        with self.assertRaises(iw.Refusal):
-            iw.preview(str(self.repo / ov.NAME), str(draft), None)
 
-    def test_oversized_or_control_text_and_a_strict_apply_are_refused(self):
+    def test_oversized_or_control_text_is_refused(self):
         draft = self.repo.parent / "draft.md"
         for data in (b"x" * (ov.LIMIT + 1), b"Agents may push.\x1b[2J\n", "\u202eevil\n".encode()):
             draft.write_bytes(data)
@@ -320,15 +216,14 @@ class WriterTest(OverlayTest):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             iw.preview(str(self.repo / ov.NAME), str(draft), None)
-        self.lease("strict")
-        with self.assertRaises(iw.Refusal):
-            iw.apply(out.getvalue().rsplit("Digest: ", 1)[1].strip(), True)
-        self.assertFalse((self.repo / ov.NAME).exists())
 
-    def test_an_open_lease_allows_the_write(self):
-        self.lease("open")
-        self.preview_apply(TEXT)
-        self.assertEqual(ov.state(self.repo)[0], "in-force")
+    def test_a_live_lease_allows_the_write_whatever_an_old_mode_line_says(self):
+        # `strict`, which refused it during a lease, was removed in 0.3.3 (docs/specs/afk-one-mode.md).
+        for mode in ("strict", "open", None):
+            with self.subTest(mode=mode):
+                self.lease(mode)
+                self.preview_apply(TEXT + (mode or "none").encode() + b"\n")
+                self.assertEqual(ov.state(self.repo)[0], "in-force")
 
 
 class LoadingTest(OverlayTest):
@@ -343,41 +238,6 @@ class LoadingTest(OverlayTest):
         self.assertIn(ov.HEADER, self.hook_state())
         (self.repo / ov.NAME).write_bytes(TEXT + b"changed\n")
         self.assertEqual(self.hook_state(), ov.NOT_IN_FORCE + "\n")
-
-
-class ProtectedNameTest(unittest.TestCase):
-    def test_strict_protects_the_overlay_and_the_constitution(self):
-        sys.path.insert(0, str(ROOT / "skills/delegate/scripts"))
-        self.addCleanup(sys.path.remove, str(ROOT / "skills/delegate/scripts"))
-        afk = importlib.import_module("afk")
-        for value in ("AGENTS.afk.md", "agents.afk.md", "AGENTS.afk.md.bak-20261116", ".specify/memory/constitution.md",
-                      "./.specify/memory/constitution.md"):
-            self.assertTrue(afk.protected(value), value)
-            self.assertTrue(afk.protected(value, source=True), value)
-        for value in ("docs/constitution.md", "AGENTS.md.notes", "src/agents.ts"):
-            self.assertFalse(afk.protected(value, source=True), value)
-        for value in ("AGENT\u017f.afk.md", ".\u017fpecify/memory/con\u017ftitution.md"):
-            self.assertTrue(afk.protected(value, source=True), value)
-        for value in (".specify//memory/constitution.md", ".specify/./memory/constitution.md", "--file=.specify/memory/constitution.md"):
-            self.assertTrue(afk.protected(value), value)
-
-    def test_the_constitution_is_protected_from_inside_its_folder(self):
-        sys.path.insert(0, str(ROOT / "skills/delegate/scripts"))
-        self.addCleanup(sys.path.remove, str(ROOT / "skills/delegate/scripts"))
-        afk = importlib.import_module("afk")
-        with tempfile.TemporaryDirectory() as temp:
-            repo = Path(temp).resolve() / "repo"
-            (repo / ".specify/memory").mkdir(parents=True)
-            git(repo, "init", "-q", "-b", "main")
-            (repo / ".specify/memory/constitution.md").write_text("# Constitution\n")
-            found, ident = afk.store.identity(str(repo))
-            self.assertEqual(found, "found")
-            inside = str(repo / ".specify/memory")
-            context = afk.Context("found", ident, "user", None, inside)
-            applied = {afk.CONTEXT: context}
-            self.assertTrue(afk.token_protected("constitution.md", applied))
-            self.assertEqual(afk.classify_paths(["constitution.md"], context=context), "protected")
-            self.assertFalse(afk.token_protected("notes.md", applied))
 
 
 if __name__ == "__main__":

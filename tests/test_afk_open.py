@@ -1,5 +1,6 @@
-"""afk `open` mode: the credential floor corpus, the default-branch guard and the mode settings
-(docs/specs/afk-autonomy.md A, B, C, acceptance 3, 4 and 6, implementation obligations 1 to 7).
+"""afk's one mode (docs/specs/afk-one-mode.md; `open` before 0.3.3): the credential floor corpus, the default-branch
+guard and the guard settings (docs/specs/afk-autonomy.md B, C, acceptance 3, 4 and 6, implementation obligations 1 to
+7).
 
 The floor is defined by its purpose; FLOOR below is its corpus. Every form a spec reviewer named is a case, each with
 its source. A form found later that serves the purpose but passes is fixed by a case here and an entry in afk.py."""
@@ -8,10 +9,9 @@ import unittest
 
 from tests.test_afk import AfkBase, SETUP
 
-OPEN = SETUP.replace('- Mode: strict\n', '')  # a missing Mode line means `open`
-STRICT = SETUP
+OPEN = SETUP
 
-# (argv, source): each answers `floor` in both modes.
+# (argv, source): each answers `floor`.
 FLOOR = [
     (['printenv'], 'B'), (['env'], 'B'), (['env', '-0'], 'B step 2'), (['export'], 'B'), (['export', '-p'], 'B'),
     (['set'], 'B'), (['declare', '-p'], 'B'), (['declare', '-x'], 'B'), (['typeset', '-x'], 'B'),
@@ -232,37 +232,13 @@ class FloorCorpusTest(OpenBase):
         self.check(['cat', '.yarnrc.yml'], tier=3, code='floor')
 
     def test_every_secret_name_protected_floors_today_still_floors(self):
-        # Obligation 4: B's file names, `secrets*`, `*.env` and the secret_patterns prefixes carry over from protected().
+        # Obligation 4: B's file names, `secrets*`, `*.env` and the secret_patterns prefixes (once protected()'s).
         ap = self.load()
         for name in ('.ssh', '.aws', '.gnupg', '.netrc', '.npmrc', '.pypirc', 'id_rsa', 'id_ed25519', '.env',
                      '.env.local', 'credentials', 'credentials.json', 'secrets', 'secrets.yml', 'prod.env', 'a.pem',
                      'a.key', 'a.p12', 'a.pfx', '.git-credentials', 'ghp_' + 'c' * 36):
             with self.subTest(name=name):
-                self.assertTrue(ap.protected(name), name)
                 self.assertTrue(ap.floor_hit(['cat', name]), name)
-
-
-class FloorStrictTest(AfkBase):
-    def test_floor_forms_stay_tier_3_in_strict(self):
-        # strict keeps its own refusals (`protected`, `forbidden`); where it would answer `unknown`, the floor answers.
-        self.start(STRICT)
-        for argv, source in FLOOR:
-            with self.subTest(argv=argv, source=source):
-                status, output = self.invoke('check', '--argv-json', json.dumps(argv))
-                result = json.loads(output)
-                self.assertEqual(result['tier'], 3, (argv, output))
-                self.assertNotIn(result['code'], {'unknown', 'decided'}, (argv, output))
-
-    def test_a_floor_form_cannot_be_approved_in_strict(self):
-        self.start(STRICT)
-        argv = ['git', 'show', 'HEAD:$OPENAI_API_KEY']
-        status, output = self.invoke('check', '--argv-json', json.dumps(argv))
-        self.assertEqual(json.loads(output), {'tier': 3, 'code': 'floor'})
-        status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it',
-                                     '--precedents', '0', '--rung', 'host', '--settled', 'yes', '--by', 'claude',
-                                     '--option', '1', '--of', '2', '--model', 'claude-opus-5-5',
-                                     '--approve-argv-json', json.dumps(argv))
-        self.assertEqual(status, 3, output)
 
 
 class GuardTest(OpenBase):
@@ -306,46 +282,44 @@ class ModeTest(AfkBase):
         self.assertEqual(status, 0, output)
         return json.loads(output)
 
-    def test_missing_mode_is_open_and_start_shows_it_first(self):
-        self.setup_config(OPEN.replace('- Merge: yes\n', ''))
+    def test_start_shows_the_guards_first_and_effective_has_no_mode(self):
+        self.setup_config(OPEN)
         status, output = self.invoke('start')
         self.assertEqual(status, 0, output)
-        self.assertEqual(output.splitlines()[1], '- Mode: open')
+        self.assertEqual(output.splitlines()[1], '- Third-party instructions: guard')
         result = self.effective()
-        self.assertEqual(result['mode'], 'open')
+        self.assertNotIn('mode', result)
         self.assertEqual(result['guards'], {'Third-party instructions': 'guard', 'Default branch': 'guard'})
 
-    def test_invalid_mode_fails_start(self):
-        for value in ('closed', 'OPEN', ''):
-            self.setup_config(OPEN + f'- Mode: {value}\n')
-            status, output = self.invoke('start')
-            self.assertEqual(status, 3, output)
-
-    def test_strict_needs_merge(self):
-        self.setup_config(STRICT.replace('- Merge: yes\n', ''))
-        status, output = self.invoke('start')
-        self.assertEqual(status, 3, output)
+    def test_any_mode_value_is_not_read(self):
+        for value in ('strict', 'open', 'closed', 'OPEN'):
+            with self.subTest(value=value):
+                self.invoke('stop')
+                self.setup_config(OPEN + f'- Mode: {value}\n')
+                status, output = self.invoke('start')
+                self.assertEqual(status, 0, output)
+                self.check(['npm', 'publish'])
 
     def test_third_party_switch_shows(self):
         self.start(OPEN + '- Third-party instructions: open\n')
         self.assertEqual(self.effective()['guards']['Third-party instructions'], 'open')
 
-    def test_open_ignores_limits_and_categories(self):
-        self.start(OPEN + '- Max actions per hour: 1\n')
+    def test_limits_and_categories_are_not_read(self):
+        self.start(OPEN + '- Max actions per hour: 1\n- Publishing: stop\n- Merge: no\n')
         for _ in range(3):
             self.check(['npm', 'publish'])
         status, output = self.invoke('check', '--argv-json', json.dumps(['gh', 'pr', 'merge', '9']))
         self.assertEqual((status, json.loads(output)), (0, {'tier': 1, 'code': 'allowed'}))
-        self.assertEqual(self.lease()['counters'], {})
+        self.assertNotIn('counters', self.lease())
 
-    def test_open_still_ends_with_the_lease(self):
+    def test_the_lease_still_ends(self):
         self.start(OPEN)
         self.invoke('stop')
         self.check(['git', 'status'], tier=3, code='stopped')
 
 
 class RepositoryModeTest(AfkBase):
-    """A repository's approved `mode` and guard keys win in that repository only (acceptance 3 and 6)."""
+    """A repository's approved guard keys win in that repository only (acceptance 3 and 6); its `mode` is not read."""
 
     def setUp(self):
         super().setUp()
@@ -369,16 +343,9 @@ class RepositoryModeTest(AfkBase):
         (repo / '.git/config').write_text(ORIGIN_CONFIG)
         return repo
 
-    def test_a_repository_strict_mode_wins_there_only(self):
+    def test_an_old_repository_strict_mode_is_not_read(self):
         self.start(OPEN)
         self.project({'mode': 'strict'})
-        self.check(['npm', 'publish'], tier=3, code='forbidden')  # strict: Publishing is stop
-        self.cwd = self.other_repo('second')
-        self.check(['npm', 'publish'])
-
-    def test_a_repository_open_mode_wins_over_a_strict_user(self):
-        self.start(STRICT)
-        self.project({'mode': 'open'})
         self.check(['npm', 'publish'])
         self.check(['printenv'], tier=3, code='floor')
 
@@ -389,7 +356,7 @@ class RepositoryModeTest(AfkBase):
         self.cwd = self.other_repo('second')
         self.check(['git', 'push', 'origin', 'main'], tier=3, code='guarded')
 
-    def test_invalid_repository_mode_is_refused(self):
+    def test_invalid_repository_values_are_refused(self):
         self.assertFalse(self.store.valid_autopilot({'mode': 'closed'}))
         self.assertFalse(self.store.valid_autopilot({'default-branch': 'off'}))
         self.assertTrue(self.store.valid_autopilot({'mode': 'open', 'third-party-instructions': 'open'}))

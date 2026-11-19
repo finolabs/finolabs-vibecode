@@ -26,7 +26,7 @@ class RuleTableTest(AfkBase):
     def test_the_table_is_built_from_the_data_check_reads(self):
         output, afk = self.rules()
         for name in (*afk.CREDENTIAL_COMMANDS, *afk.FLOOR_NAMES, *afk.ENV_EXCEPTIONS, *afk.DEFAULT_NAMES,
-                     *afk.CATEGORIES, *afk.HARD, *afk.KINDS, *afk.PROJECT_KEYS):
+                     *afk.RETIRED, *afk.KINDS, *afk.PROJECT_KEYS):
             with self.subTest(name=name):
                 self.assertIn(f'`{name}`', output)
         for row in afk.__doc__.split('| Rule | Enforcer |')[1].split('\n\n')[0].splitlines()[2:]:
@@ -42,7 +42,9 @@ class RuleTableTest(AfkBase):
                 self.assertIn('rules.md', (ROOT / 'skills/afk' / name).read_text())
         setup = (ROOT / 'skills/setup/references/features/afk.md').read_text()
         self.assertIn('afk.py rules', setup)
-        self.assertLess(setup.index('Open (recommended)'), setup.index('Which AI apps'))
+        # One mode since 0.3.3 (docs/specs/afk-one-mode.md): no mode or limit question, and no such flag.
+        for word in ('Strict', '--mode', '--max-runs', '--merge', 'How much may the agents do'):
+            self.assertNotIn(word, setup)
 
 
 if __name__ == '__main__':

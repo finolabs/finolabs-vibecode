@@ -8,8 +8,8 @@ apply --digest <64 hex> --yes
 
 Allowed targets are a closed list: the user-level files `hosts.md` lists (Codex uses the account-derived default only), and
 AGENTS.md, CLAUDE.md and CLAUDE.local.md at the git top level of the working folder, and the afk overlay
-`AGENTS.afk.md` at the top of the repository's main checkout (docs/specs/afk-overlay.md): refused when Git tracks it
-or while a strict away lease is live; its backups go to the private state, and `apply` adds it to the local
+`AGENTS.afk.md` at the top of the repository's main checkout (docs/specs/afk-overlay.md): refused when Git tracks
+it; its backups go to the private state, and `apply` adds it to the local
 `.git/info/exclude` and records its SHA-256 as the overlay's trust anchor. Symlinks are refused
 at the target and at every folder below the allowed base. Metadata only: nothing is sent anywhere.
 """
@@ -109,9 +109,6 @@ def overlay_target(path):
     main = str(ident.main)
     if Path(path).name != OVERLAY or os.path.dirname(path) != main or os.path.realpath(main) != main:
         raise Refusal("the afk overlay is only AGENTS.afk.md at the top of this repository's main checkout")
-    reason = afk_overlay.write_refused(ident)
-    if reason:
-        raise Refusal(reason)
     try:
         if afk_overlay.tracked(ident):
             raise Refusal("Git tracks AGENTS.afk.md here; the afk overlay must stay local")

@@ -59,7 +59,7 @@ class AfkSetupTest(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def preview(self, *args):
-        code, out, err = self.cli('preview', '--merge', 'no', *args)
+        code, out, err = self.cli('preview', *args)
         self.assertEqual(code, 0, err)
         self.assertIn('## afk', out)
         self.assertNotIn('## Autopilot', out)
@@ -83,31 +83,27 @@ class AfkSetupTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.plan.stat().st_mode), 0o600)
         self.apply(digest[:12])
         reader = self.reader()
-        owned = {key: value for key, value in reader.settings().items() if key in {*reader.DEFAULTS, 'Merge'}}
-        self.assertEqual(owned, {**reader.DEFAULTS, 'Merge': 'no'})
-        self.assertEqual({reader.settings()[key] for key in reader.CATEGORIES}, {'stop'})
+        owned = {key: value for key, value in reader.settings().items() if key in reader.DEFAULTS}
+        self.assertEqual(owned, reader.DEFAULTS)
         self.assertEqual(next(self.host.parent.glob('host.md.bak-*')).read_bytes(), before)
         self.assertFalse(self.plan.exists())
 
     def test_explicit_values_round_trip_and_surrounding_bytes(self):
         prefix = self.host.read_bytes() + b'```\r\n## afk\r\nexample\r\n```\r\n'
         suffix = b'# Later\nlast line without newline'
-        self.host.write_bytes(prefix + b'## afk\r\n- Merge: no\r\n\r\n' + suffix)
-        digest = self.preview('--hosts', 'Codex', 'Antigravity', '--task-choice', 'listed',
-                              '--push-and-pull-requests', 'no', '--merge', 'yes',
-                              '--lease-hours', '24', '--max-runs', '10000',
-                              '--max-runtime-minutes', '1440', '--max-actions-per-hour', '10000',
-                              '--quota-floor-percent', '100', '--trusted-authors', 'own')
+        self.host.write_bytes(prefix + b'## afk\r\n- Merge: no\r\n- Mode: strict\r\n\r\n' + suffix)
+        digest = self.preview('--hosts', 'Codex', 'Antigravity', '--lease-hours', '24', '--quota-floor-percent', '100',
+                              '--third-party-instructions', 'open', '--default-branch', 'open')
         self.apply(digest)
         raw = self.host.read_bytes()
         self.assertTrue(raw.startswith(prefix))
         self.assertTrue(raw.endswith(suffix))
+        self.assertNotIn(b'Mode', raw)  # the old lines go with the section the writer replaces
+        self.assertNotIn(b'Merge', raw)
         reader = self.reader()
-        self.assertEqual({key: value for key, value in reader.settings().items() if key in {*reader.DEFAULTS, 'Merge'}}, {
-            'Hosts': 'Codex, Antigravity', 'Task choice': 'listed',
-            'Push and pull requests': 'no', 'Merge': 'yes', 'Trusted authors': 'own',
-            'Lease hours': 24, 'Max runs': 10000, 'Max runtime minutes': 1440,
-            'Max actions per hour': 10000, 'Quota floor percent': 100})
+        self.assertEqual(reader.settings(), {
+            'Hosts': 'Codex, Antigravity', 'Lease hours': 24, 'Quota floor percent': 100,
+            'Third-party instructions': 'open', 'Default branch': 'open', 'Excerpts leave the machine': 'no'})
 
     def test_an_old_autopilot_section_is_left_for_the_user_and_afk_is_added(self):
         old = b'## Autopilot\n- Merge: yes\n\n'
@@ -117,7 +113,7 @@ class AfkSetupTest(unittest.TestCase):
         # The old section is neither read nor rewritten; the upgrade note asks the user to delete it.
         self.assertTrue(raw.startswith(old))
         self.assertEqual(raw.count(b'## afk\n'), 1)
-        self.assertEqual(self.reader().settings()['Merge'], 'no')
+        self.assertEqual(self.reader().settings()['Lease hours'], 8)
 
     def test_mismatch_and_missing_yes_write_nothing(self):
         digest = self.preview()
@@ -145,28 +141,28 @@ class AfkSetupTest(unittest.TestCase):
         self.host.rename(target)
         self.host.symlink_to(target)
         before = self.snapshot()
-        self.assertEqual(self.cli('preview', '--merge', 'yes')[0], 1)
+        self.assertEqual(self.cli('preview')[0], 1)
         self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
         self.assertEqual(self.snapshot(), before)
 
-    def test_merge_required_and_bounds(self):
+    def test_bounds_and_retired_options(self):
         before = self.snapshot()
-        self.assertEqual(self.cli('preview', '--mode', 'strict')[0], 1)  # strict needs an explicit Merge answer
         for option, values in {
-            '--mode': ('closed',), '--default-branch': ('off',), '--third-party-instructions': ('off',),
-            '--lease-hours': ('0', '25'), '--max-runs': ('0', '10001'),
-            '--max-runtime-minutes': ('0', '1441'), '--max-actions-per-hour': ('0', '10001'),
+            '--default-branch': ('off',), '--third-party-instructions': ('off',), '--lease-hours': ('0', '25'),
             '--quota-floor-percent': ('-1', '101', '1.5'), '--hosts': ('Unknown',),
-            '--task-choice': ('unknown',), '--trusted-authors': ('everyone',),
-            '--merge': ('maybe',), '--push-and-pull-requests': ('maybe',),
+            # Retired with `strict` (docs/specs/afk-one-mode.md): setup has no such option any more.
+            '--mode': ('open', 'strict'), '--merge': ('yes', 'no'), '--max-runs': ('20',),
+            '--max-runtime-minutes': ('480',), '--max-actions-per-hour': ('30',), '--task-choice': ('choose',),
+            '--push-and-pull-requests': ('yes',), '--trusted-authors': ('own',), '--decide': ('Publishing',),
+            '--non-production-target': ('npm run deploy:dev',), '--test-command': ('npm test',),
+            '--top-level-file': ('TASKS.md',), '--release-target': ('git tag v1.0.0',),
+            '--production-target': ('npm run deploy',),
         }.items():
             for value in values:
                 with self.subTest(option=option, value=value):
-                    self.assertEqual(self.cli('preview', '--merge', 'no', option, value)[0], 1)
+                    self.assertEqual(self.cli('preview', option, value)[0], 1)
                     self.assertEqual(self.snapshot(), before)
-        digest = self.preview('--lease-hours', '1', '--max-runs', '1',
-                              '--max-runtime-minutes', '1', '--max-actions-per-hour', '1',
-                              '--quota-floor-percent', '0')
+        digest = self.preview('--lease-hours', '1', '--quota-floor-percent', '0')
         self.apply(digest)
         self.assertEqual(self.reader().settings()['Quota floor percent'], 0)
 
@@ -188,124 +184,49 @@ class AfkSetupTest(unittest.TestCase):
         self.plan.rename(target)
         self.plan.symlink_to(target)
         before = self.snapshot()
-        self.assertEqual(self.cli('preview', '--merge', 'no')[0], 1)
+        self.assertEqual(self.cli('preview')[0], 1)
         self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
         self.assertEqual(self.snapshot(), before)
 
     def writer(self):
         return load('afk_setup_names', SCRIPT)
 
-    def test_category_names_match_the_reader(self):
+    def test_names_and_bounds_match_the_reader(self):
         writer, reader = self.writer(), self.reader()
-        self.assertEqual(writer.CATEGORIES, reader.CATEGORIES)
-        self.assertEqual((writer.CONSENT, writer.TARGETS), (reader.CONSENT, reader.TARGETS))
-        self.assertEqual(writer.LISTS, reader.LISTS)
+        self.assertEqual((writer.DEFAULTS, writer.NUMBERS, writer.CHOICES, writer.CONSENT),
+                         (reader.DEFAULTS, reader.NUMBERS, reader.CHOICES, reader.CONSENT))
 
-    def test_open_mode_writes_mode_first_and_needs_no_merge(self):
-        code, out, err = self.cli('preview', '--mode', 'open', '--default-branch', 'open')
+    def test_the_section_holds_the_guards_first_and_no_retired_line(self):
+        code, out, err = self.cli('preview', '--default-branch', 'open')
         self.assertEqual(code, 0, err)
         self.apply(out.split('Digest: ')[1].splitlines()[0])
         section = self.host.read_text()
         section = section[section.index('## afk'):]
-        self.assertEqual(section.splitlines()[2:5],
-                         ['- Mode: open', '- Third-party instructions: guard', '- Default branch: open'])
-        self.assertNotIn('- Merge:', section)
-        applied = self.reader().settings()
-        self.assertEqual((applied['Mode'], applied['Default branch'], applied['Merge']), ('open', 'open', 'no'))
-
-    def test_fixed_rows_cannot_be_moved(self):
-        before = self.snapshot()
-        for name in ('Production', 'Real users and customer data', 'Unknown category'):
-            with self.subTest(name=name):
-                self.assertEqual(self.cli('preview', '--merge', 'no', '--decide', name)[0], 1)
-                self.assertEqual(self.snapshot(), before)
-        writer = self.writer()
-        values = {**writer.DEFAULTS, 'Merge': 'no', 'Mode': 'strict', 'Third-party instructions': 'guard',
-                  'Default branch': 'guard', **{c: 'stop' for c in writer.CATEGORIES},
-                  writer.CONSENT: 'no', writer.TARGETS: [], **{key: [] for key in writer.LISTS}}
-        writer.validate(values)
-        for name in ('Production', 'Real users and customer data'):
-            with self.subTest(name=name), self.assertRaises(ValueError):
-                writer.validate({**values, name: 'decide'})
-
-    def test_category_moves_only_with_its_own_answer(self):
-        self.apply(self.preview('--decide', 'Tags and releases'))
-        reader = self.reader()
-        applied = reader.settings()
-        self.assertEqual({c for c in reader.CATEGORIES if applied[c] == 'decide'}, {'Tags and releases'})
-        self.assertEqual(applied[reader.CONSENT], 'no')
-        text = self.host.read_text()
-        for name in reader.CATEGORIES:
-            self.assertEqual(text.count(f'- {name}: '), 1, name)
-        self.apply(self.preview('--decide', 'Recoverable deletion', '--decide', 'Repository comments'))
-        applied = self.reader().settings()
-        self.assertEqual({c for c in reader.CATEGORIES if applied[c] == 'decide'},
-                         {'Recoverable deletion', 'Repository comments'})
-
-    def test_missing_answer_is_stop(self):
-        self.apply(self.preview())
-        text = self.host.read_text()
-        reader = self.reader()
-        for name in reader.CATEGORIES:
-            self.assertIn(f'- {name}: stop\n', text)
-        self.assertNotIn(reader.TARGETS, text)
-        self.assertEqual(reader.settings()[reader.TARGETS], [])
-
-    def test_targets_stored_exactly(self):
-        targets = ['npm run deploy:uat', 'make deploy STAGE=dev-2']
-        self.apply(self.preview('--non-production-target', targets[0], '--non-production-target', targets[1]))
-        self.assertEqual(self.reader().settings()[self.reader().TARGETS], targets)
-        before = self.snapshot()
-        for bad in ('a; b', ' padded', 'x' * 201, 'tab\there', ''):
-            with self.subTest(bad=bad):
-                self.assertEqual(self.cli('preview', '--merge', 'no', '--non-production-target', bad)[0], 1)
-                self.assertEqual(self.snapshot(), before)
-        self.assertEqual(self.cli('preview', '--merge', 'no', '--non-production-target', 'same',
-                                  '--non-production-target', 'same')[0], 1)
-
-    def test_account_lists_round_trip_into_the_reader(self):
-        # Owner decision 15/11/2026: the account sets the default lists for every repository.
-        self.apply(self.preview('--test-command', 'npm test', '--test-command', 'python3 -m unittest',
-                                '--top-level-file', 'TASKS.md', '--release-target', 'git tag v1.2.0',
-                                '--production-target', 'npx wrangler deploy --env production'))
-        reader = self.reader()
-        applied = reader.settings()
-        self.assertEqual((applied['Test commands'], applied['Top-level files'], applied['Release targets'],
-                          applied['Production targets']),
-                         (['npm test', 'python3 -m unittest'], ['TASKS.md'], ['git tag v1.2.0'],
-                          ['npx wrangler deploy --env production']))
-        self.assertIn('- Test commands: npm test; python3 -m unittest\n', self.host.read_text())
-        self.apply(self.preview())
-        self.assertNotIn('Test commands', self.host.read_text())  # an empty list writes no line
-        self.assertEqual(self.reader().settings()['Test commands'], [])
-        before = self.snapshot()
-        for flag, bad in (('--test-command', 'git status'), ('--test-command', 'npm  test'),
-                          ('--test-command', 'a; b'), ('--top-level-file', 'CLAUDE.md'),
-                          ('--top-level-file', 'notes/x.md'), ('--release-target', 'make release'),
-                          ('--production-target', 'deploy $(x)')):
-            with self.subTest(flag=flag, bad=bad):
-                self.assertEqual(self.cli('preview', '--merge', 'no', flag, bad)[0], 1)
-                self.assertEqual(self.snapshot(), before)
+        self.assertEqual(section.splitlines()[2:8],
+                         ['- Third-party instructions: guard', '- Default branch: open', '- Hosts: Claude Code',
+                          '- Lease hours: 8', '- Quota floor percent: 15', '- Excerpts leave the machine: no'])
+        for name in self.reader().RETIRED:
+            self.assertNotIn('- %s:' % name, section)
+        _, notices = self.reader().read_settings()
+        self.assertEqual(notices, [])  # a fresh setup prints no retired-line notice
 
     def test_excerpt_consent_is_separate_and_off_by_default(self):
-        self.apply(self.preview('--merge', 'yes', '--decide', 'Publishing'))
+        self.apply(self.preview())
         reader = self.reader()
         self.assertEqual(reader.settings()[reader.CONSENT], 'no')
         self.assertIn('- Excerpts leave the machine: no\n', self.host.read_text())
         self.apply(self.preview('--excerpts-leave-the-machine', 'yes'))
-        applied = self.reader().settings()
-        self.assertEqual(applied[reader.CONSENT], 'yes')
-        self.assertEqual({applied[c] for c in reader.CATEGORIES}, {'stop'})
-        self.assertEqual(self.cli('preview', '--merge', 'no', '--excerpts-leave-the-machine', 'maybe')[0], 1)
+        self.assertEqual(self.reader().settings()[reader.CONSENT], 'yes')
+        self.assertEqual(self.cli('preview', '--excerpts-leave-the-machine', 'maybe')[0], 1)
 
     def test_ambiguous_host_refused_and_missing_host_created(self):
         for raw in (b'## afk\n- Merge: no\n## afk\n', b'```\nunclosed\n'):
             self.host.write_bytes(raw)
-            self.assertEqual(self.cli('preview', '--merge', 'no')[0], 1)
+            self.assertEqual(self.cli('preview')[0], 1)
             self.assertEqual(self.host.read_bytes(), raw)
         self.host.unlink()
         self.apply(self.preview())
-        self.assertEqual(self.reader().settings()['Merge'], 'no')
+        self.assertEqual(self.reader().settings()['Lease hours'], 8)
         self.assertEqual(list(self.host.parent.glob('host.md.bak-*')), [])
 
 
