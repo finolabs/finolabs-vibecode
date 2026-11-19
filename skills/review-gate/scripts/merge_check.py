@@ -99,7 +99,7 @@ import unicodedata
 from datetime import datetime, timezone
 
 MARKER = re.compile(
-    r"<!-- fnl-review kind=(code|security) head=([0-9a-f]{40}) verdict=(APPROVE|REWORK)( lane=yes)? -->"
+    r"<!-- fnl-review kind=(code|security|ui) head=([0-9a-f]{40}) verdict=(APPROVE|REWORK)( lane=yes)? -->"
 )
 WRITE = {"admin", "maintain", "write"}
 REVIEW_STATES = {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}
@@ -112,9 +112,12 @@ FIELDS = "author,headRefOid,comments,reviews,statusCheckRollup,mergeStateStatus,
 DEPTHS = ("MIN", "NORMAL", "DEEP")
 TRIGGERS = ("none", "contract", "security", "privacy", "permission", "migration", "dependency",
             "uncertainty", "consumers", "irreversible", "calculation", "prediction", "input")
-ROUTER = re.compile(r"<!-- fnl-router depth=(%s) trigger=(%s) -->" % ("|".join(DEPTHS), "|".join(TRIGGERS)))
+ROUTER = re.compile(r"<!-- fnl-router depth=(%s) trigger=(%s)(?: ui=(yes|no))? -->" % ("|".join(DEPTHS), "|".join(TRIGGERS)))
 ADOPTION_FILES = ("CLAUDE.md", "AGENTS.md")
 ADOPTION_TOKEN = re.compile(r"(?<![\w-])(?:fnl-)?review-gate(?![\w-])")  # the older fnl- name still adopts
+# A repository that also names `ui-review-gate` in that section opts in to the UI review marker
+# (docs/specs/ui-review-gate.md decision 4, owner decision 19/11/2026).
+UI_ADOPTION_TOKEN = re.compile(r"(?<![\w-])ui-review-gate(?![\w-])")
 ADOPTION_CAP = 256 * 1024  # maximum size in bytes of one adoption file
 SHA = re.compile(r"[0-9a-f]{40}")
 
@@ -438,8 +441,9 @@ def lane_files(files, read):
     return not reasons, reasons
 
 
-def adopts(text):
-    """True when a `## Agent skills` section of an agent context file names `review-gate`."""
+def adopts(text, token=ADOPTION_TOKEN):
+    """True when a `## Agent skills` section of an agent context file names `review-gate` (or, with
+    `UI_ADOPTION_TOKEN`, `ui-review-gate`)."""
     inside = fenced = False
     for line in text.splitlines():
         if re.match(r" {0,3}(```|~~~)", line):
@@ -447,7 +451,7 @@ def adopts(text):
         elif not fenced and re.match(r"#{1,2}(\s|$)", line):
             inside = line.rstrip() == "## Agent skills"
             continue
-        if inside and ADOPTION_TOKEN.search(line):
+        if inside and token.search(line):
             return True
     return False
 
@@ -465,8 +469,15 @@ def router_marker(body):
         return False, "missing; the body needs one line <!-- fnl-router depth=... trigger=... -->"
     if len(found) > 1:
         return False, "multiple fnl-router lines; keep exactly one"
-    depth, trigger = ROUTER.fullmatch(found.pop()).groups()
-    return True, f"depth={depth} trigger={trigger}"
+    depth, trigger, ui = ROUTER.fullmatch(found.pop()).groups()
+    return True, f"depth={depth} trigger={trigger}" + (f" ui={ui}" if ui else "")
+
+
+def ui_declared(body):
+    """`yes`, `no` or None: the router marker's `ui=` value, read only from a valid single marker line."""
+    lines = [line[:-1] if line.endswith("\r") else line for line in body.split("\n")] if isinstance(body, str) else []
+    found = [ROUTER.fullmatch(line) for line in lines if ROUTER.fullmatch(line)]
+    return found[0].group(3) if len(found) == 1 else None
 
 
 def independent_families(pr):
@@ -687,7 +698,7 @@ def local_receipt(head, repo):
 
 
 def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None, local_receipt=None,
-             repo=None, fallback_family=None, changed_files=None, blocked_ok=False):
+             repo=None, fallback_family=None, changed_files=None, blocked_ok=False, ui_adopted=False):
     """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane;
     `adopted` whether the base commit adopted the gate, which makes the router marker required.
     The marker is checked beside the review markers and never relaxes them.
@@ -757,6 +768,24 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
         marked, detail = router_marker(pr.get("body"))
         ok = ok and marked
         lines.append(f"{'ok   ' if marked else 'BLOCK'} router marker: {detail}")
+    if adopted and ui_adopted:
+        # The base opted in to UI reviews: the router marker says whether the change touches user-facing UI,
+        # and `ui=yes` needs a UI review APPROVE for this head (docs/specs/ui-review-gate.md decision 4).
+        ui = ui_declared(pr.get("body"))
+        verdict = found.get("ui")
+        if ui is None:
+            ok = False
+            lines.append("BLOCK ui review: the router marker needs ui=yes or ui=no in this repository")
+        elif ui == "no":
+            lines.append("ok    ui review: not needed (ui=no)")
+        elif verdict is None:
+            ok = False
+            lines.append("BLOCK ui review: no counted verdict for this head (ui=yes)")
+        elif verdict[0] != "APPROVE" or verdict[2]:
+            ok = False
+            lines.append(f"BLOCK ui review: latest verdict is {verdict[0]}{' with lane=yes' if verdict[2] else ''} ({verdict[1]})")
+        else:
+            lines.append(f"ok    ui review: APPROVE ({verdict[1]})")
     if can_write(login(pr)):
         lines.append("ok    author has write access")
     elif owner_review(pr, can_write):
@@ -834,13 +863,18 @@ def file_at(repo, path, ref):
 
 
 def adopted_at(repo, base):
-    """Whether the base commit adopted the gate, read through GitHub (never the head
+    """Whether the base commit adopted the gate (see `adoption_at`)."""
+    return adoption_at(repo, base)[0]
+
+
+def adoption_at(repo, base):
+    """(review gate adopted, UI marker adopted) at the base commit, read through GitHub (never the head
     or a local branch). A clean 404 means absent; every other read failure is Unknown.
     Only exact links to the other adoption file are allowed; it is read on its own turn.
     """
     if not isinstance(base, str) or not SHA.fullmatch(base):
         raise Unknown("the pull request has no base commit")
-    adopted = False
+    adopted = ui = False
     for path in ADOPTION_FILES:
         result = run_gh("api", f"repos/{repo}/contents/{path}?ref={base}")
         if result.returncode != 0:
@@ -870,7 +904,8 @@ def adopted_at(repo, base):
         except UnicodeDecodeError:
             raise Unknown(f"{path} at the base commit is not UTF-8")
         adopted = adopted or adopts(text)
-    return adopted
+        ui = ui or adopts(text, UI_ADOPTION_TOKEN)
+    return adopted, adopted and ui
 
 
 def main(argv=None):
@@ -930,7 +965,7 @@ def main(argv=None):
 
         if not isinstance(pr.get("body"), str):
             raise Unknown("the pull request body could not be read")
-        adopted = adopted_at(args.repo, pr.get("baseRefOid"))
+        adopted, ui_adopted = adoption_at(args.repo, pr.get("baseRefOid"))
         families = independent_families(pr) if args.independent else None
         files_cache = []
 
@@ -943,7 +978,7 @@ def main(argv=None):
                              independent=args.independent, families=families,
                              local_receipt=None if args.ci_context is not None else local_receipt,
                              repo=args.repo, fallback_family=args.fallback_family, changed_files=changed_files,
-                             blocked_ok=args.ci_context is not None)
+                             blocked_ok=args.ci_context is not None, ui_adopted=ui_adopted)
     except (Unknown, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f"UNKNOWN {error}")
         return 2

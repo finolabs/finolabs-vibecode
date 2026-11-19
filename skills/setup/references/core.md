@@ -44,10 +44,10 @@ Choices: "Yes, hide these files" / "No, keep the list".
 ```markdown
 ## Agent skills
 
-This repository uses the finolabs-vibecode skills. Routing on: use `coding-router`. <Spec Kit line, when present: use Spec Kit.> <Work-record line, when adopted: use work records.> Pull requests follow `review-gate` "Pull requests"; reviewers may post code/security reviews. <Single-owner option: Pull requests may take the low-risk lane of `review-gate`.> Help: `/finolabs-vibecode:help` (Codex `$help`).
+This repository uses the finolabs-vibecode skills. Routing on: use `coding-router`. <Spec Kit line, when present: use Spec Kit.> <Work-record line, when adopted: use work records.> Pull requests follow `review-gate` "Pull requests"; reviewers may post code/security reviews. <Single-owner option: Pull requests may take the low-risk lane of `review-gate`.> <UI option: User-facing UI changes follow `ui-review-gate`; reviewers post a `ui` review.> Help: `/finolabs-vibecode:help` (Codex `$help`).
 ```
 
-   Include only the confirmed workflow line, neither when none. `python3 -I <this skill folder>/scripts/instructions_write.py preview --target <file> --content-file <draft> --block "Agent skills"`; show diff/full digest. Ask: "Save these plugin rules for AI sessions in this repository?"
+   Include only the confirmed workflow line, neither when none. Ask the UI option on its own, neutral Yes and No: "Should pull requests that change user-facing UI wait for a posted UI review before merge?" (adds the UI line; `merge_check.py` then requires a `ui=yes|no` router marker and, for `ui=yes`, a `kind=ui` review). `python3 -I <this skill folder>/scripts/instructions_write.py preview --target <file> --content-file <draft> --block "Agent skills"`; show diff/full digest. Ask: "Save these plugin rules for AI sessions in this repository?"
 Yes: Save only Agent skills in the shown file with backup; future sessions use their AI provider.
 No: Keep the file; ask later.
 Undo: Restore the backup.

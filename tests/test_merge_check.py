@@ -713,6 +713,63 @@ class RouterMarkerTest(unittest.TestCase):
 RECORDED_FALLBACK = "## Reviews\n- Rework limit: 3\n- Same-family security fallback: yes (2026-11-17)\n"
 
 
+class UiReviewMarkerTest(unittest.TestCase):
+    """docs/specs/ui-review-gate.md decision 4 (owner decision 19/11/2026): the opt-in UI review marker."""
+
+    def check(self, body, extra=(), ui_adopted=True, adopted=True):
+        comments = [comment(marker("code", "APPROVE") + "\nreport"),
+                    comment(marker("security", "APPROVE") + "\nreport"), *extra]
+        return mc.evaluate(pr(comments=comments, body=body), lambda who: who in WRITERS, adopted=adopted,
+                           ui_adopted=ui_adopted)
+
+    def test_only_ui_review_gate_names_the_ui_opt_in(self):
+        self.assertTrue(mc.adopts("## Agent skills\nUI changes follow `ui-review-gate`.\n", mc.UI_ADOPTION_TOKEN))
+        # ui-review-gate alone does not adopt review-gate, and review-gate alone does not opt in to UI reviews.
+        self.assertFalse(mc.adopts("## Agent skills\nUI changes follow `ui-review-gate`.\n"))
+        self.assertFalse(mc.adopts(ADOPTED, mc.UI_ADOPTION_TOKEN))
+        self.assertFalse(mc.adopts("## Agent skills\nmy-ui-review-gate\n", mc.UI_ADOPTION_TOKEN))
+
+    def test_an_opted_in_base_needs_ui_yes_or_no(self):
+        ok, lines = self.check(ROUTED)
+        self.assertFalse(ok)
+        self.assertIn("BLOCK ui review: the router marker needs ui=yes or ui=no in this repository", lines)
+        ok, lines = self.check("<!-- fnl-router depth=NORMAL trigger=none ui=no -->\n")
+        self.assertTrue(ok, lines)
+        self.assertIn("ok    ui review: not needed (ui=no)", lines)
+
+    def test_ui_yes_needs_an_approving_ui_marker_for_the_head(self):
+        body = "<!-- fnl-router depth=NORMAL trigger=none ui=yes -->\n"
+        self.assertIn("BLOCK ui review: no counted verdict for this head (ui=yes)", self.check(body)[1])
+        stale = comment(marker("ui", "APPROVE", head=OLD) + "\nreport")
+        self.assertFalse(self.check(body, [stale])[0])
+        rework = comment(marker("ui", "REWORK") + "\nreport")
+        self.assertFalse(self.check(body, [rework])[0])
+        lane = comment(f"<!-- fnl-review kind=ui head={HEAD} verdict=APPROVE lane=yes -->\nreport")
+        self.assertFalse(self.check(body, [lane])[0])
+        outsider = comment(marker("ui", "APPROVE") + "\nreport", who="stranger")
+        self.assertFalse(self.check(body, [outsider])[0])
+        ok, lines = self.check(body, [comment(marker("ui", "APPROVE") + "\nreport")])
+        self.assertTrue(ok, lines)
+
+    def test_without_the_opt_in_the_ui_value_and_marker_change_nothing(self):
+        for body in (ROUTED, "<!-- fnl-router depth=NORMAL trigger=none ui=yes -->\n"):
+            ok, lines = self.check(body, ui_adopted=False)
+            self.assertTrue(ok, lines)
+            self.assertFalse(any("ui review" in line for line in lines), lines)
+        # A ui marker never stands in for a code or security review.
+        only_ui = mc.evaluate(pr(comments=[comment(marker("ui", "APPROVE") + "\nreport")], body=ROUTED),
+                              lambda who: who in WRITERS, adopted=True, ui_adopted=True)
+        self.assertFalse(only_ui[0])
+
+    def test_cli_reads_the_ui_opt_in_from_the_base(self):
+        base = {"CLAUDE.md": "# Demo\n\n## Agent skills\n\nPull requests follow `review-gate`. UI changes follow `ui-review-gate`.\n"}
+        result = run_cli(pr(body=ROUTED), base_files=base)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("ui=yes or ui=no", result.stdout)
+        result = run_cli(pr(body="<!-- fnl-router depth=NORMAL trigger=none ui=no -->\n"), base_files=base)
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+
 class SameFamilyFallbackTest(unittest.TestCase):
     """docs/specs/afk-per-project.md D: outside a lease, with the recorded same-family security fallback, same-family
     markers count only with every condition (the strict lease that also ran them was removed in 0.3.3,

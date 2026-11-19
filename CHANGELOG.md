@@ -16,6 +16,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- UI review marker, opt-in per repository (`ui-review-gate` decision 4, owner decision 19/11/2026): `/setup` can add a UI line naming `ui-review-gate` to the repository's `## Agent skills` block. Then the router marker carries `ui=yes` or `ui=no`, and `merge_check.py` blocks a `ui=yes` pull request until a `kind=ui` review marker, posted through `post_review.py`, approves its head. Without the opt-in nothing changes.
 - `/setup add quota` can record a weekly floor per install (`--weekly-floor claude/work=15`): routing treats that install as out of quota once its weekly quota left drops below the floor, for example after 85% of the week is used, instead of the default 10%. `quota_probe.py status` shows the floor on the install's line, and `review_route.py` and `route_pick.py` apply it to weekly pools only.
 
 - `/setup instructions` scans existing instruction files for lines that would stop `afk` or `delegate` (a merge or deploy only the user may run with no lease exception, an away rule of its own, machine facts that belong in the host config) and proposes a replacement for each; the contract template's approval list names the lease exception.
