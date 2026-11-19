@@ -43,7 +43,7 @@ Review of this spec (Codex, 19/11/2026) narrowed two points: a repository with n
 
 ### B. How a turn ends
 
-- The afk stop hook lets a stop through on an `idle` record of this session written since its previous stop whose `revision` equals the current revision of the queue of the hook input's repository, and no longer on a `parked` record: a park closes an item, not the turn (decision 3). A stale `idle` record (the queue changed after it) does not count. Its fixed reason names `afk.py log --kind idle` alone. To compare, the hook reads one more value: the integer `revision` of that repository's queue file, nothing else from it.
+- The afk stop hook lets a stop through on an `idle` record of this session written since its previous stop whose repository digest equals the hook input's repository and whose `revision` equals the current revision of that repository's queue, and no longer on a `parked` record: a park closes an item, not the turn (decision 3). A stale `idle` record (the queue changed after it) does not count. Its fixed reason names `afk.py log --kind idle` alone. To compare, the hook reads one more value: the integer `revision` of that repository's queue file, nothing else from it.
 - Every other escape stays: `stop_hook_active`, the lease's limits for the repository reached, and no lease, an expired, stopped or unreadable lease, or any error.
 - What this guarantees, and what it does not: the hook sends the agent back once at each stop (`stop_hook_active` lets the next stop through, so it never loops). An agent that stops again right away can still end its turn with items open. What brings it back is the self-paced loop the goal step starts (`/loop` on Claude Code) and the host's goal command, which are agent judgment and host behaviour, not this hook.
 - This changes the eleventh scoped exception in `CLAUDE.md` ("names `afk.py log --kind idle` and `--kind parked` as the way to end the turn", and the list of what the hook reads, which gains the queue's `revision`). The pull request that ships this code changes that text and the "afk stop hook" section of `PRIVACY.md` in the same commit.
@@ -86,11 +86,16 @@ Before the user leaves, and only when the repository's `Merge` setting lets the 
 - A session that starts while a lease is live already gets the fixed away line from the session-start hook. That line gains one fixed sentence: load the afk lease rules and run `afk.py goal` for this repository before other work. So a session that joins late knows the lease is live and gets a goal of its own.
 - Enforcer: `afk.py` (script) for refusing plain `stop` and for `--hours`. That only the user runs `stop --all` is advisory (agent judgment): the command is the same for both. The session-start line is a hook; following it is agent judgment (advisory).
 
+### F. Permissions for the new commands
+
+`goal` joins the afk lease commands the permission hook allows without a prompt (`log`, `stop`, `review`, `effective`, `rules`, `check`, `packet-check`), under the same conditions: this install's own `afk.py`, plain arguments only, no other tool-input key. The native allow rules `/afk start` prints gain the same command. This changes the twelfth scoped exception in `CLAUDE.md` (its list of lease commands) and the "afk permission hook" section of `PRIVACY.md`, in the same commit as the code, with a test that `goal --items-file <file>` is allowed and that `goal` with a shell metacharacter is not. `--items-file` names a file under `.finolabs/briefs/`, the same folder `packet-check` reads.
+
 ## What enforces what
 
 | Rule | Enforcer |
 | --- | --- |
 | Queue shape, size, labels, item numbers | `afk.py goal` and `log --item` (script) |
+| `goal` runs without a prompt under a lease | afk permission hook (hook), as for the other lease commands |
 | `goal` refused without a live lease | `afk.py goal` (script) |
 | `idle` refused while the queue has open items | `afk.py log` (script) |
 | A stop goes back to work once unless a current `idle` record exists | afk stop hook, Claude Code (hook); elsewhere advisory |
@@ -116,7 +121,7 @@ Before the user leaves, and only when the repository's `Merge` setting lets the 
 - `log --kind idle` is refused with an open item and with no queue, and accepted when every item is `done` or `parked` and when the lease has ended.
 - `log --item` refuses an unknown number. A `parked` record marks the item.
 - `goal` refuses with no lease, an expired lease, a stopped lease and a changed setup.
-- The stop hook blocks on a `parked` record alone, lets a current `idle` record through, and blocks on an `idle` record made stale by a later `goal` append (append-after-idle).
+- The stop hook blocks on a `parked` record alone, lets a current `idle` record through, and blocks on an `idle` record made stale by a later `goal` append (append-after-idle) and on an `idle` record of another repository whose queue has the same revision (cross-repository).
 - Plain `stop` is refused and leaves the lease; `stop --all` removes it.
 - `start --hours` keeps its bounds (existing tests).
 - `effective` prints `Project settings: recorded` only for a repository with its own afk section.
@@ -124,7 +129,7 @@ Before the user leaves, and only when the repository's `Merge` setting lets the 
 
 ## Surfaces to update in the code pull request
 
-`skills/afk/SKILL.md` steps 1 and 3 and "Stop and return" (`stop --all`); `scripts/afk_stop_hook.py`; `skills/afk/references/lease-rules.md` and `stops.md`; `delegate` `references/agents/claude-code.md` (the session tools); `CLAUDE.md` exception 11; `PRIVACY.md` ("afk lease", "afk stop hook"); `README.md` (the afk row and the 0.3.3 section); `skills/help/references/skills/afk.md`, `map.md` and `troubleshooting.md`; `skills/setup/references/check.md`; `skills/update/references/upgrades.json`; `docs/diagrams/afk-mechanism` sources and PNGs; `docs/specs/release-0.3.3.md` and `CHANGELOG.md`.
+`skills/afk/SKILL.md` steps 1 and 3 and "Stop and return" (`stop --all`); `scripts/afk_stop_hook.py`; `skills/afk/references/lease-rules.md` and `stops.md`; `delegate` `references/agents/claude-code.md` (the session tools); `CLAUDE.md` exceptions 11 and 12; `scripts/afk_permit_hook.py` and `afk_native_rules.py`; `PRIVACY.md` ("afk lease", "afk stop hook", "afk permission hook"); `README.md` (the afk row and the 0.3.3 section); `skills/help/references/skills/afk.md`, `map.md` and `troubleshooting.md`; `skills/setup/references/check.md`; `skills/update/references/upgrades.json`; `docs/diagrams/afk-mechanism` sources and PNGs; `docs/specs/release-0.3.3.md` and `CHANGELOG.md`.
 
 ## Open
 
