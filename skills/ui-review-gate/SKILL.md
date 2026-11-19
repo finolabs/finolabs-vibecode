@@ -31,7 +31,7 @@ Report only, like `review-gate`: findings with severity, screenshots and an Issu
    - [references/forms.md](references/forms.md)
    - [references/responsive.md](references/responsive.md)
    - [references/accessibility.md](references/accessibility.md) (the WCAG 2.2 AA criteria list)
-2. **Find the browser.** Use the browser the host session already exposes (a built-in browser pane, a browser extension, or one the host config names under `## Browser`) against the project's own local server. A repository's own end-to-end tooling and browser policy come first. This gate launches no browser of its own: no new Chrome, no Playwright or Puppeteer `launch()`. With no browser available, the run is **BLOCKED**, never PASS; report what could be read from the code alone as unverified.
+2. **Find the browser.** Use the browser the host session already exposes (a built-in browser pane or a browser extension) against the project's own local server. A repository's own end-to-end tooling and browser policy come first. This gate launches no browser of its own: no new Chrome, no Playwright or Puppeteer `launch()`. With no browser available, the run is **BLOCKED**, never PASS; report what could be read from the code alone as unverified.
 3. **Write the constraint list** before any fix, from the modes, the user's words and the change's own goal (see "Constraints and evidence"), and take the "before" evidence for each constraint.
 4. **Measure** with the snippets in "Measurements", at each width the modes need, and decide the axe pass (see "axe-core").
 5. **Check by hand** what the snippets cannot: one keyboard pass (Tab through the touched UI), focus visibility, and every criterion the mode files mark as manual.

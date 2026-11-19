@@ -95,7 +95,7 @@ The snippets read the page only: no network call, no storage write, no navigatio
 
 axe-core runs only when both hold: the repository declares `axe-core`, and the exact command that runs it is one the user already authorized for this repository (a test command recorded in the host config or the repository's settings, or the user's yes to that exact command in this session). A declaration alone authorizes neither running nor installing anything, since a repository's own scripts run whatever code they contain. Its violations join the findings, marked by source. Without both, the axe pass is reported as skipped, with the reason.
 
-Browser: the gate uses the browser the host session already exposes (a built-in browser pane, a browser extension, or one the host config names under `## Browser`) against the project's own local server. It never launches a private browser itself; a repository's own end-to-end tooling and browser policy come first. With no browser available it reports BLOCKED, never PASS.
+Browser: the gate uses the browser the host session already exposes (a built-in browser pane or a browser extension) against the project's own local server. It never launches a private browser itself; a repository's own end-to-end tooling and browser policy come first. With no browser available it reports BLOCKED, never PASS.
 
 ## Report
 

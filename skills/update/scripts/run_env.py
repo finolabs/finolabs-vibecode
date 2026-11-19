@@ -8,6 +8,8 @@ import subprocess
 import sys
 
 BASE_NAMES = ('PATH', 'HOME', 'LANG', 'TMPDIR', 'FNL_DISPATCH_ID')
+# Plugin hooks a caller may switch off in a child; the only explicit value they take is `off`.
+HOOK_SWITCHES = ('FNL_AFK_STOP', 'FNL_AFK_PERMIT')
 NAME = re.compile(r'^[A-Z][A-Z0-9_]{0,63}$')
 SENSITIVE = re.compile(r'KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|SESSIONID|SESSID|(?:^|_)(?:PASS|PASSWD|PASSPHRASE|AUTH|COOKIE|COOKIES|SESSION|PRIVATE)(?:_|$)')
 DENIED = re.compile(r'^(?:LD_|DYLD_|PYTHON|PERL5|RUBY|GIT_)|^(?:BASH_ENV|ENV|NODE_OPTIONS|NODE_EXTRA_CA_CERTS|REQUESTS_CA_BUNDLE|CURL_CA_BUNDLE|NODE_TLS_REJECT_UNAUTHORIZED|NODE_PATH|PERLLIB|SHELLOPTS|PS4|PROMPT_COMMAND|JAVA_TOOL_OPTIONS)$|_PROXY$|^SSL_CERT_')
@@ -56,6 +58,9 @@ def environment(source=None, names=(), explicit=None):
         validate_name(name)
     result = {name: source[name] for name in (*BASE_NAMES, *names) if name in source}
     for name, value in (explicit or {}).items():
+        if name in HOOK_SWITCHES and value == 'off':
+            result[name] = 'off'  # A switch may only turn a plugin hook off in the child, never on.
+            continue
         # Only the Claude command form selects a login directory explicitly.
         if name != 'CLAUDE_CONFIG_DIR':
             raise ValueError('refused explicit environment setting')

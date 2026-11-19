@@ -63,7 +63,7 @@ One request, from your words to a merged pull request: the router picks depth an
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/request-to-merge-dark.png">
-    <img src="assets/request-to-merge-light.png" alt="Swimlane of one coding request: you describe it; when the idea is unclear, shape interviews you first; the coding router names the session and picks depth and gates; delegate picks an agent from the assignment matrix and records the dispatch; another agent builds it in one worktree per branch while the main checkout stays on the default branch; checks rerun the tests and write a receipt; reviewers of another model family post code and security markers; the merge waits for your go and merge_check.py; the agent removes the worktree and branch it created and lists the rest; the release waits for you." width="920">
+    <img src="assets/request-to-merge-light.png" alt="Swimlane of one coding request: you describe it; when the idea is unclear, shape interviews you first; the coding router names the session and picks depth and gates; delegate picks an agent from the assignment matrix and records the dispatch; another agent builds it in one worktree per branch while the main checkout stays on the default branch; checks rerun the tests and write a receipt; reviewers of another model family post code and security markers; the merge waits for your go and merge_check.py; the agent removes the worktree and branch it created, leaves delegated runs' merged worktrees to a background cleanup, and lists the rest; the release waits for you." width="920">
   </picture>
 </p>
 
