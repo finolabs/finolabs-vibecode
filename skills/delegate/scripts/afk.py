@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Local afk lease, action classification and private action log; no execution.
 
-Rule table (each row names its enforcer; unknown input fails closed unless a recorded away decision approved that exact
-request, row `decided` below):
+Rule table (each row names its enforcer; unknown input fails closed: an unknown command parks, and only an unknown set of
+paths may be approved once by a recorded away decision, row `decided` below):
 
 | Rule | Enforcer |
 | --- | --- |
@@ -19,7 +19,7 @@ request, row `decided` below):
 | An argv path operand inside a checkout of this repository (its own, the main checkout or a linked worktree `project_store.identity` validates; never a lexical .claude/worktrees allow) is judged by its path relative to that checkout's root; `git -C <folder>` is judged as the same command run in that folder | token_protected, checkout_of, check |
 | Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper), and so is every path, read from the check's folder, in this install's own checkout on every branch (the checkout `project_store.identity` validates for it is the plugin root, so its linked worktrees stay editable); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3; a git verb that changes a work tree, index or HEAD (not `worktree add` of a new own worktree or `worktree remove` of another worktree) is protected when it would run in that checkout, by its folder or `git -C` | classify_paths, token_protected, install_owned, WORK_TREE_VERBS |
 | On a non-default work branch with Push and pull requests or Merge yes, a source path (skills/**, scripts/**, top-level CLAUDE.md and AGENTS.md, .<host>-plugin/*.json) of this check's own checkout is a known path, enforcer scripts included; the default branch, this install's own checkout and the hard names stay Tier 3 | source_mode, source_path, classify_paths |
-| `strict` reads no command syntax beyond the lists, categories, lease answers, merge pins and guards in these rows (decision 5 of `docs/specs/afk-decider.md`, 19/11/2026): read-only queries such as `git status` or `gh pr view`, and every other command no row names, are `unknown`; before that answer the request passes the `open` floor (`floor`), the default-branch guard reading (`guarded`) and the kept rules: a `git push`, `merge`, `tag` or `commit`, a `gh pr merge`, `create`, `edit` or `comment`, a `gh release`, a publish, a deploy word or a recursive `rm`, anywhere in the request, that its row does not accept answers `rule-form` and parks | classify_argv, strict_unknown, open_commands, rule_form, guard_hit, floored |
+| `strict` reads no command syntax beyond the lists, categories, lease answers, merge pins and guards in these rows (decision 5 of `docs/specs/afk-decider.md`, 19/11/2026): read-only queries such as `git status` or `gh pr view`, and every other command no row names, are `unknown`; before that answer the request passes the `open` floor (`floor`), the default-branch guard reading (`guarded`) and the kept rules: a `git push`, `merge`, `tag` or `commit`, a `gh pr merge`, `create`, `edit` or `comment`, a `gh release`, a publish, a deploy word or a recursive `rm`, anywhere in the request, that its row does not accept answers `rule-form` and parks; an `unknown` command parks too (Tier 3, `"next":"park"` in the answer) and is never approved, because a command run through another (`find -exec`, `sh -c`) would carry what these rows refuse (owner decision, 19/11/2026) | classify_argv, strict_unknown, open_commands, rule_form, guard_hit, floored |
 | Git add of allowed paths, commit on a work branch (a commit on the default branch, a detached head or an unreadable branch is protected or unknown), origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
 | A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
 | One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
@@ -35,7 +35,7 @@ request, row `decided` below):
 | PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA (other options: a long method flag, --delete-branch, --repo, and one plain email address for --author-email or -A) and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`); its pin names the repository and is written before the action is reserved (a full log answers `log-unwritable`) | classify_argv, check |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run`, `run --changed [--base <branch or commit>]` (no relative revision) or `run --dispatch <dispatch id>` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
-| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings; an argv of at most 256 non-empty tokens of at most 64 KiB each, no control character but a newline or tab, and no secret or sensitive assignment, with no shape allowlist; a set of plain relative file paths inside the checkout, outside its protected paths, with no link) is Tier 1 `decided` once, for that exact argv or set of paths, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, decidable_paths, request_subject, open_approvals |
+| An `unknown` set of paths that a rule, advisor or host attempt approved with `--approve-paths` (option 1, decidable: a found repository with user or project settings and a set of plain relative file paths inside the checkout, outside its protected paths, with no link) is Tier 1 `decided` once, for that set of paths, in the same folder, during the lease that recorded it; `--approve-argv-json` is refused in every case: an unknown command parks (owner decision, 19/11/2026) | check, log, approval_subject, decidable_paths, request_subject, open_approvals |
 | `--approve-request <digest>` on a rule, advisor or host attempt settled on option 1 stores a permission approval for the afk permission hook (away_lease.record_permit: 64-hex digest, live lease, used once within 30 minutes); `check` never reads or consumes it | log, permit_subject |
 | `log --kind idle` needs a live lease; `--session` belongs to idle and parked and is stored as the first 16 hex of its SHA-256 | log, check |
 | A repository's approved `merge: decide` applies as Merge yes there under any lease; `effective` shows `merge_authority` | effective, show_effective |
@@ -2495,8 +2495,8 @@ def open_commands(argv):
 
 # The commands a kept `strict` rule reads (afk-decider.md D, decision 5): the lease's Push and Merge answers, the merge
 # pins, the commit and pull request text screens, the release and deploy lists and the recursive-deletion category. A
-# form of one of them that its rule does not accept parks as `rule-form`; it never reaches Decide as `unknown`, so an
-# approval cannot replace the rule.
+# form of one of them that its rule does not accept parks as `rule-form`. An `unknown` command parks too and is never
+# approved (owner decision, 19/11/2026), so no command run through another can carry a kept rule's form past it.
 RULE_GIT_VERBS = frozenset({'push', 'merge', 'tag', 'commit'})
 RULE_GH_PR_VERBS = frozenset({'merge', 'create', 'edit', 'comment'})
 PUBLISHERS = frozenset({'npm', 'pnpm', 'yarn', 'bun'})
@@ -2519,7 +2519,8 @@ def rule_form(program, words):
 
 def strict_unknown(argv, paths, applied, cwd):
     """The answer for a `strict` request no rule accepted: `floor` when it touches the credential floor, `guarded`
-    when a default-branch guard form matches, `rule-form` when it belongs to a kept rule, else `unknown` (Decide)."""
+    when a default-branch guard form matches, `rule-form` when it belongs to a kept rule, else `unknown`: a command
+    parks, a set of paths may enter Decide."""
     if argv is None:
         return 'floor' if floored(None, paths, cwd) else 'unknown'
     if floored(argv, None, cwd):
@@ -2578,7 +2579,8 @@ def classified(folder, argv_json, paths, coordinator, current):
                                       applied.get(FILES, ()))
             if code == 'unknown':
                 # The floor and the guards apply in `strict` too, and a form of a kept rule parks (afk-decider.md D):
-                # what is left is unknown and decidable. Any parser error answers Tier 3, never Tier 1.
+                # what is left is unknown; a command parks, a set of paths may be decided. Any parser error answers
+                # Tier 3, never Tier 1.
                 try:
                     valid = argv_json is None or isinstance(argv, list) and all(isinstance(t, str) for t in argv)
                     if valid:
@@ -2604,9 +2606,10 @@ def limit_reached(folder, cwd, current):
 def check(folder, args):
     current = now()
     code, lease, applied, key, entry, argv, cwd = classified(folder, args.argv_json, args.paths, args.coordinator, current)
-    if code == 'unknown' and entry is not None:
-        # An away decision may have approved this exact request once (`log --kind decision --approve-...`).
-        subject = request_subject(applied, cwd, argv if args.argv_json is not None else None, args.paths)
+    if code == 'unknown' and entry is not None and args.argv_json is None:
+        # An away decision may have approved this exact set of paths once (`log --kind decision --approve-paths`); an
+        # unknown command is never approved (owner decision, 19/11/2026).
+        subject = request_subject(applied, cwd, args.paths)
         if subject is not None and subject in open_approvals(folder, lease, current):
             code = 'decided'
             append_log(folder, dict(time=current, tier=1, kind='approval-used', subject=subject, note=''), current)
@@ -2633,6 +2636,8 @@ def check(folder, args):
         save_lease(folder, lease)
     tier = 1 if code in {'allowed', 'decided'} else 3
     result = {'tier': tier, 'code': code}
+    if code == 'unknown' and args.argv_json is not None:
+        result['next'] = 'park'  # an unknown command never enters Decide: `log --kind parked`
     if code in ENDED:
         # A host loop can outlive the lease; the answer itself tells the caller to end it.
         result['end'] = ENDED_LINE
@@ -2840,7 +2845,14 @@ def packet_check(args):
     print(json.dumps({'goal': packet['goal'], 'excerpts': kept, 'dropped': len(excerpts) - len(kept)}, ensure_ascii=False))
 
 
+# The one refusal of every `--approve-argv-json` (owner decision, 19/11/2026).
+ARGV_APPROVAL_REFUSED = ('--approve-argv-json is never accepted: an unknown command is never approved; '
+                         "park it with `log --kind parked --note '<brief reason>'`")
+
+
 def log(folder, args):
+    if args.approve_argv_json is not None:
+        raise Refusal(ARGV_APPROVAL_REFUSED)
     decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS,
                       'approve_argv_json', 'approve_paths', 'approve_request')
     if args.kind != 'decision' and any(getattr(args, key) is not None for key in decision_flags):
@@ -2884,7 +2896,7 @@ def log(folder, args):
     if args.kind == 'decision' and args.approve_request is not None:
         attempt(args)  # the row itself must be valid before the approval is stored
         permit = permit_subject(args)
-    elif args.kind == 'decision' and (args.approve_argv_json is not None or args.approve_paths is not None):
+    elif args.kind == 'decision' and args.approve_paths is not None:
         attempt(args)  # the row itself must be valid before the request is judged
         subject = approval_subject(folder, args, current)
     # Every other check passes before the decision line reaches the ledger.
@@ -2974,28 +2986,6 @@ def inside(token, context):
     return not protected(os.path.relpath(full, root))
 
 
-def decidable_argv(argv, context):
-    """True when an `unknown` command may enter the away ladder for approval of that exact argv (afk-decider.md D,
-    decision 5: no shape allowlist): a found repository with user or project settings, every token a non-empty string
-    of at most 64 KiB with no control character but a newline or tab, and no token holding a secret or a sensitive
-    assignment. The floor, the guards and the kept rules were applied before (`strict_unknown`)."""
-    if context.repository != 'found' or context.state not in {'user', 'project'} or not argv or len(argv) > 256:
-        return False
-    for token in argv:
-        if (not isinstance(token, str) or not token or len(token.encode()) > 65536
-                or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in token)):
-            return False
-        try:
-            if secret_patterns.findings(token):
-                return False
-        except ValueError:
-            return False
-        import judge
-        if judge.assigns_sensitive(token):
-            return False
-    return True
-
-
 def decidable_paths(paths, context):
     """True when every path of an `unknown` change is a plain relative file path inside this checkout, outside its
     protected paths, with no link on the way."""
@@ -3009,19 +2999,13 @@ def decidable_paths(paths, context):
     return True
 
 
-def request_subject(applied, cwd, argv, paths):
-    """The digest an approval binds: repository, working folder and the exact argv or set of paths; None when the
-    request is not decidable."""
+def request_subject(applied, cwd, paths):
+    """The digest an approval binds: repository, working folder and the exact set of paths; None when the change is
+    not decidable. A command never has one (owner decision, 19/11/2026)."""
     context = context_of(applied)
-    if argv is not None:
-        if not isinstance(argv, list) or not decidable_argv(argv, context):
-            return None
-        request = dict(argv=argv)
-    else:
-        if not isinstance(paths, list) or not decidable_paths(paths, context):
-            return None
-        request = dict(paths=sorted(paths))
-    return digest(dict(project=project_key(context), cwd=os.path.realpath(cwd), **request))
+    if not isinstance(paths, list) or not decidable_paths(paths, context):
+        return None
+    return digest(dict(project=project_key(context), cwd=os.path.realpath(cwd), paths=sorted(paths)))
 
 
 def open_approvals(folder, lease, current):
@@ -3047,27 +3031,23 @@ def permit_subject(args):
     approving it is advisory (agent judgment)."""
     if args.rung not in {'rule', 'advisor', 'host'} or args.settled != 'yes' or args.option != '1':
         raise Refusal('an approval needs a rule, advisor or host rung that settled on option 1, which runs the request')
-    if args.approve_argv_json is not None or args.approve_paths is not None:
-        raise Refusal('approve one request: --approve-request, --approve-argv-json or --approve-paths')
+    if args.approve_paths is not None:
+        raise Refusal('approve one request: --approve-request or --approve-paths')
     if not SHA256.fullmatch(args.approve_request):
         raise Refusal('--approve-request is the 64-hex request digest the permission hook printed')
     return args.approve_request
 
 
 def approval_subject(folder, args, current):
-    """The subject of `--approve-argv-json` or `--approve-paths`, checked before the decision is recorded: the rung
-    decided option 1 (run it), and the request, judged now and here exactly as `check` would, is `unknown` and
-    decidable. Refuses anything else."""
+    """The subject of `--approve-paths`, checked before the decision is recorded: the rung decided option 1 (run it),
+    and the change, judged now and here exactly as `check` would, is `unknown` and decidable. Refuses anything else."""
     if args.rung not in {'rule', 'advisor', 'host'} or args.settled != 'yes' or args.option != '1':
         raise Refusal('an approval needs a rule, advisor or host rung that settled on option 1, which runs the request')
-    if args.approve_argv_json is not None and args.approve_paths is not None:
-        raise Refusal('approve one request: --approve-argv-json or --approve-paths')
-    code, lease, applied, key, entry, argv, cwd = classified(
-        folder, args.approve_argv_json, args.approve_paths, None, current)
+    code, lease, applied, key, entry, argv, cwd = classified(folder, None, args.approve_paths, None, current)
     if code != 'unknown' or entry is None:
-        # entry is None when `git -C` named a folder outside this repository or under a protected path
-        raise Refusal('only an unknown request in a checked folder may be approved')
-    subject = request_subject(applied, cwd, argv if args.approve_argv_json is not None else None, args.approve_paths)
+        # entry is None in `open` mode, which keeps no per-project counters and answers no `unknown` change
+        raise Refusal('only an unknown change in a checked folder may be approved')
+    subject = request_subject(applied, cwd, args.approve_paths)
     if subject is None:
         raise Refusal('this request is never decidable: park it')
     return subject

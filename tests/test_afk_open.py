@@ -263,6 +263,20 @@ class FloorStrictTest(AfkBase):
                                      '--option', '1', '--of', '2', '--model', 'claude-opus-5-5',
                                      '--approve-argv-json', json.dumps(argv))
         self.assertEqual(status, 3, output)
+        self.assertIn('never approved', output)  # every command approval is refused (owner decision, 19/11/2026)
+
+    def test_a_command_run_through_another_parks_in_strict(self):
+        # Codex review of PR 370: a merge behind `find -exec` and a write to .git/config behind `sh -c`.
+        self.start(STRICT.replace('- Merge: yes', '- Merge: no'))
+        for argv in (['find', 'src', '-prune', '-exec', 'gh', 'pr', 'merge', '7', '--repo', 'github.com/example/demo', ';'],
+                     ['sh', '-c', 'printf x > .git/config', ';']):
+            with self.subTest(argv=argv):
+                status, output = self.invoke('check', '--argv-json', json.dumps(argv))
+                result = json.loads(output)
+                self.assertEqual((status, result['tier']), (3, 3), output)
+                self.assertNotEqual(result['code'], 'decided', output)
+                if result['code'] == 'unknown':
+                    self.assertEqual(result['next'], 'park', output)
 
 
 class GuardTest(OpenBase):
@@ -337,6 +351,22 @@ class ModeTest(AfkBase):
         status, output = self.invoke('check', '--argv-json', json.dumps(['gh', 'pr', 'merge', '9']))
         self.assertEqual((status, json.loads(output)), (0, {'tier': 1, 'code': 'allowed'}))
         self.assertEqual(self.lease()['counters'], {})
+
+    def test_open_answers_stay_and_no_command_is_approved(self):
+        # Owner decision 19/11/2026 changes `strict` only: the same requests keep their `open` answer, and an
+        # argv approval is refused here too.
+        self.start(OPEN)
+        for argv in (['find', 'src', '-prune', '-exec', 'gh', 'pr', 'merge', '7', '--repo', 'github.com/example/demo', ';'],
+                     ['sh', '-c', 'printf x > .git/config', ';'], ['git', 'status']):
+            with self.subTest(argv=argv):
+                self.check(argv)
+                status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it',
+                                             '--precedents', '0', '--rung', 'host', '--settled', 'yes', '--by', 'claude',
+                                             '--option', '1', '--of', '2', '--model', 'claude-opus-5-5',
+                                             '--approve-argv-json', json.dumps(argv))
+                self.assertEqual(status, 3, output)
+        status, output = self.invoke('check', '--argv-json', '[]')
+        self.assertEqual((status, json.loads(output)), (3, {'tier': 3, 'code': 'unknown', 'next': 'park'}))
 
     def test_open_still_ends_with_the_lease(self):
         self.start(OPEN)

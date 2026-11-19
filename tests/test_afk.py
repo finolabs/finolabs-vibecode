@@ -117,6 +117,8 @@ class AfkBase(unittest.TestCase):
         status, output = self.invoke('check', *flags)
         self.assertEqual(status, 0 if tier == 1 else 3, output)  # a denied check never exits 0
         expected = {'tier': tier, 'code': code}
+        if code == 'unknown' and argv is not None:
+            expected['next'] = 'park'  # an unknown command parks (owner decision, 19/11/2026)
         if code in ENDED_CODES:
             expected['end'] = ENDED_LINE
         self.assertEqual(json.loads(output), expected)
@@ -439,7 +441,7 @@ class AfkTest(AfkBase):
         for raw in ('null', '{}', '[1]', 'invalid', '[]'):
             status, output = self.invoke('check', '--argv-json', raw)
             self.assertEqual(status, 3, output)
-            self.assertEqual(json.loads(output), dict(tier=3, code='unknown'))
+            self.assertEqual(json.loads(output), dict(tier=3, code='unknown', next='park'))
         (self.state / 'lease.json').chmod(0o644)
         self.check(TIER_ONE, tier=3, code='unsafe')
         (self.state / 'lease.json').chmod(0o600)
@@ -591,6 +593,8 @@ class AwayDecisionTest(AfkBase):
             self.assertEqual(result['tier'], 3, argv)
         else:
             expected = {'tier': tier, 'code': code}
+            if code == 'unknown':
+                expected['next'] = 'park'  # an unknown command parks (owner decision, 19/11/2026)
             if code in ENDED_CODES:
                 expected['end'] = ENDED_LINE
             self.assertEqual(result, expected, argv)
@@ -969,8 +973,9 @@ class AwayDecisionTest(AfkBase):
         self.check_as(AGY, coordinator='antigravity', tier=3, code='unknown')
         self.assertEqual(self.counts()['actions'], 3)
 
-    def test_a_delegated_run_outside_the_advisor_form_may_be_decided_once(self):
-        # Owner decision 15/11/2026: a review on a fast model, or an implementation run, goes up the ladder.
+    def test_a_delegated_run_outside_the_advisor_form_parks(self):
+        # Owner decision 19/11/2026 (replacing 15/11/2026): an unknown command is never approved in `strict`; a review
+        # on a fast model, an implementation run or a family outside Hosts parks.
         self.start_away(SETUP_ALL)
         self.cwd = self.repo
         review = AGY[:AGY.index('gemini-4-argon-high')] + ['gemini-3.8-flash-high'] + AGY[AGY.index('gemini-4-argon-high') + 1:]
@@ -980,18 +985,15 @@ class AwayDecisionTest(AfkBase):
                 '--model', 'claude-opus-5-5')
         status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'review run',
                                      '--precedents', '0', *host, '--approve-argv-json', json.dumps(argv))
-        self.assertEqual(status, 0, output)
-        self.check_as(argv, code='decided')
+        self.assertEqual(status, 3, output)
         self.check_as(argv, tier=3, code='unknown')
-        # Decision 5 (19/11/2026): no shape allowlist, so a program other than the recorded executable, or a family
-        # outside Hosts, enters the ladder too and runs once for that exact argv; "Where it must stop" is the ladder's.
         for other in (review, ENV + ['--family', 'zcode', '--', 'zcode', '-p', BRIEF]):
             with self.subTest(other=other):
                 self.check_as(other, tier=3, code='unknown', real=False)
                 status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'review run',
                                              '--precedents', '0', *host, '--approve-argv-json', json.dumps(other))
-                self.assertEqual(status, 0, output)
-                self.check_as(other, code='decided', real=False)
+                self.assertEqual(status, 3, output)
+                self.check_as(other, tier=3, code='unknown', real=False)
 
     def test_the_advisor_model_is_frontier_else_strong(self):
         self.start_away(SETUP_ALL)
@@ -1333,41 +1335,29 @@ class ProjectScopeTest(AfkBase):
         self.assertEqual(found[0], status, found[1])
         return found[1]
 
-    def test_an_away_decision_approves_one_unknown_command_once_in_this_folder(self):
-        # Owner decision 15/11/2026: an unknown request goes up the away ladder instead of parking.
+    def test_an_away_decision_never_approves_a_command_and_approves_paths_once(self):
+        # Owner decision 19/11/2026 (replacing 15/11/2026): an unknown command parks; --approve-argv-json is refused in
+        # every case with one fixed message, and only an unknown set of paths may be approved once.
         self.start(SETUP + '- Max actions per hour: 1000\n')
         (self.repo / 'scripts').mkdir(exist_ok=True)
         (self.repo / 'scripts/ci-local.sh').write_text('#!/bin/sh\n')
-        argv = ['scripts/ci-local.sh', 'fast']
-        self.check(argv, tier=3, code='unknown')
-        self.approve('--approve-argv-json', json.dumps(argv))
-        self.check(argv, code='decided')
-        self.check(argv, tier=3, code='unknown')  # one approval runs once
-        self.approve('--approve-argv-json', json.dumps(argv))
-        self.check(['scripts/ci-local.sh', 'web'], tier=3, code='unknown')  # bound to the exact argv
-        self.cwd = self.other_repo('second')
-        self.check(argv, tier=3, code='unknown')  # and to the repository and folder
-        self.cwd = self.repo
-        self.check(argv, code='decided')
         (self.repo / 'requirements.txt').write_text('x\n')
-        for test in (['npm', 'test', '--', 'unit'], ['python3', '-m', 'unittest', 'tests.test_x'], ['make', 'ci-local'],
-                     ['go', 'test', './...'], ['go', 'test', '-race', '-count=1', './...'], ['make', 'ci-local', 'TIER=fast'],
-                     ['git', 'fetch', 'origin', 'main'], ['gh', 'issue', 'create', '-R', 'example/demo', '--title', 'x'],
-                     ['python3', '-I', 'scripts/ci-local.sh'],
-                     # git and gh for code, review and workflow work (owner decision, 15/11/2026).
-                     ['git', 'cherry-pick', 'abc1234'], ['git', 'revert', '--no-edit', 'abc1234'],
-                     ['gh', 'workflow', 'run', 'deploy.yml'], ['gh', 'run', 'rerun', '123'],
-                     ['gh', 'issue', 'create', '--title', 'x', '--body', 'y'],
-                     # Installing what the repository declares (owner decision, 15/11/2026).
-                     ['npm', 'ci'], ['npm', 'install'], ['pnpm', 'install', '--frozen-lockfile'], ['uv', 'sync'],
-                     ['pip', 'install', '-r', 'requirements.txt'], ['python3', '-m', 'pip', 'install', '-e', '.'],
-                     ['python3', '-I', '-m', 'pytest', '-q'], ['python3', '-u', '-m', 'pip', 'install', '-r', 'requirements.txt'],
-                     ['go', 'mod', 'download']):
-            with self.subTest(test=test):
-                self.approve('--approve-argv-json', json.dumps(test))
-                self.check(test, code='decided')
-        # A change of paths no rule names, bound to the same set of paths.
+        for argv in (['scripts/ci-local.sh', 'fast'], ['npm', 'ci'], ['git', 'fetch', 'origin', 'main'],
+                     ['gh', 'issue', 'create', '--title', 'x', '--body', 'y'], ['python3', '-I', '-m', 'pytest', '-q']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='unknown')
+                output = self.approve('--approve-argv-json', json.dumps(argv), status=3)
+                self.assertIn('never approved', output)
+                self.assertIn('log --kind parked', output)
+                self.check(argv, tier=3, code='unknown')
+        # Refused before anything else: on any kind, and with --approve-paths beside it.
+        self.assertEqual(self.invoke('log', '--kind', 'action', '--approve-argv-json', '["make"]')[0], 3)
         (self.repo / 'NOTES.md').write_text('x\n')
+        self.approve('--approve-argv-json', '["make"]', '--approve-paths', 'NOTES.md', status=3)
+        self.check(paths=['NOTES.md'], tier=3, code='unknown')  # the refused call approved nothing
+        log = self.state / 'log.jsonl'
+        self.assertNotIn('"approval"', log.read_text() if log.exists() else '')
+        # A change of paths no rule names, bound to the same set of paths.
         self.check(paths=['NOTES.md'], tier=3, code='unknown')
         self.approve('--approve-paths', 'NOTES.md')
         self.check(paths=['NOTES.md'], code='decided')
@@ -1375,7 +1365,7 @@ class ProjectScopeTest(AfkBase):
 
     def test_strict_reads_no_syntax_beyond_its_lists_categories_answers_and_guards(self):
         # Decision 5 (19/11/2026), afk-decider.md D: an unknown request passes the floor, the default-branch guard
-        # reading and the kept rules before it may enter Decide; anything a kept rule owns parks as `rule-form`.
+        # reading and the kept rules; anything a kept rule owns parks as `rule-form`, and an unknown command parks too.
         self.start(NO + '- Max actions per hour: 1000\n- Test commands: make check\n')
         self.check(['make', 'check'])  # a listed test command, exactly
         self.check(['make', 'check', 'extra'], tier=3, code='unknown')
@@ -1395,15 +1385,15 @@ class ProjectScopeTest(AfkBase):
                            (['bash', '-c', 'printenv'], 'floor')):
             with self.subTest(argv=argv):
                 self.check(argv, tier=3, code=code)
-                self.approve('--approve-argv-json', json.dumps(argv), status=0 if code == 'unknown' else 3)
+                self.approve('--approve-argv-json', json.dumps(argv), status=3)  # a command is never approved
         self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
         self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
         self.assertEqual(self.counts()['actions'], 1)  # only the listed test command reserved an action
 
-    def test_an_approval_needs_an_unknown_answer_and_no_shape_allowlist(self):
+    def test_no_command_of_the_review_corpus_is_ever_approved(self):
         # Decision 5 (19/11/2026): the shape allowlist is gone. The corpus below (review rounds of PR 295) is kept:
-        # what the floor, a guard or a kept rule answers still parks and is never approved; every other request is
-        # `unknown` and may be approved once for its exact argv, leaving "Where it must stop" to the ladder.
+        # what the floor, a guard or a kept rule answers parks with its own code, every other command is `unknown`
+        # and parks too, and no command is approved (owner decision, 19/11/2026).
         self.start(SETUP + '- Max actions per hour: 1000\n')
         (self.repo / 'tests').mkdir(exist_ok=True)
         outside = self.home / 'outside.txt'
@@ -1450,15 +1440,11 @@ class ProjectScopeTest(AfkBase):
             with self.subTest(argv=argv):
                 code = json.loads(self.invoke('check', '--argv-json', json.dumps(argv))[1])['code']
                 answers[tuple(argv)] = code
-                if code == 'unknown':
-                    self.approve('--approve-argv-json', json.dumps(argv))
-                    self.check(argv, code='decided')
-                else:
-                    self.approve('--approve-argv-json', json.dumps(argv), status=3)
-                    self.check(argv, tier=3, code=code)
+                self.approve('--approve-argv-json', json.dumps(argv), status=3)  # never, owner decision 19/11/2026
+                self.check(argv, tier=3, code=code)
         self.assertEqual({k: answers[k] for k in parked}, parked)
         self.assertEqual(answers[('make', 'TOKEN=ghp_' + 'a' * 36)], 'protected')  # a secret never enters the ladder
-        self.assertEqual(answers[('bash', '-c', 'make')], 'unknown')  # no shape allowlist: the ladder judges it
+        self.assertEqual(answers[('bash', '-c', 'make')], 'unknown')  # no shape allowlist, and it parks
         self.check(TIER_ONE)
         self.approve('--approve-argv-json', json.dumps(TIER_ONE), status=3)  # already allowed: no approval
         self.approve('--approve-paths', '.github/workflows/x.yml', status=3)  # protected never enters the ladder
@@ -1477,6 +1463,28 @@ class ProjectScopeTest(AfkBase):
         # The strict state (a repository whose settings cannot be trusted) never approves.
         self.cwd = self.home
         self.approve('--approve-argv-json', argv, status=3)
+
+    def test_a_command_run_through_another_parks_and_is_never_approved(self):
+        # Codex review of PR 370 (head 6f8f151a): `find -exec` and `sh -c` hid a merge and a write to a protected file
+        # inside an `unknown` answer that an approval could then run, past Merge=no, the merge pin, MERGE OK and the
+        # protected names. Owner decision 19/11/2026: an unknown command parks; no syntax reading is added.
+        merge = ['find', 'src', '-prune', '-exec', 'gh', 'pr', 'merge', '7', '--repo', 'github.com/example/demo', ';']
+        write = ['sh', '-c', 'printf x > .git/config', ';']
+        self.start(NO + '- Max actions per hour: 1000\n')
+        for argv in (merge, write):
+            with self.subTest(argv=argv):
+                status, output = self.invoke('check', '--argv-json', json.dumps(argv))
+                result = json.loads(output)
+                self.assertEqual((status, result['tier']), (3, 3), output)
+                if result['code'] == 'unknown':
+                    self.assertEqual(result.get('next'), 'park', output)
+                else:
+                    self.assertIn(result['code'], {'rule-form', 'guarded', 'protected', 'floor', 'forbidden'}, output)
+                self.approve('--approve-argv-json', json.dumps(argv), status=3)
+                status, output = self.invoke('check', '--argv-json', json.dumps(argv))
+                self.assertEqual((status, json.loads(output)['tier']), (3, 3), output)
+        log = self.state / 'log.jsonl'
+        self.assertNotIn('"approval"', log.read_text() if log.exists() else '')
 
     def test_production_targets_are_tier_one_only_where_the_repository_listed_and_decides_them(self):
         targets = '- Non-production targets: npx wrangler deploy --env uat\n'
