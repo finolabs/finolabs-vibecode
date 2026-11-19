@@ -19,7 +19,9 @@ Exits: 0 passed, 1 a check failed, 2 refused (no list, unknown base, outside a r
 
 ## How a check runs
 
-Each check is launched through this skill's copy of `heavy_run.py` in its canonical form, `python3 -I <path>/heavy_run.py run --label "check <name>" -- <argument array>`. That form waits for the machine-wide heavy-job lock, the load and free memory, so checks never run beside another heavy job. No shell is involved, and the environment is the allowlist from `run_env.py`. `checks.py` edits no repository file and makes no network call. The checks themselves run the repository's own code, as cloud CI does (advisory: run them only on code you are willing to run).
+A heavy check (the default) is launched through this skill's copy of `heavy_run.py` in its canonical form, `python3 -I <path>/heavy_run.py run --label "check <name>" -- <argument array>`. That form waits for the machine-wide heavy-job lock, the load and free memory, so heavy checks never run beside another heavy job.
+
+A light check, one the approved `checks.json` marks `"heavy": false`, runs directly: it never waits for the lock, the load or free memory, refuses during a pause (exit 77, checked again while it waits), waits only while macOS memory pressure is critical (up to `Wait cap minutes`, then exit 75), runs in its own process group until every member is gone, and stops that whole group after `Max job minutes` (exit 124); the output names it `(light, outside the heavy-job lock)`. `/setup add checks` saves checks that name test modules (`python3 -m unittest tests.test_x`) light and every other check heavy; the mark is part of the approved bytes, so a hand-added one runs nothing. No shell is involved, and the environment is the allowlist from `run_env.py`. `checks.py` edits no repository file and makes no network call. The checks themselves run the repository's own code, as cloud CI does (advisory: run them only on code you are willing to run).
 
 ## The local receipt
 
@@ -56,4 +58,4 @@ The receipt holds the dispatch id, the head, a hash of the checkout path, `tests
 
 `checks_setup.py hook install` installs a git `pre-push` hook that runs `checks.py run --changed` before every push. Like every setup step, it previews first, then needs a digest and a yes. It is the user's own git hook, not a plugin hook, and `git push --no-verify` skips it. See `setup`'s checks feature for the preview, the backup, the refusal when `core.hooksPath` is set, and the removal.
 
-Enforcers: `checks.py` for the order, the stop on failure, `--changed` and the conditions of both receipts; `heavy_run.py` for serialising; `merge_check.py` for matching the receipt; the user's git hook for running before a push. Running `checks.py run` before a push when no hook is installed is agent judgment (advisory).
+Enforcers: `checks.py` for the order, the stop on failure, `--changed` and the conditions of both receipts; `heavy_run.py` for serialising heavy checks; `checks.py` for running only approved light checks outside it; `merge_check.py` for matching the receipt; the user's git hook for running before a push. Running `checks.py run` before a push when no hook is installed is agent judgment (advisory).
