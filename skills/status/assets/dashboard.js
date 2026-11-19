@@ -314,7 +314,8 @@
         var measured = q ? Date.parse(q.measured) : NaN;
         var stale = !q || q.unverified || !Number.isFinite(measured) || Date.now() < measured || (Date.now() - measured) / 1000 > 28800;
         var floor = q && !stale && Number.isInteger(q.floor) && q.floor >= 10 && q.floor <= 95 ? q.floor : null;
-        var out = floor !== null && q.below_floor === true;
+        var resets = q ? Date.parse(q.resets) : NaN;
+        var out = floor !== null && q.below_floor === true && Number.isFinite(resets) && Date.now() < resets;  /* routing stops counting it out at the reset */
         var meter = h("div", "quota-bricks" + (stale ? " unverified" : "") + (!q ? " unread" : "") + (out ? " below-floor" : ""));
         var lit = fraction > 0 ? Math.max(1, Math.round(fraction * 10)) : 0;
         for (var i = 0; i < 10; i++) meter.appendChild(brick(stale || i >= lit ? "todo" : fraction <= .1 || out ? "low" : "done", 14, 7,

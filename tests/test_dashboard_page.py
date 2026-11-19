@@ -436,6 +436,10 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertTrue(lit(1) and all('done' in m['cls'].split() for m in lit(1)))
         self.assertIn('below your weekly floor', json.dumps(out))
         self.assertIn('below weekly floor 40%', json.dumps(out))
+        pool['resets'] = '2026-11-06T09:00:00Z'  # past the reset, routing no longer counts it out
+        out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+        self.assertNotIn('below your weekly floor', json.dumps(out))
+        pool['resets'] = '2026-11-08T10:00:00Z'
         pool['unverified'] = True  # a stale reading is never marked
         out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
         self.assertNotIn('below weekly floor', json.dumps(out))
