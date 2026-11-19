@@ -46,7 +46,7 @@ Review of this spec (Codex, 19/11/2026) narrowed two points: a repository with n
 - The afk stop hook lets a stop through on an `idle` record of this session written since its previous stop whose repository digest equals the hook input's repository and whose `revision` equals the current revision of that repository's queue, and no longer on a `parked` record: a park closes an item, not the turn (decision 3). A stale `idle` record (the queue changed after it) does not count. Its fixed reason names `afk.py log --kind idle` alone. To compare, the hook reads one more value: the integer `revision` of that repository's queue file, nothing else from it.
 - Every other escape stays: `stop_hook_active`, the lease's limits for the repository reached, and no lease, an expired, stopped or unreadable lease, or any error.
 - What this guarantees, and what it does not: the hook sends the agent back once at each stop (`stop_hook_active` lets the next stop through, so it never loops). An agent that stops again right away can still end its turn with items open. What brings it back is the self-paced loop the goal step starts (`/loop` on Claude Code) and the host's goal command, which are agent judgment and host behaviour, not this hook.
-- This changes the eleventh scoped exception in `CLAUDE.md` ("names `afk.py log --kind idle` and `--kind parked` as the way to end the turn", and the list of what the hook reads, which gains the queue's `revision`). The pull request that ships this code changes that text and the "afk stop hook" section of `PRIVACY.md` in the same commit.
+- This changes the eleventh scoped exception in [CLAUDE.md](../../CLAUDE.md): its words naming `afk.py log --kind idle` and `--kind parked` as the way to end the turn, and the list of what the hook reads, which gains the queue's `revision`. The pull request that ships this code changes that text and the "afk stop hook" section of [PRIVACY.md](../../PRIVACY.md) in the same commit.
 - Enforcer: the stop hook (hook) on Claude Code. On Codex and Antigravity it is advisory (agent judgment).
 
 ### C. Waking the coordinators
@@ -88,7 +88,7 @@ Before the user leaves, and only when the repository's `Merge` setting lets the 
 
 ### F. Permissions for the new commands
 
-`goal` joins the afk lease commands the permission hook allows without a prompt (`log`, `stop`, `review`, `effective`, `rules`, `check`, `packet-check`), under the same conditions: this install's own `afk.py`, plain arguments only, no other tool-input key. The native allow rules `/afk start` prints gain the same command. This changes the twelfth scoped exception in `CLAUDE.md` (its list of lease commands) and the "afk permission hook" section of `PRIVACY.md`, in the same commit as the code, with a test that `goal --items-file <file>` is allowed and that `goal` with a shell metacharacter is not. `--items-file` names a file under `.finolabs/briefs/`, the same folder `packet-check` reads.
+`goal` joins the afk lease commands the permission hook allows without a prompt (`log`, `stop`, `review`, `effective`, `rules`, `check`, `packet-check`), under the same conditions: this install's own `afk.py`, plain arguments only, no other tool-input key. The native allow rules `/afk start` prints gain the same command. This changes the twelfth scoped exception in [CLAUDE.md](../../CLAUDE.md) (its list of lease commands) and the "afk permission hook" section of [PRIVACY.md](../../PRIVACY.md), in the same commit as the code, with a test that `goal --items-file <file>` is allowed and that `goal` with a shell metacharacter is not. `--items-file` names a file under `.finolabs/briefs/`, the same folder `packet-check` reads.
 
 ## What enforces what
 
@@ -113,7 +113,7 @@ Before the user leaves, and only when the repository's `Merge` setting lets the 
 - It lives in the lease's private state folder, follows the lease's file rules (no-follow, owner-checked, atomic) and is removed with the lease.
 - The start keeps no list of repositories or sessions.
 - The message between sessions goes through the host's own session tool on this machine; the plugin sends nothing anywhere.
-- `PRIVACY.md` ("afk lease") gains the queue in the same pull request as the code.
+- The "afk lease and log" section of [PRIVACY.md](../../PRIVACY.md) gains the queue in the same pull request as the code.
 
 ## Tests
 
@@ -129,7 +129,7 @@ Before the user leaves, and only when the repository's `Merge` setting lets the 
 
 ## Surfaces to update in the code pull request
 
-`skills/afk/SKILL.md` steps 1 and 3 and "Stop and return" (`stop --all`); `scripts/afk_stop_hook.py`; `skills/afk/references/lease-rules.md` and `stops.md`; `delegate` `references/agents/claude-code.md` (the session tools); `CLAUDE.md` exceptions 11 and 12; `scripts/afk_permit_hook.py` and `afk_native_rules.py`; `PRIVACY.md` ("afk lease", "afk stop hook", "afk permission hook"); `README.md` (the afk row and the 0.3.3 section); `skills/help/references/skills/afk.md`, `map.md` and `troubleshooting.md`; `skills/setup/references/check.md`; `skills/update/references/upgrades.json`; `docs/diagrams/afk-mechanism` sources and PNGs; `docs/specs/release-0.3.3.md` and `CHANGELOG.md`.
+`skills/afk/SKILL.md` steps 1 and 3 and "Stop and return" (`stop --all`); `scripts/afk_stop_hook.py`; `skills/afk/references/lease-rules.md` and `stops.md`; `delegate` `references/agents/claude-code.md` (the session tools); [CLAUDE.md](../../CLAUDE.md) exceptions 11 and 12; `scripts/afk_permit_hook.py` and `afk_native_rules.py`; the sections "afk lease and log", "afk stop hook" and "afk permission hook" of [PRIVACY.md](../../PRIVACY.md); `README.md` (the afk row and the 0.3.3 section); `skills/help/references/skills/afk.md`, `map.md` and `troubleshooting.md`; `skills/setup/references/check.md`; `skills/update/references/upgrades.json`; `docs/diagrams/afk-mechanism` sources and PNGs; `docs/specs/release-0.3.3.md` and `CHANGELOG.md`.
 
 ## Open
 
