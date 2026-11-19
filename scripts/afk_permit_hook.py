@@ -13,7 +13,7 @@ import signal
 import sys
 
 INPUT_LIMIT = 1024 * 1024
-LEASE_COMMANDS = {'stop', 'log', 'review', 'effective', 'rules', 'check', 'packet-check'}
+LEASE_COMMANDS = {'stop', 'log', 'goal', 'review', 'effective', 'rules', 'check', 'packet-check'}
 DENY = ('The user is away under an afk lease: settle this request through afk "Decide" with two options (1 run it, '
         '2 park it); to run it, record the deciding attempt with --approve-request and the digest below, then retry '
         'the same request once. Request digest: ')

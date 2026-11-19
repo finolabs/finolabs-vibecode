@@ -8,7 +8,11 @@ Read the start summary's Claude Code lines: add the printed allow rules with `/p
 
 ## End a turn
 
-Before ending a turn under the lease, record why: `python3 -I <script> log --kind idle --session <Session id>` when nothing is left that the lease allows, or `log --kind parked --session <Session id> --note '<brief reason>'` for what waits on the user; the Session id is the one the session start printed. On Claude Code the afk stop hook sends a turn without such a record back once, and lets it through when the lease has ended or its setup changed, since Lease hours is the only limit (hook, `FNL_AFK_STOP=off` disables it); elsewhere recording it is advisory (agent judgment).
+Before ending a turn under the lease, every item of this repository's queue must be done or parked: then record `python3 -I <script> log --kind idle --session <Session id>`, the Session id the session start printed. The script refuses `idle` while an item is open (it names them) and before `goal` built a queue; once the lease has ended it accepts. A `parked` record closes one item (`--item <n>`), not the turn: go on with the next item. On Claude Code the afk stop hook sends a turn back once unless this session wrote an `idle` record since its last stop for this repository at its current queue revision, so a record made before another session added an item no longer counts; it lets the turn end when the lease has ended or its setup changed, since Lease hours is the only limit (hook, `FNL_AFK_STOP=off` disables it). The next stop after that one block passes, so the self-paced loop and the host goal are what bring the agent back (advisory (agent judgment)); elsewhere recording `idle` is advisory too.
+
+## Ending the lease
+
+Never run `afk.py stop` when your own work is done: plain `stop` is refused (script), and `stop --all` ends the lease for every session on the machine, so only the user's `/afk stop` runs it (advisory (agent judgment)).
 
 ## Permission prompts
 

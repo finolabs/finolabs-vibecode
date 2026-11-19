@@ -141,7 +141,7 @@ class AfkTest(AfkBase):
         self.assertIn('covers every session on this machine', joined)
         self.assertEqual((self.state / 'lease.json').read_bytes(), before)  # nothing extended or reset
         for _ in range(2):
-            status, output = self.invoke('stop')
+            status, output = self.invoke('stop', '--all')
             self.assertEqual(status, 0, output)
             self.assertFalse((self.state / 'lease.json').exists())
             self.assertTrue((self.state / 'stop').is_file())
@@ -412,7 +412,7 @@ class AwayDecisionTest(AfkBase):
         status, output = self.invoke('review', '--decision', 'q20261115-000000-abcd', 'kept')
         self.assertEqual((status, output), (3, 'afk refused: --decision names no recorded decision id\n'))
         # Without a live lease, or with unreadable private state, the refusal stays generic.
-        self.assertEqual(self.invoke('stop')[0], 0)
+        self.assertEqual(self.invoke('stop', '--all')[0], 0)
         self.assertEqual(self.decide(*ROWS['park yes'][0]), (3, 'afk refused: --kind decision needs a live lease\n'))
         self.state.chmod(0o755)
         self.addCleanup(self.state.chmod, 0o700)
@@ -496,7 +496,7 @@ class AwayDecisionTest(AfkBase):
     def test_review_records_kept_or_reversed_for_an_existing_decision_only(self):
         self.start()
         identifier, _ = self.recorded(*ROWS['host yes'][0])
-        self.assertEqual(self.invoke('stop')[0], 0)  # reviews happen after the user returns
+        self.assertEqual(self.invoke('stop', '--all')[0], 0)  # reviews happen after the user returns
         for verdict in ('kept', 'reversed'):
             status, output = self.invoke('review', '--decision', identifier, verdict)
             self.assertEqual(status, 0, output)
@@ -594,7 +594,7 @@ class AwayFlowTest(AfkBase):
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 0)
         record = json.loads((self.state / 'log.jsonl').read_text().splitlines()[-1])
         self.assertEqual((record['kind'], record['repo']), ('merge', 'github.com/example/demo'))
-        self.invoke('stop')
+        self.invoke('stop', '--all')
         self.clock += 60
         self.start()  # a new lease does not inherit the old pin
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)
@@ -630,7 +630,7 @@ class AwayFlowTest(AfkBase):
                 self.assertEqual(json.loads(result[1])['tier'], tier)
         self.assertEqual(self.invoke('check', '--paths', '.env')[0], 3)
         self.assertEqual(self.invoke('check', '--paths', '.github/workflows/x.yml')[0], 0)
-        self.invoke('stop')
+        self.invoke('stop', '--all')
         self.assertEqual(self.invoke('check', '--argv-json', '["git", "status"]')[0], 3)  # no lease
 
     def test_a_merge_entry_matching_pins_of_two_repositories_is_refused(self):
@@ -691,7 +691,7 @@ class RetiredSetupTest(AfkBase):
                                (SETUP + '- Merge: no\n- Trusted authors: own\n', []),
                                (SETUP, [])):
             with self.subTest(text=text):
-                self.invoke('stop')
+                self.invoke('stop', '--all')
                 self.setup_config(text)
                 status, output = self.invoke('start')
                 self.assertEqual(status, 0, output)
@@ -718,7 +718,8 @@ class RetiredSetupTest(AfkBase):
         (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
         self.check(['git', 'push', 'origin', 'main'])  # the repository's guard key is still read
         status, output = self.invoke('effective')
-        view = json.loads(output)
+        view = json.loads(output.splitlines()[0])
+        self.assertEqual(output.splitlines()[1], 'Project settings: recorded')
         self.assertEqual((view['state'], view['guards']['Default branch'], len(view['retired'])), ('project', 'open', 2))
         self.assertNotIn('mode', view)
 
@@ -727,7 +728,7 @@ class RetiredSetupTest(AfkBase):
         self.change_lease(lambda v: v.update(counters={}))
         self.check(['git', 'status'], tier=3, code='unsafe')
         self.assertEqual(self.invoke('start')[0], 3)
-        self.assertEqual(self.invoke('stop')[0], 0)
+        self.assertEqual(self.invoke('stop', '--all')[0], 0)
         self.assertEqual(self.invoke('start')[0], 0)
         self.check(['git', 'status'])
 
@@ -789,17 +790,17 @@ class DeciderTest(AfkBase):
         status, output = self.invoke('start')
         self.assertEqual(status, 0, output)
         self.assertIn('Warning: Claude Code has no deny rule for the credential floor', output)
-        self.invoke('stop')
+        self.invoke('stop', '--all')
         settings = self.home / '.claude/settings.json'
         settings.parent.mkdir()
         ap = self.load()
         settings.write_text(json.dumps({'permissions': {'deny': [ap.FLOOR_RULES[0]]}}))
         status, output = self.invoke('start')
         self.assertNotIn('Warning:', output)
-        self.invoke('stop')
+        self.invoke('stop', '--all')
         settings.write_text(json.dumps({'permissions': {'defaultMode': 'default'}}))
         self.assertNotIn('Warning:', self.invoke('start')[1])
-        self.invoke('stop')
+        self.invoke('stop', '--all')
         settings.write_text(json.dumps({'permissions': {'defaultMode': 'bypassPermissions'}}))
         self.assertIn('Warning:', self.invoke('start')[1])
 
@@ -824,6 +825,176 @@ class DeciderTest(AfkBase):
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it', '--precedents',
                             '0', *host, flag, '["make"]')
+
+
+def item(label='fix login', kind='fix', minutes=30):
+    return {'label': label, 'kind': kind, 'minutes': minutes}
+
+
+class GoalTest(AfkBase):
+    """docs/specs/afk-goals.md A and E: the queue, the goal, `--item`, the idle refusals and the lease scope."""
+
+    def items(self, values, name='items.json'):
+        folder = self.repo / '.finolabs/briefs'
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / name
+        path.write_text(json.dumps(values))
+        return str(path)
+
+    def goal(self, values, status=0):
+        code, output = self.invoke('goal', '--items-file', self.items(values))
+        self.assertEqual(code, status, output)
+        return output
+
+    def queue(self):
+        store = load_store()
+        key = store.identity_digest(store.identity(self.repo)[1].main)
+        return json.loads((self.state / f'queue-{key}.json').read_text()), key
+
+    def records(self):
+        return [json.loads(line) for line in (self.state / 'log.jsonl').read_text().splitlines()]
+
+    def test_goal_prints_the_goal_line_the_queue_and_appends(self):
+        ap = self.load()
+        self.start()
+        output = self.goal([item(), item('review pr 12', 'review', 45)])
+        lines = output.splitlines()
+        self.assertEqual(lines[0], 'Every item in the afk queue of this repository is done or parked, or the away '
+                                   'lease has ended.')
+        self.assertEqual(lines[0], ap.GOAL_LINE)
+        self.assertEqual(lines[1], 'Queue (revision 1; 480 minutes left on the lease):')
+        self.assertEqual(lines[2:4], ['1. [open] fix login (fix, 30 min)', '2. [open] review pr 12 (review, 45 min)'])
+        self.assertIn('Warning: the queue is short: add the next work', lines)
+        queue, key = self.queue()
+        self.assertEqual((queue['revision'], [i['n'] for i in queue['items']]), (1, [1, 2]))
+        self.assertEqual(stat.S_IMODE((self.state / f'queue-{key}.json').stat().st_mode), 0o600)
+        self.assertNotIn(str(self.repo), (self.state / f'queue-{key}.json').read_text())
+        # A second call appends and never removes; the long estimate names the first item beyond the lease.
+        output = self.goal([item('release step', 'release-step', 400), item('tidy docs', 'other', 60)])
+        queue, _ = self.queue()
+        self.assertEqual((queue['revision'], len(queue['items'])), (2, 4))
+        self.assertIn('Warning: the estimates exceed the minutes left on the lease from item 4 on', output)
+        self.assertNotIn('the queue is short', output)
+        self.goal([])  # an empty call changes nothing
+        self.assertEqual(self.queue()[0]['revision'], 2)
+
+    def test_goal_limits(self):
+        self.start()
+        synthetic = 'ghp_' + 'x' * 36
+        for values in ([item(f'task {n}') for n in range(31)], [item('x' * 61)], [item('docs/readme')],
+                       [item(synthetic)], [item(kind='deploy')], [item(minutes=0)], [item(minutes=481)],
+                       [item(minutes=True)], [item(minutes='30')], [{'label': 'a', 'kind': 'fix'}],
+                       {'label': 'a'}, [dict(item(), extra=1)]):
+            with self.subTest(values=str(values)[:60]):
+                self.goal(values, status=3)
+        self.assertFalse(list(self.state.glob('queue-*.json')))
+        self.goal([item(f'task {n}') for n in range(30)])
+        self.goal([item('one more')], status=3)  # at most 30 open items in a queue
+        outside = self.home / 'items.json'
+        outside.write_text(json.dumps([item()]))
+        self.assertEqual(self.invoke('goal', '--items-file', str(outside))[0], 3)
+
+    def test_goal_refuses_without_a_live_lease(self):
+        self.setup_config()
+        self.goal([item()], status=3)  # no lease
+        self.start()
+        self.clock += 8 * 3600
+        self.goal([item()], status=3)  # expired
+        self.clock -= 8 * 3600
+        self.setup_config(SETUP.replace('Claude Code', 'Codex'))
+        self.goal([item()], status=3)  # setup changed
+        self.setup_config()
+        self.goal([item()])
+        self.assertEqual(self.invoke('stop', '--all')[0], 0)
+        self.assertFalse(list(self.state.glob('queue-*.json')))  # removed with the lease
+        self.goal([item()], status=3)  # stopped
+
+    def test_log_item_marks_and_refuses_unknown_numbers(self):
+        self.start()
+        self.goal([item(), item('second'), item('third')])
+        self.assertEqual(self.invoke('log', '--kind', 'parked', '--item', '4')[0], 3)
+        self.assertEqual(self.invoke('log', '--kind', 'parked', '--item', '0')[0], 3)
+        self.assertEqual(self.invoke('log', '--kind', 'idle', '--item', '1')[0], 3)
+        self.assertEqual(self.invoke('log', '--kind', 'action', '--done')[0], 3)  # --done needs --item
+        self.assertEqual(self.invoke('log', '--kind', 'parked', '--item', '1', '--done')[0], 3)
+        self.assertEqual(self.invoke('log', '--kind', 'parked', '--item', '1')[0], 0)
+        self.assertEqual(self.invoke('log', '--kind', 'action', '--item', '2')[0], 0)  # no --done: still open
+        self.assertEqual(self.invoke('log', '--kind', 'action', '--item', '2', '--done')[0], 0)
+        self.assertEqual(self.invoke('log', '--kind', 'action', '--item', '2', '--done')[0], 3)  # already done
+        queue, _ = self.queue()
+        self.assertEqual([i['state'] for i in queue['items']], ['parked', 'done', 'open'])
+        self.assertEqual(queue['revision'], 3)
+        self.assertEqual([r.get('item') for r in self.records()], [1, 2, 2])
+
+    def test_idle_needs_an_empty_queue(self):
+        self.setup_config()
+        self.assertEqual(self.invoke('log', '--kind', 'idle')[0], 3)  # no lease
+        self.start()
+        status, output = self.invoke('log', '--kind', 'idle')
+        self.assertEqual(status, 3, output)
+        self.assertIn('run goal first', output)
+        self.goal([item(), item('second')])
+        status, output = self.invoke('log', '--kind', 'idle')
+        self.assertEqual(status, 3, output)
+        self.assertIn('items are open: 1, 2', output)
+        self.invoke('log', '--kind', 'parked', '--item', '1')
+        self.invoke('log', '--kind', 'merge', '--item', '2', '--done')
+        status, output = self.invoke('log', '--kind', 'idle', '--session', 'abc-123')
+        self.assertEqual(status, 0, output)
+        record = self.records()[-1]
+        queue, key = self.queue()
+        self.assertEqual((record['kind'], record['repository'], record['revision']), ('idle', key[:16], queue['revision']))
+        self.assertEqual(record['session'], hashlib.sha256(b'abc-123').hexdigest()[:16])
+
+    def test_idle_with_an_empty_goal_and_after_the_lease_ended(self):
+        self.start()
+        self.goal([])
+        self.assertEqual(self.invoke('log', '--kind', 'idle')[0], 0)
+        self.goal([item()])
+        self.assertEqual(self.invoke('log', '--kind', 'idle')[0], 3)
+        self.clock += 8 * 3600  # the lease has ended: idle is accepted with items open
+        self.assertEqual(self.invoke('log', '--kind', 'idle')[0], 0)
+        self.clock -= 8 * 3600
+        self.assertEqual(self.invoke('stop', '--all')[0], 0)
+        self.assertEqual(self.invoke('log', '--kind', 'idle')[0], 0)
+
+    def test_plain_stop_is_refused_and_keeps_the_lease(self):
+        ap = self.load()
+        self.start()
+        self.goal([item()])
+        status, output = self.invoke('stop')
+        self.assertEqual(status, 3, output)
+        self.assertEqual(output, 'afk refused: ' + ap.STOP_REFUSED + '\n')
+        self.assertIn('--kind idle', output)
+        self.assertTrue((self.state / 'lease.json').exists())
+        self.assertFalse((self.state / 'stop').exists())
+        self.check(['git', 'status'])
+        self.assertEqual(self.invoke('stop', '--all')[0], 0)
+        self.assertFalse((self.state / 'lease.json').exists())
+        self.assertFalse(list(self.state.glob('queue-*.json')))
+
+    def test_a_new_lease_starts_with_no_queue(self):
+        self.start()
+        self.goal([item()])
+        self.clock += 8 * 3600
+        self.start()
+        self.assertFalse(list(self.state.glob('queue-*.json')))
+
+    def test_effective_names_project_settings(self):
+        self.start()
+        status, output = self.invoke('effective')
+        self.assertEqual((status, output.splitlines()[1]), (0, 'Project settings: none'))
+        store = load_store()
+        found, ident = store.identity(self.repo)
+        store.write_setting(self.repo, 'autopilot', {'default-branch': 'open'}, ident=ident)
+        status, output = self.invoke('effective')
+        self.assertEqual((status, output.splitlines()[1]), (0, 'Project settings: recorded'))
+        self.cwd = self.home  # no repository
+        status, output = self.invoke('effective')
+        self.assertEqual((status, output.splitlines()[1]), (0, 'Project settings: none'))
+
+    def test_goal_is_a_lease_command(self):
+        self.assertIn('goal', self.load().LEASE_COMMANDS)
 
 
 if __name__ == '__main__':

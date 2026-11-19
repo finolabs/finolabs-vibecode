@@ -199,7 +199,8 @@ def parallel_words(families=ALL_FAMILIES):
         return "unknown"
 
 
-AWAY_LINE = 'Away mandate active: never ask or wait for the user; afk "Decide" settles it\n'
+AWAY_LINE = ('Away mandate active: never ask or wait for the user; afk "Decide" settles it. Before other work, load the '
+             'afk lease rules and run afk.py goal for this repository.\n')
 
 
 def away_line():

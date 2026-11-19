@@ -149,13 +149,17 @@ class PermitHookTest(unittest.TestCase):
         self.lease()
         for command in (f"python3 -I {AFK} log --kind parked --note waiting",
                         f"python3 {AFK} effective", f"{sys.executable} -I {AFK} check --paths src/a.py",
-                        f"python3 -I {AFK} log --kind decision --approve-request {'a' * 64} --topic run-it"):
+                        f"python3 -I {AFK} log --kind decision --approve-request {'a' * 64} --topic run-it",
+                        f"python3 -I {AFK} goal --items-file .finolabs/briefs/items.json",
+                        f"python3 -I {AFK} stop --all"):
             with self.subTest(command=command):
                 self.assertEqual(self.run_hook(self.event(command)), {"behavior": "allow"})
         for command in (f"python3 -I {AFK} start", f"python3 -I {AFK} log --note 'x'", f"python3 -I {AFK} log; ls",
                         f"python3 -I {AFK} log --note $HOME", f"python3 -I {AFK} log\nls", f"bash {AFK} log",
                         f"python3 -c {AFK} log", f"X=1 python3 -I {AFK} log", f"python3 -I /tmp/afk.py log",
-                        f"python3 -I {AFK} log --note a*"):
+                        f"python3 -I {AFK} log --note a*",
+                        f"python3 -I {AFK} goal --items-file .finolabs/briefs/items.json; ls",
+                        f"python3 -I {AFK} goal --items-file $(echo x)"):
             with self.subTest(command=command):
                 self.assertEqual(self.run_hook(self.event(command))["behavior"], "deny")
         sandbox = self.event(f"python3 -I {AFK} effective", dangerouslyDisableSandbox=True)

@@ -6,7 +6,7 @@ Typed by the user only. Older short name (be right back) of `afk`, kept as an al
 
 **When to use it.** Starting or stopping the away mandate under the old name.
 
-**Type:** Claude Code `/finolabs-vibecode:brb` or `/brb`; Codex `$brb`; Antigravity `/brb`. Arguments: `[start|stop]`.
+**Type:** Claude Code `/finolabs-vibecode:brb` or `/brb`; Codex `$brb`; Antigravity `/brb`. Arguments: `[start [hours]|stop]`, as for `afk`.
 
 ## Tips
 

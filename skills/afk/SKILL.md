@@ -2,7 +2,7 @@
 name: afk
 description: Start a time-boxed standing mandate so the host agents keep working while the user is away from the keyboard, and stop it on return. Run when the user asks for afk, away mode, work while away, or to stop the mandate on returning.
 disable-model-invocation: true
-argument-hint: "[start|stop]"
+argument-hint: "[start [hours]|stop]"
 ---
 
 # afk: start or stop an away mandate
@@ -13,9 +13,9 @@ Dependency: `delegate`. <script> is <delegate folder>/scripts/afk.py; if it is a
 
 ## Start
 
-1. Run only on the user's invocation; no argument means `start`. Run `python3 -I <script> start` and report its summary: the guards first, the lease length, any line saying a retired setting (`Mode: strict`, the three limits) is no longer read, and the `This folder` line. It needs a recorded `## afk` section (`/setup add afk`). One lease covers every session on the machine: when one is live, `start` says when it ends and changes nothing, and this session works under it.
+1. Run only on the user's invocation; no argument means `start`. Run `python3 -I <script> start`, with `--hours <n>` for `/afk start <duration>` (whole hours, rounded down; under one hour refuse; the script keeps 1 to 24 and the setup's `Lease hours`), and report its summary: the guards first, the lease length, any line saying a retired setting is no longer read, and the `This folder` line. It needs a recorded `## afk` section (`/setup add afk`). One lease covers every session on the machine: when one is live, `start` says when it ends and changes nothing. Then wake the coordinators and run the merge-blocker preflight as [references/start.md](references/start.md) says.
 2. afk has one mode (`strict` was removed in 0.3.3): everything runs except the credential floor and the guards that are on, and Lease hours is the only limit (script). Blocking anything more is the host's job (its permission rules, auto mode, deny rules and sandbox); tell the user to write a host deny rule for anything that must stay forbidden. A repository's approved guards win in that repository; read `python3 -I <script> effective` there (script for `check`; following the view is advisory (agent judgment)). Never extend the lease or change setup while away: `check` denies everything after a setup change.
-3. Keep the session working (advisory (agent judgment)): the lease bounds actions and starts no turn. Before the user leaves, print one goal for the host's goal command (`/goal`), worded so it can finish while they are away, such as "every listed task is merged or parked, or the lease has ended". While work waits on CI, reviews or a delegated run, start a self-paced loop where the host allows it (`/loop` on Claude Code) and stop it when `check` prints an `end` line.
+3. Keep the session working (advisory (agent judgment)): the lease bounds actions and starts no turn. Build this repository's queue with `goal` ([references/lease-rules.md](references/lease-rules.md)), set the host goal (`/goal`) to the line it prints, and start a self-paced loop where the host allows it (`/loop` on Claude Code); stop the loop when `check` prints an `end` line.
 4. Never ask or wait for the user while the lease is live: settle questions through "Decide". On Claude Code the away question gate, the afk stop hook and the afk permission hook enforce this ([references/stops.md](references/stops.md)); elsewhere it is advisory (agent judgment).
 
 ## Work inside the lease
@@ -36,6 +36,6 @@ Before any merge, load [references/merge-gate.md](references/merge-gate.md) and 
 
 ## Stop and return
 
-On the user's return or `stop`, run `python3 -I <script> stop` and report it. List first every merge that used the same-family fallback, then parked work, decisions and delegated runs still waiting; record running delegates as orphaned and leave them to the user. List the decisions from your `log --kind decision` records, those with `--precedents 0` first, and ask the user to mark each `kept` or `reversed`; record each with `python3 -I <script> review --decision <id> kept|reversed` (script: the id must exist) and write each reversal back as a decision with the user's reason through `tidy` (advisory (agent judgment)).
+On the user's return or `/afk stop`, run `python3 -I <script> stop --all` and report it; plain `stop` is refused, so an agent never ends the lease for every session (script). List first every merge that used the same-family fallback, then parked work, decisions and delegated runs still waiting; record running delegates as orphaned and leave them to the user. List the decisions from your `log --kind decision` records, those with `--precedents 0` first, and ask the user to mark each `kept` or `reversed`; record each with `python3 -I <script> review --decision <id> kept|reversed` (script: the id must exist) and write each reversal back as a decision with the user's reason through `tidy` (advisory (agent judgment)).
 
 No plugin-run loop, scheduler or notice hook ships; following this procedure is advisory (agent judgment), backed by the script, the merge gate and, on Claude Code, the away question gate, the afk stop hook and the afk permission hook.
