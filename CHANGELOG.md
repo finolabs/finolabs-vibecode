@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- Light stored checks run outside the heavy-job lock (`checks`, `setup`; [spec](docs/specs/checks.md#light-checks-2026-11-19)): a check in the approved `checks.json` may carry `"heavy": false`, and `checks.py run` then runs it directly instead of through `heavy_run.py`, so a unit test no longer waits behind other sessions' container suites or builds. A light check skips the lock and the load gate, still refuses during a pause (exit 77, also when the pause starts while it waits), waits only while macOS memory pressure is critical (up to the wait cap, exit 75), runs in its own process group until every worker it started is gone, and stops that whole group after the maximum job time (exit 124). `/setup add checks` saves a check that names test modules (`python3 -m unittest tests.test_x ...`) as light by default and every other check as heavy; `checks_setup.py preview --light NAME` and `--heavy NAME` override it, and the preview lists both groups before the approval. A list saved before this release has no light check and runs exactly as before until you save it again. Receipts are unchanged: the list digest still covers names and arguments only.
+
 ## [0.3.3] - 2026-11-19
 
 ### Added

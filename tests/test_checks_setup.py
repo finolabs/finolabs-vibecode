@@ -804,6 +804,70 @@ class ProjectFileTest(unittest.TestCase):
         self.assertFalse(self.reader().receipt_mode(self.code(), root=self.repo))
         self.assertEqual(self.host.read_bytes(), host)
 
+    # Light checks: outside the heavy-job lock, only through the approved file
+
+    def light(self):
+        return self.reader().light_for(self.code(), root=self.repo)[1]
+
+    def test_named_unittest_modules_are_light_by_default_and_everything_else_heavy(self):
+        out = self.save('unit=["python3","-m","unittest","tests.test_a","tests.test_b"]',
+                        'suite=["python3","-m","unittest","discover","-s","tests"]',
+                        'opts=["python3","-m","unittest","-v","tests.test_a"]', 'build=["make","build"]')
+        self.assertEqual(self.light(), {'unit'})
+        stored = json.loads(self.project().read_text())['checks']
+        self.assertEqual([item.get('heavy', 'absent') for item in stored], [False, 'absent', 'absent', 'absent'])
+
+    def test_the_preview_names_light_and_heavy_checks_before_the_approval(self):
+        code, out, err = self.cli('preview', '--root', str(self.repo),
+                                  '--check', 'unit=["python3","-m","unittest","tests.test_a"]',
+                                  '--check', 'e2e=["make","e2e"]')
+        self.assertEqual(code, 0, err)
+        self.assertIn('Light (outside the heavy-job lock): unit\n', out)
+        self.assertIn('Heavy (queue for the heavy-job lock): e2e\n', out)
+        self.assertIn('"heavy": false', out)
+        self.assertLess(out.index('Light (outside'), out.index('Digest: '))
+
+    def test_light_and_heavy_flags_override_the_default(self):
+        self.save('unit=["python3","-m","unittest","tests.test_a"]', 'lint=["make","lint"]')
+        self.assertEqual(self.light(), {'unit'})
+        code, out, err = self.cli('preview', '--root', str(self.repo),
+                                  '--check', 'unit=["python3","-m","unittest","tests.test_a"]',
+                                  '--check', 'lint=["make","lint"]', '--light', 'lint', '--heavy', 'unit')
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertEqual(self.light(), {'lint'})
+        for extra in (['--light', 'missing'], ['--light', 'lint', '--heavy', 'lint']):
+            code, _, err = self.cli('preview', '--root', str(self.repo), '--check', 'lint=["make","lint"]', *extra)
+            self.assertEqual(code, 1, extra)
+            self.assertIn('--light or --heavy', err)
+
+    def test_the_receipt_mode_keeps_the_light_marks(self):
+        self.save('unit=["python3","-m","unittest","tests.test_a"]', 'lint=["make","lint"]')
+        _, out, _ = self.cli('receipt', 'on', '--root', str(self.repo))
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertEqual(self.light(), {'unit'})
+
+    def test_a_file_without_the_key_is_all_heavy_and_heavy_true_is_invalid(self):
+        reader = self.reader()
+        raw = reader.render_project([['unit', ['python3', '-m', 'unittest', 'tests.test_a']]], False)
+        self.assertNotIn(b'heavy', raw)  # a list saved before light checks keeps its bytes and its approval
+        for value in ('true', '0', 'null', '"false"'):
+            text = ('{"version": 1, "checks": [{"name": "lint", "argv": ["make", "lint"], "heavy": %s}], '
+                    '"local_receipt": false}\n' % value)
+            with self.subTest(value=value):
+                self.assertRaises(ValueError, reader.parse_project_full, text.encode())
+        self.assertEqual(reader.parse_project_full(reader.render_project([['lint', ['make', 'lint']]], False,
+                                                                         {'lint'}))[2], {'lint'})
+        self.assertRaises(ValueError, reader.render_project, [['lint', ['make', 'lint']]], False, {'other'})
+
+    def test_a_light_mark_added_by_hand_is_not_approved_and_runs_nothing(self):
+        self.save('lint=["make","lint"]')
+        data = json.loads(self.project().read_text())
+        data['checks'][0]['heavy'] = False
+        self.project().write_text(json.dumps(data, indent=2) + '\n')
+        self.assertEqual(self.reader().light_for(self.code(), root=self.repo),
+                         ([], frozenset(), self.reader().CHANGED))
+
     def test_apply_refuses_a_file_changed_after_the_preview(self):
         self.save('test=["make","test"]')
         digest = self.preview('lint=["make","lint"]')

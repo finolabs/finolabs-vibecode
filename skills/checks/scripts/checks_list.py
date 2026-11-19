@@ -4,8 +4,9 @@
 The list lives in the main checkout's project data folder (`PROJECT_FOLDERS`), in `checks.json`, and counts only while its exact bytes match
 the digest approved in the private state folder; nothing else is read, and the host config is never consulted.
 Shared, read-mostly: `checks_setup.py` writes the file and its approval, `checks.py` writes a receipt,
-`merge_check.py` reads both. A check is a short name and a JSON argument array, never a shell string. An invalid file
-counts as unset and is never repaired here. Runs no command and makes no network call.
+`merge_check.py` reads both. A check is a short name and a JSON argument array, never a shell string, and may carry
+`"heavy": false` to run outside the machine-wide heavy-job lock (no key means heavy). An invalid file counts as unset
+and is never repaired here. Runs no command and makes no network call.
 """
 import hashlib
 import json
@@ -40,6 +41,9 @@ PROJECT_FOLDERS = store.PROJECT_FOLDERS
 PROJECT_FILE = 'checks.json'
 PROJECT_LIMIT = 65536
 PROJECT_KEYS = {'version', 'checks', 'local_receipt'}
+CHECK_KEYS = {'name', 'argv'}
+LIGHT_KEYS = CHECK_KEYS | {'heavy'}  # only ever `"heavy": false`; no key means heavy
+MODULE_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]{0,99}(?:\.[A-Za-z_][A-Za-z0-9_]{0,99}){0,9}')
 APPROVED = 'state/checks-approved'
 APPROVED_KEYS = {'sha256', 'approved'}  # plus 'identity', the full digest of the main checkout, since 0.3.1
 CHANGED = 'changed since it was approved'
@@ -104,6 +108,26 @@ def check_list(checks):
         names.add(item[0])
 
 
+def plain_unittest(argv):
+    """True only for `<python> -m unittest <module> [<module>...]`: named test modules and nothing else (no option,
+    no `discover`, no file path). This is the form setup marks light by default; every other form stays heavy."""
+    if not isinstance(argv, list) or len(argv) < 4 or not all(isinstance(item, str) for item in argv):
+        return False
+    name = program_name(argv[0])
+    return (name.startswith('python') and bool(INTERPRETER.fullmatch(name)) and argv[1:3] == ['-m', 'unittest']
+            and all(MODULE_NAME.fullmatch(item) and item != 'discover' for item in argv[3:]))
+
+
+def check_light(light, checks):
+    """The light names as a frozenset; each must name a check of the list."""
+    if not isinstance(light, (set, frozenset, list, tuple)) or not all(isinstance(name, str) for name in light):
+        raise ValueError('light')
+    light = frozenset(light)
+    if not light <= {name for name, _ in checks}:
+        raise ValueError('light')
+    return light
+
+
 def list_digest(checks):
     """SHA-256 of the ordered list in its canonical JSON form; any change of name, order or argument changes it."""
     canonical = [[name, json.loads(check_argv(list(argv)))] for name, argv in checks]
@@ -163,28 +187,47 @@ def _constant(value):
     raise ValueError('constant')
 
 
-def parse_project(raw):
-    """(checks as [[name, argv], ...], local receipt) of the closed schema; anything else raises."""
+def parse_project_full(raw):
+    """(checks as [[name, argv], ...], local receipt, light names) of the closed schema; anything else raises.
+
+    A check is `{"name", "argv"}` (heavy) or `{"name", "argv", "heavy": false}` (light); `"heavy": true` or any other
+    value is refused, so each list has one canonical form."""
     data = json.loads(raw.decode('utf-8'), object_pairs_hook=_object, parse_constant=_constant)
     if (not isinstance(data, dict) or set(data) != PROJECT_KEYS or type(data['version']) is not int
             or data['version'] != 1 or type(data['local_receipt']) is not bool or not isinstance(data['checks'], list)):
         raise ValueError('project file')
-    checks = []
+    checks, light = [], set()
     for item in data['checks']:
-        if not isinstance(item, dict) or set(item) != {'name', 'argv'}:
+        if not isinstance(item, dict) or set(item) not in (CHECK_KEYS, LIGHT_KEYS):
             raise ValueError('check')
+        if 'heavy' in item:
+            if item['heavy'] is not False:
+                raise ValueError('check')
+            light.add(item['name'])
         checks.append([item['name'], item['argv']])
     check_list(checks)
-    return checks, data['local_receipt']
+    return checks, data['local_receipt'], frozenset(light)
 
 
-def render_project(checks, receipt):
-    """The exact bytes a writer stores for this list and mode, in stored order."""
+def parse_project(raw):
+    """(checks as [[name, argv], ...], local receipt) of the closed schema; anything else raises."""
+    checks, receipt, _ = parse_project_full(raw)
+    return checks, receipt
+
+
+def render_project(checks, receipt, light=frozenset()):
+    """The exact bytes a writer stores for this list, mode and light names, in stored order."""
     check_list(checks)
     if type(receipt) is not bool:
         raise ValueError('mode')
-    data = {'version': 1, 'checks': [{'name': name, 'argv': list(argv)} for name, argv in checks],
-            'local_receipt': receipt}
+    light = check_light(light, checks)
+    items = []
+    for name, argv in checks:
+        item = {'name': name, 'argv': list(argv)}
+        if name in light:
+            item['heavy'] = False
+        items.append(item)
+    data = {'version': 1, 'checks': items, 'local_receipt': receipt}
     return (json.dumps(data, indent=2, ensure_ascii=True) + '\n').encode()
 
 
@@ -234,31 +277,37 @@ def remove_approved(code):
 
 
 def read_project(code, root):
-    """(checks, receipt, reason): no file reads as 'no entry'.
+    """(checks, receipt, reason); see `read_project_full`."""
+    checks, receipt, _, reason = read_project_full(code, root)
+    return checks, receipt, reason
+
+
+def read_project_full(code, root):
+    """(checks, receipt, light names, reason): no file reads as 'no entry'.
 
     A file whose bytes do not match the approved digest, or with none, reads as unset with CHANGED: this is what stops
     a committed or branch-supplied file from choosing commands. Never repaired here.
     """
     main, _ = layout(root)
     if code_of(main) != code:
-        return [], False, 'invalid code'
+        return [], False, frozenset(), 'invalid code'
     try:
         raw = read_project_bytes(main)
     except FileNotFoundError:
-        return [], False, 'no entry'
+        return [], False, frozenset(), 'no entry'
     except (OSError, ValueError):
-        return [], False, 'unreadable'
+        return [], False, frozenset(), 'unreadable'
     try:
         approved = read_approved(code, store.identity_digest(main))
     except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
         approved = None
     if approved is None or approved != hashlib.sha256(raw).hexdigest():
-        return [], False, CHANGED
+        return [], False, frozenset(), CHANGED
     try:
-        checks, receipt = parse_project(raw)
+        checks, receipt, light = parse_project_full(raw)
     except (ValueError, TypeError, UnicodeError, RecursionError):
-        return [], False, 'invalid'
-    return checks, receipt, None
+        return [], False, frozenset(), 'invalid'
+    return checks, receipt, light, None
 
 
 def checks_for(repository_code, root):
@@ -270,6 +319,16 @@ def checks_for(repository_code, root):
         return [], 'invalid code'
     checks, _, reason = read_project(repository_code, root)
     return ([], reason) if reason else ([(name, argv) for name, argv in checks], None)
+
+
+def light_for(repository_code, root):
+    """(ordered (name, argv) pairs, light names, None) from one read, or ([], frozenset(), reason) as `checks_for`."""
+    if not isinstance(repository_code, str) or not CODE.fullmatch(repository_code):
+        return [], frozenset(), 'invalid code'
+    checks, _, light, reason = read_project_full(repository_code, root)
+    if reason:
+        return [], frozenset(), reason
+    return [(name, argv) for name, argv in checks], light, None
 
 
 def receipt_mode(repository_code, root):
