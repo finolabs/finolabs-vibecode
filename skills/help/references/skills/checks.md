@@ -12,5 +12,5 @@ Typed by the user, or loaded by the agent when the task matches.
 
 - It runs targeted tests for the changed code and its consumers; a full suite runs only when you ask for one.
 - A skipped or partly green run, a missing credential, an enabled setting or a tool's DONE is not a pass.
-- Store a check list with `/setup add checks`; `checks.py run [--changed]` then runs it.
+- Store a check list with `/setup add checks`; `checks.py run [--changed]` then runs it. Checks that name test modules are saved light and run at once, outside the heavy-job lock; the rest queue for it. A list saved before light checks existed is all heavy until you save it again.
 - Each check is reported as PASS, FAIL, PENDING, SKIP, WAIVED or N/A; only you waive a check.

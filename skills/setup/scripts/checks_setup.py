@@ -5,8 +5,11 @@ or remove the optional git pre-push hook, and write one cheaper CI workflow file
 (`ci preview|apply`, never committed or pushed); never read or write the host config for checks; make no network
 call.
 
-A check is a short name and a JSON argument array, never a shell string. Only this script writes the check file and
-its approval. Detection, the list and the mode run no command; the hook commands run only fixed git queries, with no
+A check is a short name and a JSON argument array, never a shell string. A check that names test modules
+(`<python> -m unittest <module>...`) is saved light by default (`"heavy": false`: `checks.py` runs it outside the
+machine-wide heavy-job lock); every other check is heavy and queues for the lock. `--light NAME` and `--heavy NAME`
+override the default per check, and the preview shows the result before the approval. Only this script writes the
+check file and its approval. Detection, the list and the mode run no command; the hook commands run only fixed git queries, with no
 shell, to find where git reads hooks.
 """
 try:
@@ -154,7 +157,24 @@ def write_private(folder, name, raw, mode=0o600):
         os.fsync(stream.fileno())
 
 
-def plan_for(found, action, checks=None, receipt=None):
+def default_light(checks, light_names=(), heavy_names=()):
+    """The light names for a list being saved: named unittest modules by default, then the user's overrides. A name
+    given both ways, or one that is not in the list, is refused."""
+    names = {name for name, _ in checks}
+    light_names, heavy_names = set(light_names), set(heavy_names)
+    if light_names & heavy_names or not (light_names | heavy_names) <= names:
+        raise Said('each --light or --heavy name must be one check of the list, given one way')
+    light = {name for name, argv in checks if cl.plain_unittest(argv)}
+    return frozenset((light | light_names) - heavy_names)
+
+
+LIGHT_NOTICE = ("Light checks run outside the machine-wide heavy-job lock and its load gate; they still refuse during "
+                "a pause and wait while memory pressure is critical. Keep heavy (the default for anything that is not "
+                "named test modules) every check that starts containers or a database, drives a browser, runs a whole "
+                "integration or contract suite, or is a large build.")
+
+
+def plan_for(found, action, checks=None, receipt=None, light=frozenset()):
     """Build and save the plan for one repository: action save (checks), mode (receipt True or False) or remove;
     returns (plan, digest, mode) without changing anything outside the private state folder."""
     root = dr.consent_root()
@@ -168,7 +188,7 @@ def plan_for(found, action, checks=None, receipt=None):
     if action == 'mode':
         if previous is None:
             raise Said('this repository has no stored checks; save a list first')
-        found_checks, _, reason = cl.read_project(code, found)
+        found_checks, _, light, reason = cl.read_project_full(code, found)
         if reason:
             raise Said(f'the project check file is unset ({reason}); save a list first')
         checks = [list(item) for item in found_checks]
@@ -181,7 +201,7 @@ def plan_for(found, action, checks=None, receipt=None):
             mode = kept if reason is None else False
     else:
         checks = mode = None
-    content = None if action == 'remove' else cl.render_project(checks, mode).decode()
+    content = None if action == 'remove' else cl.render_project(checks, mode, light).decode()
     exclude, listed = (None, True) if content is None else exclude_state(common)
     backup = None
     if previous is not None:
@@ -201,8 +221,8 @@ def plan_for(found, action, checks=None, receipt=None):
     return plan, value, mode
 
 
-def preview(found, action, checks=None, receipt=None):
-    plan, value, mode = plan_for(found, action, checks, receipt)
+def preview(found, action, checks=None, receipt=None, light=frozenset()):
+    plan, value, mode = plan_for(found, action, checks, receipt, light)
     main, code = Path(plan['main']), plan['code']
     target = main.joinpath(*cl.PROJECT_FOLDERS, cl.PROJECT_FILE)
     print('Target: ' + str(target))
@@ -217,6 +237,10 @@ def preview(found, action, checks=None, receipt=None):
         print('Check list for repository ' + code + ' (local receipt ' + ('on' if mode else 'off') + '):')
         print(plan['content'], end='')
         print(PREVIEW_NOTICE)
+        names = [name for name, _ in checks]
+        print('Light (outside the heavy-job lock): ' + (', '.join(n for n in names if n in light) or 'none'))
+        print('Heavy (queue for the heavy-job lock): ' + (', '.join(n for n in names if n not in light) or 'none'))
+        print(LIGHT_NOTICE)
     if plan['content'] is not None:
         print(APPROVAL_NOTICE)
     if plan['backup']:
@@ -239,8 +263,8 @@ def checked_plan(plan):
     if content is not None:
         if not isinstance(content, str):
             raise ValueError('invalid plan')
-        checks, mode = cl.parse_project(content.encode())
-        if cl.render_project(checks, mode) != content.encode():
+        checks, mode, light = cl.parse_project_full(content.encode())
+        if cl.render_project(checks, mode, light) != content.encode():
             raise ValueError('invalid plan')
     if plan['root'] != str(dr.consent_root()):
         raise ValueError('data root changed; preview again')
@@ -323,14 +347,14 @@ def show(root):
     if found is None:
         raise ValueError('no repository')
     code = pp.repository_code(found)
-    checks, reason = checks_for(code, root=found)
+    checks, light, reason = cl.light_for(code, root=found)
     if reason:
         print(f'Repository {code}: no checks ({reason}).' + (f' Nothing runs; {cl.AGAIN}.'
                                                               if reason == cl.CHANGED else ''))
         return 3 if reason in ('invalid', 'unreadable', cl.CHANGED) else 0
     print(f'Repository {code}:')
     for name, argv in checks:
-        print(f'{name} = {check_argv(argv)}')
+        print(f'{name} = {check_argv(argv)}' + (' (light)' if name in light else ''))
     print('local receipt: ' + ('on' if cl.receipt_mode(code, root=found) else 'off'))
     return 0
 
@@ -1150,6 +1174,8 @@ def main(argv=None):
         pre = commands.add_parser('preview')
         pre.add_argument('--root')
         pre.add_argument('--check', action='append', default=[], metavar='NAME=JSON_ARRAY')
+        pre.add_argument('--light', action='append', default=[], metavar='NAME')
+        pre.add_argument('--heavy', action='append', default=[], metavar='NAME')
         app = commands.add_parser('apply')
         app.add_argument('--yes', action='store_true')
         app.add_argument('--digest', required=True)
@@ -1206,7 +1232,8 @@ def main(argv=None):
             return show(args.root)
         if args.action == 'preview':
             checks = [parse_check(item) for item in args.check]
-            preview(repository(args.root), 'save', checks)
+            check_list(checks)
+            preview(repository(args.root), 'save', checks, light=default_light(checks, args.light, args.heavy))
         elif args.action == 'remove':
             preview(repository(args.root), 'remove')
         else:
