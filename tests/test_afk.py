@@ -500,6 +500,10 @@ class AwayDecisionTest(AfkBase):
             self.assertEqual(status, 0, output)
             line = self.ledger()[-1]
             self.assertEqual(line, dict(event='decision_review', id=identifier, ts=line['ts'], verdict=verdict))
+        # An id typed in another case names the same decision and is recorded as generated (lowercase).
+        status, output = self.invoke('review', '--decision', identifier.upper(), 'kept')
+        self.assertEqual(status, 0, output)
+        self.assertEqual(self.ledger()[-1]['id'], identifier)
         before = self.ledger()
         for identifier in ('q20261110-010203-ffff', 'bad'):
             self.assertEqual(self.invoke('review', '--decision', identifier, 'kept')[0], 3)

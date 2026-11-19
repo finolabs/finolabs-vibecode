@@ -170,7 +170,7 @@ class RunHygieneTest(unittest.TestCase):
                                  'pwd': SimpleNamespace(getpwuid=lambda uid: SimpleNamespace(pw_name='fixture'))}
                     exec(compile(ast.Module(body=[builder], type_ignores=[]), '<synthetic-builder>', 'exec'), namespace)
                     entry = {'executable': '/' + 'synthetic/bin/agent'}
-                    expected = {'HOME', 'PATH', 'USER', 'LANG', 'FNL_METRICS', 'FNL_UPDATE_CHECK', 'FNL_AFK_STOP', 'FNL_AFK_PERMIT'}
+                    expected = {'HOME', 'PATH', 'USER', 'LANG', 'FNL_METRICS', 'FNL_UPDATE_CHECK', 'FNL_AFK_STOP', 'FNL_AFK_PERMIT', 'FNL_PROOF_NUDGE'}
                     self.assertEqual(set(namespace['environment'](entry)), expected)
                     self.assertEqual(set(namespace['environment'](entry, '/' + 'synthetic/config')),
                                      expected | {'CLAUDE_CONFIG_DIR'})

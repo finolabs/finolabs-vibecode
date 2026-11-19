@@ -10,7 +10,7 @@ NAME = re.compile(r'^[A-Z][A-Z0-9_]{0,63}$')
 SENSITIVE = re.compile(r'KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|SESSIONID|SESSID|(?:^|_)(?:PASS|PASSWD|PASSPHRASE|AUTH|COOKIE|COOKIES|SESSION|PRIVATE)(?:_|$)', re.I)
 ANSI = re.compile(r'\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))')
 TOKEN = r'[A-Za-z0-9+/_=.-]'
-PREFIX = re.compile(r'(?:sk-ant-|sk-|sk_live_|sk_test_|ghp_|gho_|ghu_|ghs_|github_pat_|glpat-|xoxb-|xoxp-|npm_|AKIA|ASIA|AIza)' + TOKEN + r'{16,}')
+PREFIX = re.compile(r'(?<![A-Za-z0-9])(?:sk-ant-|sk-|sk_live_|sk_test_|ghp_|gho_|ghu_|ghs_|github_pat_|glpat-|xoxb-|xoxp-|npm_|AKIA|ASIA|AIza)' + TOKEN + r'{16,}')
 BEARER = re.compile(r'Authorization[ \t]*:[ \t]*Bearer[ \t]+' + TOKEN + r'{16,}', re.I)
 SECRET_NAME = re.compile(r'(?:[A-F0-9]{20,}|[A-Z2-7]{20,})')
 MAX_MATCHES = 1000

@@ -467,3 +467,15 @@ class NamedTokenStanceTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PrefixBoundaryTest(unittest.TestCase):
+    """A key prefix inside a longer word is not a key (`ask-...`); a real prefixed key still matches."""
+
+    def test_prefix_needs_a_word_boundary(self):
+        word = "ask-" + "protocol-no-question-tool"
+        self.assertFalse(sp.PREFIX.search(word))
+        key = "sk-" + "A1b2C3d4E5f6G7h8J9k0"
+        for text in (key, "key=" + key, '"' + key + '"', "x " + key):
+            with self.subTest(text=text[:6]):
+                self.assertTrue(sp.PREFIX.search(text))
