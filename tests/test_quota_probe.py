@@ -292,7 +292,7 @@ class QuotaTest(unittest.TestCase):
             for agent in ("agy", "codex", "claude"):
                 # A probe runs no model turn, so the afk stop and permission hooks are off in every child.
                 env = qp.environment(self.fake(agent))
-                self.assertEqual((env["FNL_AFK_STOP"], env["FNL_AFK_PERMIT"]), ("off", "off"))
+                self.assertEqual((env["FNL_AFK_STOP"], env["FNL_AFK_PERMIT"], env["FNL_PROOF_NUDGE"]), ("off", "off", "off"))
             for agent in ("agy", "codex"):
                 keys = set(qp.environment(self.fake(agent)))
                 self.assertGreaterEqual(keys, {"USER", "HOME"})

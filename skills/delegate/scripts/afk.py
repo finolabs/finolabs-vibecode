@@ -1249,6 +1249,11 @@ def iso(current):
     return datetime.fromtimestamp(current, timezone.utc).isoformat(timespec='seconds')
 
 
+def decision_id(identifier):
+    """A decision id as recorded: ids are generated lowercase, so one typed in another case names the same id."""
+    return identifier.lower() if isinstance(identifier, str) and identifier.isascii() else identifier
+
+
 def recorded_decision(identifier):
     if not isinstance(identifier, str) or not DECISION_ID.fullmatch(identifier):
         return False
@@ -1318,8 +1323,8 @@ def decide(folder, args, current):
         raise Refusal('--kind decision needs a live lease')
     if args.decision is None:
         identifier = time.strftime('q%Y%m%d-%H%M%S-', time.localtime(current)) + os.urandom(2).hex()
-    elif recorded_decision(args.decision):
-        identifier = args.decision
+    elif recorded_decision(decision_id(args.decision)):
+        identifier = decision_id(args.decision)
     else:
         raise Refusal('--decision names no recorded decision id')
     import away_lease
@@ -1329,10 +1334,11 @@ def decide(folder, args, current):
 
 
 def review(folder, args):
-    if not recorded_decision(args.decision):
+    identifier = decision_id(args.decision)
+    if not recorded_decision(identifier):
         raise Refusal('--decision names no recorded decision id')
     import away_lease
-    away_lease.append_ledger(dict(event='decision_review', id=args.decision, ts=iso(now()), verdict=args.verdict))
+    away_lease.append_ledger(dict(event='decision_review', id=identifier, ts=iso(now()), verdict=args.verdict))
     print('Decision review recorded')
 
 

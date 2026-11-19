@@ -24,6 +24,8 @@ Run each heavy command through the wrapper, which holds one machine-wide lock an
 python3 -I <this skill folder>/scripts/heavy_run.py run --label "<what it is>" -- <heavy command...>
 ```
 
+The command gets only the allowlisted environment of `run_env.py`. A variable the test suite needs to turn a step on, such as `CI_E2E=1`, must be named with `heavy_run.py run --pass-env CI_E2E` (repeat the option per name; a named variable is forwarded as it is, so name only what the step needs and never a secret), or the step is skipped silently.
+
 It records who started the job in the lock file itself (label, repository code and folder name, dispatch id, the command's program name, pids, start time and deadline; never paths, arguments or environment values), and `status` prints it. It stops a command that runs past its maximum time (default 90 minutes, exit 124). It starts the command only when the one-minute load average is below the limit (default 12), free memory is at least
 the minimum (default 4 GB), on macOS the kernel's memory pressure has read normal at every poll for the whole window
 (default 60 seconds) and swap-outs over that window average at most the limit (default 5 MB/s), and no other heavy job
