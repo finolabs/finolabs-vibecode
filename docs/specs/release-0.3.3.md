@@ -28,7 +28,7 @@ Status: implemented; release prepared, not yet tagged.
 | 365 | `/setup add quota --weekly-floor <family>/<label>=<percent>`: routing treats that install's weekly pools below the floor as out of quota. |
 | 366 | The UI review gate (`ui-review-gate`) skill, implementing docs/specs/ui-review-gate.md: four modes on WCAG 2.2 AA, read-only measurement snippets, report-only and advisory; seven Codex review rounds on the target-size inline exception. |
 | 367 | The inline target check skips hidden elements (last LOW finding of 366). |
-| this branch | afk has one mode (owner decisions 1 to 4, 19/11/2026; `docs/specs/afk-one-mode.md`): `strict`, its lists, categories, Merge answer and the per-repository limits are removed; `Lease hours` stays; old `Mode: strict` and limit lines start normally with one notice line each; the stop hook's limit escape is the lease end only; the fallback under a lease needs only the lease, the author's family and the fallback line. Pull request 370 (decision 5, the strict syntax allowlist) closed unmerged. |
+| 373 | afk has one mode (owner decisions 1 to 4, 19/11/2026; `docs/specs/afk-one-mode.md`): `strict`, its lists, categories, Merge answer and the per-repository limits are removed; `Lease hours` stays; old `Mode: strict` and limit lines start normally with one notice line each; the stop hook's limit escape is the lease end only; the fallback under a lease needs only the lease, the author's family and the fallback line. Pull request 370 (decision 5, the strict syntax allowlist) closed unmerged. |
 | this | This release: the drift review below, the Codex hook trust note, the README release section, changelog and manifests. |
 
 The changelog's 0.3.3 section holds the user-facing wording; `update` carries the 0.3.3 upgrade notes. Pull request 358 (the tokenizer implementation) closed unmerged and is not part of 0.3.3.
@@ -102,7 +102,7 @@ Checked against `main` at `b03334c` (after pull request 365), surface by surface
 
 ## Known follow-ups
 
-- afk decider decision 5 (drop `check`'s syntax allowlist and general argv classification) is superseded: `strict` is removed in this release (afk one mode, this branch), and pull request 370 closed unmerged.
+- afk decider decision 5 (drop `check`'s syntax allowlist and general argv classification) is superseded: `strict` is removed in this release (afk one mode, pull request 373), and pull request 370 closed unmerged.
 - Live delivery of the afk stop and permission hooks on a user's machine remains unverified; the `Stop` and `PermissionRequest` schemas were checked against Claude Code 2.1.327 only.
 - The new hooks load only in Claude Code sessions started after the update; a session open during the update keeps the old hook set.
 - Codex: `.codex-plugin/hooks.json` did not change since v0.3.2, but `scripts/compact_nudge.py` did, so Codex asks to trust the hooks again; Codex and Antigravity have no stop or permission hook, so "Decide" stays advisory there.
