@@ -3,6 +3,7 @@
 `<script>` is `afk.py` from `delegate`. These steps hold for every action until the lease ends; what `check` answers is [rules.md](rules.md).
 
 - Before every action run `python3 -I <script> check --argv-json '<argv JSON array>'` for the exact command, or `check --paths <files...>` with every path of one change in one call, staged paths before a commit and changed paths before a merge included. Act only on Tier 1; `check ... && <command>` runs only an allowed command (exit 0 on Tier 1, 3 on Tier 3). Calling it and passing complete evidence are advisory (agent judgment). Judge an operand in another worktree from inside it or through `git -C <worktree>`. This holds on every host, Claude Code included: no hook runs `check` for you (the afk check hook was removed on 18/11/2026), and blocking a command is the host's own permission rules and sandbox.
+- First run `goal --items-file <file in .finolabs/briefs/>` ([start.md](start.md) "Queue"); close each item with `log --item <n> --done` (action, merge) or `log --kind parked --item <n>`. A park closes the item, not the turn: take the next one.
 - Tier 1 is a classification, not proof of the merge gate or of author trust. An `end` line means the lease is over: stop.
 - `floor` and `guarded` are never done and never decided: log them with `log --kind parked --note '<brief reason>'` and go on with other work.
 - `unknown` means the request could not be read (an argv that is not a non-empty list of strings): fix the argv and check again, never run it. `unsafe` is a parser error or unsafe state: never run it either.
