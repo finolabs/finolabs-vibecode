@@ -35,6 +35,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- The `status` dashboard shows a weekly quota pool under the weekly floor you recorded for that install amber, with the floor in its tooltip and table, because routing counts that install out of quota; before, it showed only the raw remaining share.
+- Docs: `shape` appears in the skills architecture diagram and the main checkout in the delegation sequence; the afk merge gate says merge pins and merge records count only in their repository and that an afk log that cannot be written records no pin; the `setup` beginner path names the commands that bring skipped steps back (`add <feature>`, `scan`, `instructions`).
 - `afk.py review --decision` and `log --kind decision --decision` accept a decision id typed in another case and record it as generated.
 - Headless Claude children also run with `FNL_PROOF_NUDGE=off`, so the proof nudge no longer replaces a delegated run's final report with its own answer.
 - `delegate` dispatch says a test step's variable (`CI_E2E=1`) reaches a heavy job only through `heavy_run.py run --pass-env NAME`.
