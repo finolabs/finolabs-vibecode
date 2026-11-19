@@ -312,7 +312,7 @@
       (pools.length ? pools : [null]).forEach(function (q) {
         var fraction = q ? Math.max(0, Math.min(1, Number(q.remaining_fraction) || 0)) : 0;
         var measured = q ? Date.parse(q.measured) : NaN;
-        var stale = !q || q.unverified || !Number.isFinite(measured) || Date.now() < measured || (Date.now() - measured) / 1000 > 28800;
+        var stale = !q || q.unverified || !Number.isFinite(measured) || Date.now() < measured || !Number.isFinite(Date.parse(q.resets)) || Date.parse(q.resets) <= Date.now();
         var floor = q && !stale && Number.isInteger(q.floor) && q.floor >= 10 && q.floor <= 95 ? q.floor : null;
         var resets = q ? Date.parse(q.resets) : NaN;
         var out = floor !== null && q.below_floor === true && Number.isFinite(resets) && Date.now() < resets;  /* routing stops counting it out at the reset */

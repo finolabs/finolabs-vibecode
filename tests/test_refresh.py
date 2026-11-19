@@ -662,7 +662,7 @@ class RefreshTest(unittest.TestCase):
             self.assertEqual([r['agent'] for r in rows], ['claude', 'codex', 'agy'])
             self.assertEqual([len(r['pools']) for r in rows], [8, 8, 0])
             self.assertEqual([q['name'] for q in rows[0]['pools']], ['week-all', 'session'] * 4)
-            self.assertEqual([q['unverified'] for q in rows[0]['pools']], [False] * 6 + [True] * 2)
+            self.assertEqual([q['unverified'] for q in rows[0]['pools']], [False] * 8)
             self.assertEqual(rows[1]['pools'][0]['name'], 'codex / weekly')
             for row in rows:
                 self.assertEqual(set(row), {'agent', 'pools'})
@@ -685,6 +685,21 @@ class RefreshTest(unittest.TestCase):
             path.unlink()
             self.assertEqual([r['pools'] for r in module.quota_meters()], [[], [], []])
 
+    def test_quota_install_expires_at_earliest_reset(self):
+        module = self.running_module()
+        at = self.at
+        folder = self.dir / 'quota'
+        folder.mkdir(parents=True, mode=0o700)
+        path = folder / 'quota.json'
+        for hours, reset_hours, stale in ((2, -1, True), (6, 1, False), (-1, 1, True)):
+            entry = dict(measured=(at - timedelta(hours=hours)).isoformat(), groups=[
+                dict(name='session', window='5h', remaining_fraction=.02, reset_time=(at + timedelta(hours=reset_hours)).isoformat()),
+                dict(name='week-all', window='weekly', remaining_fraction=.02, reset_time=(at + timedelta(days=1)).isoformat())])
+            path.write_text(json.dumps(dict(claude=dict(default=entry))))
+            with mock.patch.dict(os.environ, self.env), mock.patch.object(module.fm, 'now', return_value=at):
+                pools = module.quota_meters()[0]['pools']
+            self.assertEqual([p['unverified'] for p in pools], [stale, stale])
+
     def test_quota_marks_a_weekly_pool_under_its_recorded_floor_like_review_route(self):
         module = self.running_module()
         at = self.at
@@ -696,7 +711,7 @@ class RefreshTest(unittest.TestCase):
             claude=dict(work=entry([('week-all', 'weekly', .30, 1), ('week-opus', 'weekly', .05, 1),
                                     ('session', '5h', .05, 1)]),
                         home=entry([('week-all', 'weekly', .30, 1)]),
-                        old=entry([('week-all', 'weekly', .30, 1)], hours=9)),
+                        old=entry([('week-all', 'weekly', .30, -1)], hours=2)),
             codex=dict(default=entry([('codex', 'weekly', .395, 1), ('codex', '5h', .2, 1)])),
             agy=dict(default=entry([('gemini', 'weekly', .1, -1)])))
         folder = self.dir / 'quota'

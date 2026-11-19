@@ -288,6 +288,9 @@ def quota_view(lines, current=None):
     current = current or datetime.now(timezone.utc)
     marked, installs = set(), {}
     for line in lines:
+        if re.fullmatch(r"Quota claude/[^:]+: no plan limits \(no reading\)", line):
+            installs.setdefault("claude", []).append(set())
+            continue
         marker = re.fullmatch(r"Quota (claude|codex|agy): rate-limit marker ([^;]+); out of quota until ([^ ]+) \(advisory\)", line)
         if marker:
             if quota_probe.timestamp(marker[2]) <= current < quota_probe.timestamp(marker[3]):
@@ -298,9 +301,11 @@ def quota_view(lines, current=None):
             continue
         family = "antigravity" if match[1] == "agy" else match[1]
         age = (current - quota_probe.timestamp(match[3])).total_seconds()
-        if age < 0 or age > 8 * 3600:
+        if age < 0 or "unverified" in match[4] or "reset passed at" in match[4]:
             continue
         pools = re.findall(r"(?:^|; )([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", match[4])
+        if not pools or any(quota_probe.timestamp(p[3]) <= current for p in pools):
+            continue
         relevant = [pool for pool in pools if family != "claude" or pool[0] == "week-all"]
         # A weekly floor the user recorded for this install raises the 10% line for its weekly pools only.
         floor = re.search(r"; weekly floor (\d+)%", match[4])

@@ -897,12 +897,21 @@ class SameFamilyFallbackTest(unittest.TestCase):
             with self.subTest(second=second):
                 self.assertIsNone(mc.fallback_model(second, "claude"))
 
+    def test_fallback_evidence_follows_earliest_reset(self):
+        from datetime import datetime, timedelta, timezone
+        current = datetime.now(timezone.utc)
+        for hours, reset, expected in ((2, -1, set()), (6, 1, {"codex"}), (9, 1, {"codex"}), (-1, 1, set())):
+            line = (f"Quota codex/default: measured {(current - timedelta(hours=hours)).isoformat()}; "
+                    f"session 5h: 2% remaining, resets {(current + timedelta(hours=reset)).isoformat()}; "
+                    f"week weekly: 2% remaining, resets {(current + timedelta(days=1)).isoformat()}")
+            self.assertEqual(mc.out_families([line], current, {"codex": {"default"}}), expected)
+
     def test_only_positive_evidence_counts_as_out(self):
         iso = self.iso
         from datetime import timedelta
         for lines in ([],  # no reading
                       [self.out[0]],  # antigravity has no evidence
-                      [f"Quota codex/default: measured {iso(timedelta(hours=-9))}; week 7d: 2% remaining, resets {iso(timedelta(days=1))}", self.out[1]],
+                      [f"Quota codex/default: measured {iso(timedelta(hours=1))}; week 7d: 2% remaining, resets {iso(timedelta(days=1))}", self.out[1]],
                       [f"Quota codex/default: measured {iso(timedelta(hours=-1))}; week 7d: 2% remaining, resets {iso(timedelta(days=1))}; "
                        f"5h 5h: 50% remaining, resets {iso(timedelta(hours=2))}", self.out[1]],  # one pool still has room
                       [f"Quota codex/default: measured {iso(timedelta(hours=-1))}; week 7d: 2% remaining, resets {iso(timedelta(hours=-1))}", self.out[1]],

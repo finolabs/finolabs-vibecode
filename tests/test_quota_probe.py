@@ -90,6 +90,13 @@ class ParsersTest(unittest.TestCase):
         with self.assertRaises(qp.ShapeError):
             qp.parse("codex", json.dumps(bad), MEASURED)
 
+    def test_claude_partial_current_line_is_unverified(self):
+        data = self.fixture("claude")
+        data["result"] = "Current unknown limits"
+        with self.assertRaises(qp.ShapeError) as caught:
+            qp.parse("claude", json.dumps(data), MEASURED)
+        self.assertNotIsInstance(caught.exception, qp.NoLimitsError)
+
     def test_fraction_and_unknown_names(self):
         for value in (True, False, float("nan"), float("inf"), -.1, 1.1, "0.2"):
             bad = self.fixture("agy")
@@ -368,7 +375,7 @@ class QuotaTest(unittest.TestCase):
         entry = self.fake("claude")
         self.configure({"claude": entry})
         self.ready()
-        for failure, error, seconds in ((qp.ShapeError(), "unverified", 86400),
+        for failure, error, seconds in ((qp.ShapeError(), "unverified", 5 * 3600),
                                         (qp.PromptError(), "prompt", 7 * 86400),
                                         (TimeoutError(), "timeout", 1800), (OSError(), "execution", 1800)):
             self.ready()
@@ -589,7 +596,7 @@ class QuotaTest(unittest.TestCase):
         path = self.root / "state/quota/quota.json"
         path.write_bytes(b" " * (qp.LIMIT + 1))
         path.chmod(0o600)
-        with mock.patch.object(qp, "command", wraps=qp.command) as command:
+        with mock.patch.object(qp, "command", wraps=qp.command) as command, mock.patch.object(qp, "now", return_value=MEASURED):
             self.assertIn(": read;", qp.read_family("agy")[0])
             self.assertIn(": fresh;", qp.read_family("agy")[0])
             self.assertEqual(command.call_count, 1)
@@ -1184,6 +1191,52 @@ class QuotaTest(unittest.TestCase):
         time.sleep(.7)
         self.assertFalse(sentinel.exists())
 
+    def test_reset_freshness_and_passed_pool_display(self):
+        self.ready()
+        for hours, reset_hours, fresh in ((2, -1, False), (2, 0, False), (6, 1, True), (9, 1, True), (-1, 1, False)):
+            entry = dict(measured=qp.stamp(MEASURED - qp.timedelta(hours=hours)), source="agy-usage",
+                         groups=[qp.group("gemini", "5h", .02, qp.stamp(MEASURED + qp.timedelta(hours=reset_hours))),
+                                 qp.group("gemini", "weekly", .02, qp.stamp(MEASURED + qp.timedelta(days=1)))])
+            with qp.state_folder() as folder:
+                qp.write_json(folder, "quota.json", {"agy": {"default": entry}})
+            with mock.patch.object(qp, "now", return_value=MEASURED):
+                line = qp.status_lines()[0]
+            self.assertEqual("unverified" not in line, fresh)
+            if reset_hours <= 0:
+                self.assertIn("gemini 5h: reset passed at ", line)
+                self.assertNotIn("gemini 5h: 2%", line)
+
+    def test_shape_retry_uses_earliest_future_reset_with_bounds(self):
+        self.configure({"agy": self.fake("agy")})
+        for resets, minutes in (([-1, 90, 120], 90), ([5, 120], 30), ([0, 90], 90), ([400], 300), ([-1], 300), ([], 300)):
+            self.ready()
+            if resets:
+                with qp.state_folder() as folder:
+                    qp.write_json(folder, "quota.json", {"agy": {"default": dict(
+                        measured=qp.stamp(MEASURED - qp.timedelta(hours=2)), source="agy-usage",
+                        groups=[qp.group("gemini", "5h", .02, qp.stamp(MEASURED + qp.timedelta(minutes=n))) for n in resets])}})
+            with mock.patch.object(qp, "now", return_value=MEASURED), mock.patch.object(qp, "command", side_effect=qp.ShapeError()):
+                qp.read_family("agy")
+            with qp.state_folder() as folder:
+                record = qp.read_json(folder, "backoff.json")["agy"]["default"]
+            self.assertEqual(record, dict(error="unverified", retry_after=qp.stamp(MEASURED + qp.timedelta(minutes=minutes))))
+
+    def test_valid_claude_without_current_lines_records_no_limits(self):
+        self.configure({"claude": self.fake("claude")})
+        self.ready()
+        with qp.state_folder() as folder:
+            qp.write_json(folder, "quota.json", {"claude": {"default": {
+                "measured": qp.stamp(MEASURED - qp.timedelta(hours=2)), "source": "claude-usage",
+                "groups": [qp.group("week-all", "weekly", .02, qp.stamp(MEASURED + qp.timedelta(days=1)))]}}})
+        reply = dict(type="result", subtype="success", is_error=False, num_turns=0, total_cost_usd=0, result="API billing")
+        with mock.patch.object(qp, "now", return_value=MEASURED), mock.patch.object(qp, "command", return_value=json.dumps(reply)):
+            qp.read_family("claude")
+            self.assertEqual(qp.status_lines(), ["Quota claude/default: no plan limits (no reading)"])
+        with qp.state_folder() as folder:
+            self.assertEqual(qp.read_json(folder, "backoff.json")["claude"]["default"],
+                             dict(error="no-limits", retry_after=qp.stamp(MEASURED + qp.timedelta(days=7))))
+            self.assertEqual(qp.read_cache(folder), {})
+
     def test_cache_display_safe_and_age(self):
         self.configure({"agy": self.fake("agy")})
         self.ready()
@@ -1193,7 +1246,7 @@ class QuotaTest(unittest.TestCase):
             lines = qp.status_lines()
         self.assertIn("measured 2026-11-05T09:00:00Z", lines[0])
         self.assertIn("gemini weekly", lines[0])
-        self.assertIn("unverified: older than 8 hours", lines[0])
+        self.assertIn("unverified: reset passed or future measurement", lines[0])
         self.assertNotIn(str(self.home), lines[0])
 
     def test_scan_and_check_print_cached_measurement_without_probing(self):
@@ -1301,7 +1354,7 @@ class DocumentationTest(unittest.TestCase):
     def test_routing_thresholds_and_advisory(self):
         text = (ROOT / "skills/delegate/references/route.md").read_text()
         step = text.split("4. **Reachability and quota**", 1)[1].split("5. **Effort**", 1)[0]
-        for phrase in ("advisory, agent judgment", "Below 10%", "reset time still ahead", "older than 8 hours",
+        for phrase in ("advisory, agent judgment", "Below 10%", "reset time still ahead", "every group reset still ahead",
                        "excludes nothing", "week-all", "user's own statement", "wins", "state/quota/quota.json"):
             self.assertIn(phrase, step)
 

@@ -28,6 +28,7 @@ class OnDemandTest(unittest.TestCase):
     configure = tq.QuotaTest.configure
     ready = tq.QuotaTest.ready
 
+    @mock.patch.object(qp, "now", lambda: MEASURED)
     def test_concurrent_reads_run_once(self):
         sentinel = self.base / "started"
         entry = self.fake("agy", f"import time\nfrom pathlib import Path\nPath({str(sentinel)!r}).write_text('started')\ntime.sleep(.5)\nprint({(tq.FIXTURES / 'agy-usage.json').read_text()!r})\n")
@@ -361,6 +362,7 @@ class OnDemandTest(unittest.TestCase):
             self.assertEqual(qp.read_family("claude"), ["Quota claude/default: off; age 0s", "Quota claude/work: off; age unknown"])
             command.assert_not_called()
 
+    @mock.patch.object(qp, "now", lambda: MEASURED)
     def test_cli_reads_only_selected_family_without_provider_text(self):
         self.configure({"agy": self.fake("agy"), "codex": self.fake("codex")})
         with mock.patch.object(sys, "argv", ["quota_probe.py", "read", "--family", "agy", "--max-age-minutes", "0"]), \

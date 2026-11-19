@@ -132,8 +132,7 @@ def family_quota(probe, agent, labels, marked, current):
         return "limited", None
     fractions, out = [], False
     for entry in labels.values():
-        age = (current - probe.timestamp(entry["measured"])).total_seconds()
-        if age < 0 or age > 8 * 3600:
+        if not probe.fresh(entry, current):
             return "unverified", None
         for group in entry["groups"]:
             fraction = group["remaining_fraction"]
@@ -154,15 +153,20 @@ def quota_words(families=ALL_FAMILIES):
         with probe.state_folder(read_only=True) as folder:
             cache = probe.read_cache(folder)
             limits = probe.limit_markers(folder)
+            unlimited = probe.no_limits(folder)
         if not isinstance(cache, dict) or not isinstance(limits, dict):
             return "unknown"
         current = probe.now()
         parts = []
         for agent, name in FAMILIES:
             labels = cache.get(agent)
-            if QUOTA_FAMILY[agent] not in families or (not labels and agent not in limits):
+            no_plan = agent == "claude" and bool(unlimited)
+            if QUOTA_FAMILY[agent] not in families or (not labels and agent not in limits and not no_plan):
                 continue
-            word, percent = family_quota(probe, agent, labels or {}, limits.get(agent), current)
+            if no_plan and (agent not in limits or not probe.limited_until(agent, limits[agent], cache, current)):
+                word, percent = "unverified", None
+            else:
+                word, percent = family_quota(probe, agent, labels or {}, limits.get(agent), current)
             parts.append(f"{name} {word}" + (f" {percent}%" if percent is not None else ""))
         return ", ".join(parts) or "no reading"
     except FileNotFoundError:

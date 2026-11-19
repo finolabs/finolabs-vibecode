@@ -54,6 +54,10 @@ class PromptError(ShapeError):
     pass
 
 
+class NoLimitsError(ShapeError):
+    pass
+
+
 def now():
     return datetime.now(timezone.utc)
 
@@ -144,6 +148,8 @@ def parse_claude(data, measured=None):
         name = "session" if period == "session" else "week-all" if family == "all models" else "week-model"
         result.append(group(name, "5h" if name == "session" else "weekly",
                             1 - number(float(used), 100) / 100, stamp(min(dates))))
+    if not result:
+        raise NoLimitsError("no-limits")
     names = [item["name"] for item in result]
     if names.count("session") != 1 or names.count("week-all") != 1 or names.count("week-model") < 1:
         raise ShapeError("missing line")
@@ -175,7 +181,7 @@ def parse(agent, raw, measured=None):
         if len(result) > 64:
             raise ShapeError("groups")
         return result
-    except PromptError:
+    except (PromptError, NoLimitsError):
         raise
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as error:
         raise ShapeError("unverified") from error
@@ -567,7 +573,7 @@ def backoff(folder, configs, current):
                 if not LABEL.fullmatch(label) or set(entry) != {"retry_after", "error"}:
                     raise ValueError("entry")
                 timestamp(entry["retry_after"])
-                if entry["error"] not in {"", "unfinished", "unverified", "prompt", "timeout", "output-limit", "execution"}:
+                if entry["error"] not in {"", "unfinished", "unverified", "no-limits", "prompt", "timeout", "output-limit", "execution"}:
                     raise ValueError("error")
         return data
     except (OSError, ValueError, TypeError, KeyError):
@@ -773,12 +779,20 @@ def read_family(family, max_age_minutes=15):
                         continue
                 measured = now()
                 groups, error, seconds = None, "", MIN_AGE
+                retry_after = None
                 try:
                     groups = parse(agent, command(agent, entry, label), measured)
                 except PromptError:
                     error, seconds = "prompt", 7 * 86400
+                except NoLimitsError:
+                    error, seconds = "no-limits", 7 * 86400
                 except ShapeError:
-                    error, seconds = "unverified", 86400
+                    failed = now()
+                    resets = [timestamp(g["reset_time"]) for g in cache.get(agent, {}).get(label, {}).get("groups", [])
+                              if timestamp(g["reset_time"]) > failed]
+                    retry_after = max(failed + timedelta(minutes=30),
+                                      min(failed + timedelta(hours=5), min(resets))) if resets else failed + timedelta(hours=5)
+                    error = "unverified"
                 except (TimeoutError, subprocess.TimeoutExpired):
                     error, seconds = "timeout", 1800
                 except OverflowError:
@@ -791,6 +805,12 @@ def read_family(family, max_age_minutes=15):
                         states[label] = "busy"
                         continue
                     delays = backoff(folder, configs, now())
+                    if error == "no-limits":
+                        cache = read_cache(folder, repair=True)
+                        cache.get(agent, {}).pop(label, None)
+                        if agent in cache and not cache[agent]:
+                            del cache[agent]
+                        write_json(folder, "quota.json", cache)
                     if groups is not None:
                         try:
                             cache = read_cache(folder, repair=True)
@@ -800,7 +820,7 @@ def read_family(family, max_age_minutes=15):
                         except (OSError, ValueError):
                             error, seconds = "execution", 1800
                     delays.setdefault(agent, {})[label] = {
-                        "retry_after": stamp(now() + timedelta(seconds=seconds)), "error": error}
+                        "retry_after": stamp(retry_after or now() + timedelta(seconds=seconds)), "error": error}
                     write_json(folder, "backoff.json", delays)
                     states[label] = "unverified" if error else "read"
     except BlockingIOError:
@@ -825,7 +845,7 @@ def read_lines(family, labels, states, cache):
         saved = cache.get(family, {}).get(label)
         age = int((now() - timestamp(saved["measured"])).total_seconds()) if saved else None
         state = states.get(label, "unverified")
-        if state == "fresh" and (age is None or age < 0 or age > 8 * 3600):
+        if state == "fresh" and (not saved or not fresh(saved, now())):
             state = "unverified"
         lines.append(f"Quota {family}/{label}: {state}; age " +
                      (f"{age}s" if age is not None else "unknown"))
@@ -861,12 +881,36 @@ def limited_until(agent, marked, cache, current):
     return end if current < end <= started + timedelta(hours=5) else None
 
 
+def fresh(entry, current):
+    """An install's reading expires at its earliest group reset, never by fixed age."""
+    return (timestamp(entry["measured"]) <= current and bool(entry["groups"])
+            and all(timestamp(g["reset_time"]) > current for g in entry["groups"]))
+
+
+def no_limits(folder):
+    """Claude installs whose last reply proved API billing, from existing backoff metadata."""
+    try:
+        entries = read_json(folder, "backoff.json").get("claude", {})
+        if not isinstance(entries, dict) or len(entries) > MAX_INSTALLS:
+            return set()
+        labels = set()
+        for label, record in entries.items():
+            if (LABEL.fullmatch(label) and set(record) == {"error", "retry_after"}
+                    and record["error"] == "no-limits"):
+                timestamp(record["retry_after"])
+                labels.add(label)
+        return labels
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return set()
+
+
 def status_lines():
     try:
         with state_folder(read_only=True) as folder:
             cache = read_cache(folder)
             limits = limit_markers(folder)
-        lines = []
+            unlimited = no_limits(folder)
+        lines = [f"Quota claude/{label}: no plan limits (no reading)" for label in sorted(unlimited)]
         for agent, marked in limits.items():
             end = limited_until(agent, marked, cache, now())
             if end:
@@ -874,13 +918,15 @@ def status_lines():
         floors = weekly_floors()
         for agent, labels in cache.items():
             for label, entry in labels.items():
-                age = (now() - timestamp(entry["measured"])).total_seconds()
-                pools = "; ".join(f"{g['name']} {g['window']}: {g['remaining_fraction']:.0%} remaining, resets {g['reset_time']}"
+                current = now()
+                pools = "; ".join(f"{g['name']} {g['window']}: " +
+                                  (f"reset passed at {g['reset_time']}" if timestamp(g['reset_time']) <= current else
+                                   f"{g['remaining_fraction']:.0%} remaining, resets {g['reset_time']}")
                                   for g in entry["groups"])
                 floor = floors.get(f"{agent}/{label}")
                 lines.append(f"Quota {agent}/{label}: measured {entry['measured']}; {pools}" +
                              (f"; weekly floor {floor}%" if floor else "") +
-                             (" (unverified: older than 8 hours)" if age > 8 * 3600 or age < 0 else ""))
+                             (" (unverified: reset passed or future measurement)" if not fresh(entry, current) else ""))
         return lines or ["Quota: unverified (no reading)."]
     except (OSError, ValueError, TypeError, KeyError):
         return ["Quota: unverified (no reading)."]

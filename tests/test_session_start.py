@@ -519,6 +519,24 @@ class StateBlockTest(SyntheticStateTest):
         self.assertNotIn("codex", state)
         self.assertIn("Parallel slots: 2 free of 3 (claude 0 open, antigravity 1 open, zcode 0 open; default)\n", state)
 
+    def test_quota_freshness_uses_install_earliest_reset(self):
+        current = self.qp.now()
+        for hours, reset_hours, expected in ((2, -1, ("unverified", None)), (6, 1, ("out", 2)),
+                                             (-1, 1, ("unverified", None))):
+            entry = dict(measured=self.qp.stamp(current - self.qp.timedelta(hours=hours)), groups=[
+                self.qp.group("session", "5h", .02, self.qp.stamp(current + self.qp.timedelta(hours=reset_hours))),
+                self.qp.group("week-all", "weekly", .02, self.qp.stamp(current + self.qp.timedelta(days=1)))])
+            self.assertEqual(hook.family_quota(self.qp, "claude", {"default": entry}, None, current), expected)
+
+    def test_no_limits_install_cannot_make_quota_summary_out(self):
+        current = self.qp.now()
+        self.write("state/quota/quota.json", json.dumps({"claude": {"work": {
+            "measured": self.qp.stamp(current), "source": "claude-usage", "groups": [
+                self.qp.group("week-all", "weekly", .02, self.qp.stamp(current + self.qp.timedelta(days=1)))]}}}))
+        self.write("state/quota/backoff.json", json.dumps({"claude": {"default": {
+            "error": "no-limits", "retry_after": self.qp.stamp(current + self.qp.timedelta(days=7))}}}))
+        self.assertEqual(hook.quota_words(), "claude-code unverified")
+
     def test_quota_summary_uses_fixed_words_and_capped_percents(self):
         current = self.qp.now().replace(microsecond=0)
         stamp, hours = self.qp.stamp, self.qp.timedelta
@@ -530,7 +548,7 @@ class StateBlockTest(SyntheticStateTest):
         cache = {"claude": {"default": entry("claude-usage", current - hours(hours=1),
                                              ("week-all", "weekly", .64, 48), ("session", "5h", .9, 2))},
                  "codex": {"default": entry("codex-rate-limits", current, ("codex", "5h", .03, 1))},
-                 "agy": {"default": entry("agy-usage", current - hours(hours=9), ("gemini", "5h", .5, 1))}}
+                 "agy": {"default": entry("agy-usage", current - hours(hours=9), ("gemini", "5h", .5, -1))}}
         with self.dr.data_folder("state/quota", create=True, private=True) as folder:
             self.qp.write_json(folder, "quota.json", cache)
         self.assertIn("Quota (cached): claude-code ok 64%, codex out 3%, antigravity unverified\n", self.state())

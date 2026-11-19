@@ -24,10 +24,10 @@ Claude Code [official hooks docs](https://code.claude.com/docs/en/hooks.md), res
 
 ## A. On-demand reading
 
-- New command `quota_probe.py read --family <agy|claude|codex> [--max-age-minutes N]`, in every copy of the script. `N` is raised to 15 when lower; no caller can read more often than once per 15 minutes per family. A success writes `retry_after` 15 minutes ahead (the 4-hour `FRESH` constant goes); the 30-minute failure and 24-hour shape backoffs stay, and so does the 7-day prompt backoff.
+- New command `quota_probe.py read --family <agy|claude|codex> [--max-age-minutes N]`, in every copy of the script. `N` is raised to 15 when lower; no caller can read more often than once per 15 minutes per family. A success writes `retry_after` 15 minutes ahead (the 4-hour `FRESH` constant goes); the 30-minute failure and 7-day prompt backoffs stay; unexpected shapes use the reset-based retry below.
   It reads the canonical host config (`Quota probe: on`, `FNL_QUOTA_PROBE=off`, the same checks as today), the cache,
   and the backoff times; if the family's reading is newer than the maximum age, a failed run is still inside its 30
-  minutes, or an unexpected shape is still inside its 24 hours, it prints the cached state and runs nothing. Otherwise it
+  minutes, or an unexpected shape is still before its reset-based retry, it prints the cached state and runs nothing. Otherwise it
   runs the family's one command exactly as the 0.1.8 worker did (fixed argv, no shell, allowlisted environment,
   neutral empty working folder, 30-second limit with the process group killed, 64 KiB cap) and writes the cache.
   It waits for its own run, starts no detached worker and prints one line per install: family (and the user's label), state
@@ -43,7 +43,7 @@ Claude Code [official hooks docs](https://code.claude.com/docs/en/hooks.md), res
   worker is kept and strengthened (no hook starts any process).
 - `delegate` Route step 4 now says: before routing, for each candidate family run
   `quota_probe.py read --family <f>` (advisory, agent judgment; the script enforces the age, backoff and limits),
-  then `quota_probe.py status`; honor markers (part B); a reading older than 8 hours stays `unverified`; the user's own
+  then `quota_probe.py status`; honor markers (part B); a reading with a future measurement or any group reset that has passed is `unverified`; the user's own
   statement wins. A delegated headless run reads and does not start readings (advisory, agent judgment; the script enforces the age and busy rules for everyone). Autopilot (`autopilot.md`) stops on a missing reading, so it runs `read` first.
 
 ## B. The rate-limit marker
@@ -61,7 +61,7 @@ Claude Code [official hooks docs](https://code.claude.com/docs/en/hooks.md), res
 ## D. Not in scope
 
 The status line route; a marker for Codex or Antigravity; reading quota from provider APIs; a reading on session
-start; any new network call by the plugin; changing which commands are run or their parsers.
+start; any new network call by the plugin; changing which commands are run.
 
 ## Acceptance
 
@@ -88,3 +88,16 @@ start; any new network call by the plugin; changing which commands are run or th
 
 None blocking. Later: a status-line feed for Claude (documented `rate_limits` fields, account-or-session scope
 unverified); whether Codex hooks expose a rate-limit event.
+
+## Owner decisions, 19/11/2026
+
+1. A cached install reading is fresh until its earliest group `reset_time`, provided `measured` is not in the future. At or after that reset it is unverified and excludes nothing from routing; a reading with no future reset is unverified. This replaces the fixed 8-hour freshness rule everywhere, including routing, same-family fallback evidence, session startup and the dashboard.
+2. After an unexpected reply shape (`unverified`), retry at the earliest reset still in the future among that install's last cached groups, no sooner than 30 minutes and no later than 5 hours after failure. Without a cached reading or a future reset, retry after 5 hours. This replaces the 24-hour shape backoff. The 15-minute minimum between successful readings, 30-minute failed-run retry, 7-day prompt retry and rate-limit marker rules stay unchanged.
+3. A Claude reply with `type: result`, `subtype: success`, `is_error: false`, zero turns and zero cost, and no line starting `Current `, means API billing without plan limits. Record error class `no-limits`, retry after 7 days and print `Quota claude/<label>: no plan limits (no reading)`. It never excludes an install from routing. Any `Current ` lines that fail parsing remain `unverified`. No new command, network call or stored field is added.
+4. Status prints expired pools as `<name> <window>: reset passed at <time>` in place of the old percentage. Status consumers skip this form and treat the whole install as unverified; live pools keep the existing percentage format.
+
+### Implementation and proof plan
+
+- Update the canonical probe and its byte-identical copies, then routing and its copies, session startup, merge fallback evidence, dashboard refresh and page stale flags.
+- Update current rule surfaces, privacy and release records; preserve historical `release-0.1.8.md` and unrelated time windows.
+- Prove reset-based freshness, bounded retries, no-limits and expired status output with synthetic fixtures, starting from failing tests. Run every module selected by `scripts/select_tests.py --base origin/main` (at most two per command), plus reference checks; do not run real probes.
