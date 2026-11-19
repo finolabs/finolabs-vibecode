@@ -162,7 +162,7 @@ class RunEnvironmentTest(unittest.TestCase):
             config.mkdir(mode=0o700)
             def build(path, family='claude'):
                 return delegate_env.environment(family, {}, '', str(path))
-            self.assertEqual(set(build(config)), {'CLAUDE_CONFIG_DIR', 'FNL_AFK_STOP', 'FNL_AFK_PERMIT'})
+            self.assertEqual(set(build(config)), {'CLAUDE_CONFIG_DIR', 'FNL_AFK_STOP', 'FNL_AFK_PERMIT', 'FNL_PROOF_NUDGE'})
             for path in ('', 'relative' + '/config', str(config / '..' / 'config')):
                 with self.assertRaises(ValueError):
                     build(path)
