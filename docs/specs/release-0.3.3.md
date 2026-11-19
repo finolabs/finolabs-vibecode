@@ -28,7 +28,7 @@ Status: implemented; release prepared, not yet tagged.
 | 365 | `/setup add quota --weekly-floor <family>/<label>=<percent>`: routing treats that install's weekly pools below the floor as out of quota. |
 | 366 | The UI review gate (`ui-review-gate`) skill, implementing docs/specs/ui-review-gate.md: four modes on WCAG 2.2 AA, read-only measurement snippets, report-only and advisory; seven Codex review rounds on the target-size inline exception. |
 | 367 | The inline target check skips hidden elements (last LOW finding of 366). |
-| this-d5 | afk decider decision 5: `strict` `check` drops the read-only `git` and `gh` query tables and the approval shape allowlist; an unknown request passes the floor, the guard reading and the kept rules (`rule-form`) before Decide; `open` is unchanged. |
+| 370 | afk decider decision 5: `strict` `check` drops the read-only `git` and `gh` query tables and the approval shape allowlist; an unknown request passes the floor, the guard reading and the kept rules (`rule-form`) before Decide; `open` is unchanged. |
 | this | This release: the drift review below, the Codex hook trust note, the README release section, changelog and manifests. |
 
 The changelog's 0.3.3 section holds the user-facing wording; `update` carries the 0.3.3 upgrade notes. Pull request 358 (the tokenizer implementation) closed unmerged and is not part of 0.3.3.
