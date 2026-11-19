@@ -1026,19 +1026,18 @@ class SettingsFileTest(unittest.TestCase):
     def test_the_autopilot_object_is_a_closed_schema_set_and_cleared_without_metrics_consent(self):
         (self.data / 'state/consent.json').unlink()  # the project's away permissions record no usage data
         before = self.host.read_bytes()
-        value = json.dumps({'roots': ['packages', 'services'], 'merge': 'no', 'task-choice': 'listed'})
+        value = json.dumps({'default-branch': 'open', 'third-party-instructions': 'open'})
         with self.assertRaises(ValueError):
             self.pp.set_setting(self.repo, 'autopilot', value)  # the away object is written only after a preview
         self.assertTrue(self.away(value))
         self.assertFalse(self.away(value))
         data = json.loads(self.file().read_text())
         # Stored in a fixed key order, whatever order the caller used.
-        self.assertEqual(list(data['autopilot']), ['task-choice', 'merge', 'roots'])
+        self.assertEqual(list(data['autopilot']), ['third-party-instructions', 'default-branch'])
         self.assertEqual(self.pp.store.settings_state(self.repo),
-                         ('approved', {'autopilot': {'task-choice': 'listed', 'merge': 'no',
-                                                     'roots': ['packages', 'services']}}))
+                         ('approved', {'autopilot': {'third-party-instructions': 'open', 'default-branch': 'open'}}))
         self.assertTrue(self.pp.set_setting(self.repo, 'parallel', '4'))
-        self.assertEqual(self.pp.store.settings_state(self.repo)[1]['autopilot']['merge'], 'no')
+        self.assertEqual(self.pp.store.settings_state(self.repo)[1]['autopilot']['default-branch'], 'open')
         self.assertTrue(self.away(None))
         self.assertEqual(json.loads(self.file().read_text()), {'version': 1, 'parallel': '4'})
         self.assertEqual(self.host.read_bytes(), before)
@@ -1079,48 +1078,36 @@ class SettingsFileTest(unittest.TestCase):
         self.approval().write_text(json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
         self.assertEqual(store.settings_state(self.repo), ('broken', {}))
 
-    def test_the_preview_shows_test_commands_and_top_level_files(self):
-        shown = self.pp.autopilot_preview(self.repo, json.dumps({'test-commands': ['npm test', 'npm run lint'],
-                                                                 'top-level-files': ['TASKS.md']}))
-        self.assertEqual((shown['effective']['Test commands'], shown['effective']['Top-level files']),
-                         ('npm test; npm run lint (repository)', 'TASKS.md (repository)'))
-        self.assertIn('Test commands', shown['changed'])
-        self.assertIn('Top-level files', shown['changed'])
-        self.assertTrue(self.away(json.dumps({'test-commands': ['npm test'], 'top-level-files': ['TASKS.md']})))
-        shown = self.pp.autopilot_preview(self.repo, json.dumps({'merge': 'no'}))
-        # An omitted list inherits the user's (owner decision 15/11/2026).
-        self.assertEqual((shown['effective']['Test commands'], shown['effective']['Top-level files']),
-                         ('user list (user)', 'user list (user)'))
-        self.assertIn('Test commands', shown['changed'])  # removing a list is a change of its own
-        self.assertIn('Top-level files', shown['changed'])
-        same = self.pp.autopilot_preview(self.repo, json.dumps({'test-commands': ['npm test'],
-                                                                'top-level-files': ['TASKS.md']}))
-        self.assertEqual((same['action'], same['changed']), ('none', []))
-
-    def test_the_preview_shows_release_targets(self):
-        shown = self.pp.autopilot_preview(self.repo, json.dumps({'release-targets': ['git tag v1.2.0', 'npm publish'],
-                                                                 'decide': ['tags-and-releases', 'publishing']}))
-        self.assertEqual(shown['effective']['Release targets'], 'git tag v1.2.0; npm publish (repository)')
-        self.assertIn('Release targets', shown['changed'])
-        shown = self.pp.autopilot_preview(self.repo, json.dumps({'merge': 'no'}))
-        self.assertEqual(shown['effective']['Release targets'], 'user list (user)')
-        for bad in ({'release-targets': []}, {'release-targets': ['make release']}, {'release-targets': ['git push']},
-                    {'release-targets': ['git tag v1; rm -rf x']}, {'release-targets': ['npm publish', 'npm publish']}):
-            with self.subTest(bad=bad), self.assertRaises(ValueError):
-                self.pp.autopilot_preview(self.repo, json.dumps(bad))
+    def test_the_writer_refuses_every_key_only_strict_read(self):
+        # docs/specs/afk-one-mode.md decisions 3 and 4: setup never writes `mode`, the limits or the other old keys;
+        # an approved file that holds them stays readable and they are not read.
+        for value in ({'mode': 'open'}, {'mode': 'strict'}, {'max-runs': 5}, {'max-runtime-minutes': 60},
+                      {'max-actions-per-hour': 9}, {'merge': 'decide'}, {'task-choice': 'listed'},
+                      {'push-and-pull-requests': 'no'}, {'trusted-authors': 'own'}, {'roots': ['packages']},
+                      {'skill-repository': 'yes'}, {'decide': []}, {'non-production-targets': []},
+                      {'test-commands': ['npm test']}, {'top-level-files': ['TASKS.md']},
+                      {'release-targets': ['git tag v1.2.0']}, {'production-targets': ['npm run deploy']},
+                      {'default-branch': 'open', 'mode': 'open'}):
+            with self.subTest(value=value):
+                self.assertTrue(self.pp.store.valid_setting('autopilot', value))
+                with self.assertRaises(ValueError):
+                    self.pp.autopilot_preview(self.repo, json.dumps(value))
+        shown = self.pp.autopilot_preview(self.repo, json.dumps({'third-party-instructions': 'open'}))
+        self.assertEqual(set(shown['effective']), {'Third-party instructions', 'Default branch'})
+        self.assertEqual(shown['changed'], ['Third-party instructions'])
 
     def test_the_cli_previews_the_autopilot_object_and_writes_it_only_without_dry_run(self):
         import io
-        value = 'autopilot=' + json.dumps({'merge': 'no', 'roots': ['packages']})
+        value = 'autopilot=' + json.dumps({'default-branch': 'open'})
         with mock.patch('os.getcwd', return_value=str(self.repo)), \
                 mock.patch('sys.stdout', new_callable=io.StringIO) as out:
             self.assertEqual(self.pp.main(['settings', '--set', value, '--dry-run']), 0)
         shown = json.loads(out.getvalue())
-        self.assertEqual(shown['autopilot'], {'merge': 'no', 'roots': ['packages']})
+        self.assertEqual(shown['autopilot'], {'default-branch': 'open'})
         self.assertEqual((shown['action'], shown['repository'], shown['worktree'], shown['target'], shown['state']),
                          ('replace', str(self.repo), str(self.repo), None, 'unset'))
-        self.assertEqual(shown['effective']['Merge'], 'no (repository)')
-        self.assertEqual(shown['effective']['Push and pull requests'], 'not set (user)')
+        self.assertEqual(shown['effective']['Default branch'], 'open (repository)')
+        self.assertEqual(shown['effective']['Third-party instructions'], 'not set (user)')
         self.assertRegex(shown['token'], r'^[0-9a-f]{64}$')
         self.assertFalse(self.file().exists())
         with mock.patch('os.getcwd', return_value=str(self.repo)), \
@@ -1129,38 +1116,27 @@ class SettingsFileTest(unittest.TestCase):
             self.assertEqual(self.pp.main(['settings', '--set', value]), 1)  # no preview token, no write
             self.assertFalse(self.file().exists())
             self.assertEqual(self.pp.main(['settings', '--set', value, '--expect', shown['token']]), 0)
-            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"merge": "perhaps"}', '--dry-run']), 1)
+            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"default-branch": "perhaps"}', '--dry-run']), 1)
+            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"max-runs": 5}', '--dry-run']), 1)
             self.assertEqual(self.pp.main(['settings', '--set', 'parallel=4', '--expect', shown['token']]), 1)
-        self.assertNotIn('packages', out.getvalue())  # apply prints the key and changed, never the value
-        self.assertEqual(json.loads(self.file().read_text())['autopilot'], {'merge': 'no', 'roots': ['packages']})
+        self.assertNotIn('open', out.getvalue())  # apply prints the key and changed, never the value
+        self.assertEqual(json.loads(self.file().read_text())['autopilot'], {'default-branch': 'open'})
         with mock.patch('os.getcwd', return_value=str(self.repo)), \
                 mock.patch('sys.stdout', new_callable=io.StringIO) as out:
             self.assertEqual(self.pp.main(['settings', '--clear', 'autopilot', '--dry-run']), 0)
             cleared = json.loads(out.getvalue())
             self.assertEqual((cleared['action'], cleared['autopilot']), ('remove', None))
             # The preview names what the repository holds now and which effective values the change would move.
-            self.assertEqual(cleared['current'], {'merge': 'no', 'roots': ['packages']})
-            self.assertEqual(sorted(cleared['changed']), ['Merge', 'Roots'])
+            self.assertEqual(cleared['current'], {'default-branch': 'open'})
+            self.assertEqual(cleared['changed'], ['Default branch'])
             out.seek(0)
             out.truncate()
-            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"roots": ["packages"]}', '--dry-run']), 0)
-            narrowed = json.loads(out.getvalue())
-            self.assertEqual((narrowed['current'], narrowed['changed']), ({'merge': 'no', 'roots': ['packages']}, ['Merge']))
+            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"third-party-instructions": "open"}',
+                                           '--dry-run']), 0)
+            swapped = json.loads(out.getvalue())
+            self.assertEqual((swapped['current'], swapped['changed']),
+                             ({'default-branch': 'open'}, ['Third-party instructions', 'Default branch']))
             self.assertEqual(self.pp.main(['settings', '--clear', 'autopilot', '--expect', cleared['token']]), 0)
-            out.seek(0)
-            out.truncate()
-            # Repository limits are shown and counted as changes like the other keys.
-            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"max-runs": 5}', '--dry-run']), 0)
-            limited = json.loads(out.getvalue())
-            self.assertEqual(limited['changed'], ['Max runs'])
-            self.assertEqual(limited['effective']['Max runs'], '5 (repository)')
-            out.seek(0)
-            out.truncate()
-            # Approving a skill repository alone is a visible change.
-            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"skill-repository": "yes"}', '--dry-run']), 0)
-            skill = json.loads(out.getvalue())
-            self.assertEqual(skill['changed'], ['Skill repository'])
-            self.assertEqual(skill['effective']['Skill repository'], 'yes (repository)')
         self.assertFalse(self.file().exists())
 
     def test_the_cli_writes_the_file_and_never_echoes_values(self):

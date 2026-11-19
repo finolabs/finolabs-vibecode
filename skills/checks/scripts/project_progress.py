@@ -92,17 +92,11 @@ def project_label(root):
     return store.read_settings(root).get('label')
 
 
-# docs/specs/afk-autonomy.md A and C: the mode and the two guards first; a missing line is `open` and `guard`.
-AWAY_KEYS = (('mode', 'Mode'), ('third-party-instructions', 'Third-party instructions'), ('default-branch', 'Default branch'),
-             ('task-choice', 'Task choice'), ('push-and-pull-requests', 'Push and pull requests'), ('merge', 'Merge'),
-             ('trusted-authors', 'Trusted authors'), ('max-runs', 'Max runs'),
-             ('max-runtime-minutes', 'Max runtime minutes'), ('max-actions-per-hour', 'Max actions per hour'))
-AWAY_NUMBERS = {'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440), 'Max actions per hour': (1, 10000)}
-AWAY_USER = {'Task choice': ('choose', 'listed'), 'Push and pull requests': ('yes', 'no'), 'Merge': ('yes', 'no'),
-             'Trusted authors': ('own',), 'Mode': ('open', 'strict'), 'Third-party instructions': ('guard', 'open'),
-             'Default branch': ('guard', 'open')}
-AWAY_DEFAULTS = {'Mode': 'open', 'Third-party instructions': 'guard', 'Default branch': 'guard', 'Task choice': 'choose', 'Push and pull requests': 'yes', 'Trusted authors': 'own',
-                 'Max runs': '20', 'Max runtime minutes': '480', 'Max actions per hour': '30'}
+# docs/specs/afk-autonomy.md C: the two guards, the only project-scoped away keys since 0.3.3
+# (docs/specs/afk-one-mode.md); a missing line is `guard`.
+AWAY_KEYS = (('third-party-instructions', 'Third-party instructions'), ('default-branch', 'Default branch'))
+AWAY_USER = {'Third-party instructions': ('guard', 'open'), 'Default branch': ('guard', 'open')}
+AWAY_DEFAULTS = {'Third-party instructions': 'guard', 'Default branch': 'guard'}
 
 
 def user_away():
@@ -123,10 +117,6 @@ def user_away():
         match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)
         if match and match[1] in AWAY_USER:
             found[match[1]] = match[2] if match[2] in AWAY_USER[match[1]] else 'not set'
-        elif match and match[1] in AWAY_NUMBERS:
-            low, high = AWAY_NUMBERS[match[1]]
-            ok = re.fullmatch(r'[0-9]{1,5}', match[2]) and low <= int(match[2]) <= high
-            found[match[1]] = match[2] if ok else 'not set'
     return found
 
 
@@ -156,16 +146,6 @@ def autopilot_preview(cwd, value):
         for key, name in AWAY_KEYS:
             shown[name] = ('%s (repository)' % obj[key] if obj and key in obj
                            else '%s (user)' % user.get(name, 'not set'))
-        shown['Roots'] = (', '.join(obj['roots']) + ' (repository)' if obj and 'roots' in obj else 'none (user)')
-        shown['Skill repository'] = ('yes (repository)' if obj and obj.get('skill-repository') == 'yes' else 'no (user)')
-        shown['Decide'] = (', '.join(obj['decide']) or 'none') + ' (repository)' if obj and 'decide' in obj else 'user answers (user)'
-        shown['Non-production targets'] = ('; '.join(obj['non-production-targets']) or 'none') + ' (repository)' \
-            if obj and 'non-production-targets' in obj else 'user list (user)'
-        # The command and file lists load like environment variables: a repository list replaces the user's.
-        for key, name, joiner in (('production-targets', 'Production targets', '; '),
-                                  ('release-targets', 'Release targets', '; '), ('test-commands', 'Test commands', '; '),
-                                  ('top-level-files', 'Top-level files', ', ')):
-            shown[name] = (joiner.join(obj[key]) + ' (repository)' if obj and key in obj else 'user list (user)')
         return shown
     # The stored object and the keys whose effective value would move, so a change is never shown as a new state only.
     shown, before = effective(desired), effective(current)

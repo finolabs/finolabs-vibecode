@@ -17,21 +17,25 @@ from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'skills/delegate/scripts/afk.py'
-SETUP = ('## afk\n- Hosts: Claude Code\n- Task choice: choose\n'
-         '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n- Mode: strict\n')
+SETUP = '## afk\n- Hosts: Claude Code\n'
 ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
                  '[remote "origin"]\n\turl = https://github.com/example/demo.git\n'
                  '\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
+# A setup 0.3.2 wrote for `strict`, with every line only `strict` read (docs/specs/afk-one-mode.md).
+OLD_STRICT = ('## afk\n- Mode: strict\n- Hosts: Claude Code\n- Task choice: choose\n- Push and pull requests: yes\n'
+              '- Merge: yes\n- Trusted authors: own\n- Lease hours: 8\n- Max runs: 20\n- Max runtime minutes: 480\n'
+              '- Max actions per hour: 30\n- Quota floor percent: 15\n- Production: stop\n'
+              '- Real users and customer data: stop\n- Unrecoverable deletion: stop\n'
+              '- Messages outside the repository: stop\n- Tags and releases: stop\n- Publishing: stop\n'
+              '- Shared settings: stop\n- Recoverable deletion: decide\n- Repository comments: decide\n'
+              '- Excerpts leave the machine: no\n- Non-production targets: npm run deploy:dev\n'
+              '- Test commands: make test\n- Top-level files: TASKS.md\n- Release targets: git tag v1.0.0\n'
+              '- Production targets: npm run deploy:prod\n')
 
 
 # An ended or exhausted lease tells the caller, in one fixed line, to stop any loop it started for the lease.
 ENDED_CODES = {'no-lease', 'expired', 'stopped', 'setup-changed'}
 ENDED_LINE = 'The away lease has ended: stop any loop or wakeup you started for it, then report to the user.'
-
-def holds_floor(argv):
-    """The cases of the `or_floor` tables that hold a floor form: a secret value, an env file operand or a sensitive
-    assignment on a line of its own. Every other case of those tables must answer its own code, never `floor`."""
-    return any('ghp_' in token or token == '.env' or '\nsession_cookie=' in token for token in argv)
 
 
 class AfkBase(unittest.TestCase):
@@ -75,17 +79,6 @@ class AfkBase(unittest.TestCase):
     def lease(self):
         return json.loads((self.state / 'lease.json').read_text())
 
-    def counts(self):
-        """The counters of the one project this test's checks ran in (zeros before any reserved action)."""
-        table = self.lease()['counters']
-        self.assertLessEqual(len(table), 1, table)
-        return next(iter(table.values()), dict(runs=0, actions=0, hour_actions=[], first=None))
-
-    def change_counts(self, **values):
-        """Set counters of the one project entry, creating it from a first reserved action when absent."""
-        if not self.lease()['counters']:
-            self.check(['git', 'status'])
-        self.change_lease(lambda v: next(iter(v['counters'].values())).update(values))
 
     def change_lease(self, change):
         value = self.lease()
@@ -97,20 +90,7 @@ class AfkBase(unittest.TestCase):
         status, output = self.invoke('start')
         self.assertEqual(status, 0, output)
 
-    def merge_ok(self, pr, head, repo='github.com/example/demo', age=0):
-        """The receipt merge_check.py --independent writes on MERGE OK during the lease."""
-        path = self.state / 'merge-ok.json'
-        kept = json.loads(path.read_text()) if path.exists() else []
-        path.write_text(json.dumps(kept + [dict(repo=repo, pr=int(pr), head=head, time=self.clock - age)]))
-        path.chmod(0o600)
-
     def check(self, argv=None, paths=None, tier=1, code='allowed'):
-        if argv is not None and argv[:3] == ['gh', 'pr', 'merge'] and code == 'allowed' and self.state.is_dir():
-            # An allowed merge needs a fresh MERGE OK receipt; tests of the receipt itself write their own.
-            tail = argv[3:]
-            head = next((t.split('=', 1)[1] if '=' in t else tail[i + 1]) for i, t in enumerate(tail)
-                        if t.startswith('--match-head-commit'))
-            self.merge_ok(next(t for t in tail if t.isdigit()), head)
         flags = ('--argv-json', json.dumps(argv)) if argv is not None else ('--paths', *paths)
         status, output = self.invoke('check', *flags)
         self.assertEqual(status, 0 if tier == 1 else 3, output)  # a denied check never exits 0
@@ -121,8 +101,8 @@ class AfkBase(unittest.TestCase):
 
 
 class AfkTest(AfkBase):
-    def test_start_requires_setup_and_merge(self):
-        for text in ('', '## Other\n', SETUP.replace('- Merge: yes\n', '')):
+    def test_start_requires_setup(self):
+        for text in ('', '## Other\n'):
             self.setup_config(text)
             status, output = self.invoke('start')
             self.assertEqual(status, 3, output)
@@ -139,16 +119,18 @@ class AfkTest(AfkBase):
         self.setup_config('## Autopilot\n- Merge: perhaps\n- Lease hours: 99\n\n' + SETUP)
         status, summary = self.invoke('start')
         self.assertEqual(status, 0, summary)
-        self.assertIn('Merge: yes', summary)
         self.assertIn('Lease hours: 8', summary)
 
     def test_summary_private_lease_second_start_and_stop(self):
         self.setup_config()
         status, summary = self.invoke('start', '--hours', '2')
         self.assertEqual(status, 0, summary)
-        for value in ('Hosts: Claude Code', 'Merge: yes', 'Lease hours: 2', 'Max runs: 20',
-                      'Max runtime minutes: 480', 'Max actions per hour: 30', 'Quota floor percent: 15'):
-            self.assertIn(value, summary)
+        self.assertEqual(summary.splitlines()[:7], [
+            'afk started', '- Third-party instructions: guard', '- Default branch: guard', '- Lease hours: 2',
+            '- Hosts: Claude Code', '- Quota floor percent: 15', '- Excerpts leave the machine: no'])
+        for word in ('Mode', 'Max ', 'Merge', 'strict'):
+            self.assertNotIn(word, summary)
+        self.assertEqual(set(self.lease()), {'id', 'start', 'expiry', 'settings_hash'})  # no per-project counters
         self.assertEqual(self.lease()['expiry'] - self.lease()['start'], 7200)
         self.assertEqual(stat.S_IMODE(self.state.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE((self.state / 'lease.json').stat().st_mode), 0o600)
@@ -169,13 +151,15 @@ class AfkTest(AfkBase):
         self.assertFalse((self.state / 'stop').exists())
 
     def test_invalid_setup_and_hours_fail_closed(self):
-        for text in (SETUP + '- Merge: no\n', SETUP + '- Unknown: yes\n',
-                     SETUP + '- Lease hours: 25\n', SETUP + '- Max runs: 0\n',
-                     SETUP.replace('choose', 'anything'), SETUP + '## afk\n- Merge: yes\n'):
-            self.setup_config(text)
-            self.assertEqual(self.invoke('start')[0], 3)
-        self.setup_config()
-        for hours in ('0', '25', 'nan'):
+        for text in (SETUP + '- Unknown: yes\n', SETUP + '- Lease hours: 25\n', SETUP + '- Lease hours: 0\n',
+                     SETUP + '- Quota floor percent: 101\n', SETUP + '- Default branch: off\n',
+                     SETUP + '- Third-party instructions: closed\n', SETUP + '- Hosts: Codex\n',
+                     SETUP.replace('Claude Code', 'Gemini'), SETUP + '## afk\n- Lease hours: 4\n'):
+            with self.subTest(text=text):
+                self.setup_config(text)
+                self.assertEqual(self.invoke('start')[0], 3)
+        self.setup_config(SETUP + '- Lease hours: 8\n')
+        for hours in ('0', '25', '9', 'nan'):
             self.assertEqual(self.invoke('start', '--hours', hours)[0], 3)
 
     def test_symlinks_refused_without_touching_target(self):
@@ -213,195 +197,13 @@ class AfkTest(AfkBase):
         (self.state / 'stop').chmod(0o600)
         self.check(['git', 'status'], tier=3, code='stopped')
         (self.state / 'stop').unlink()
-        self.setup_config(SETUP.replace('choose', 'listed'))
+        self.setup_config(SETUP.replace('Claude Code', 'Codex'))
         self.check(['git', 'status'], tier=3, code='setup-changed')
         self.setup_config()
-        self.change_counts(runs=20)
-        self.check(['git', 'status'], tier=3, code='spent')
-        self.change_counts(runs=0, first=self.clock - 480 * 60)
-        self.check(['git', 'status'], tier=3, code='spent')
-        self.change_counts(runs=20, first=self.clock, hour_actions=[self.clock] * 30)
-        self.check(['git', 'status'], tier=3, code='spent')  # spent wins over the hourly cap: it never comes back
-        self.change_counts(runs=0, first=self.clock, hour_actions=[self.clock] * 30)
-        self.check(['git', 'status'], tier=3, code='limit')
-        self.clock += 3601
+        for _ in range(40):  # no run, runtime or hourly limit: Lease hours is the only one
+            self.check(['git', 'status'])
+        self.clock += 8 * 3600 - 1
         self.check(['git', 'status'])
-        self.assertEqual(self.counts()['actions'], 2)
-
-    def test_runtime_limit_uses_elapsed_time_since_the_projects_first_action(self):
-        self.start(SETUP + '- Max runtime minutes: 10\n')
-        self.clock += 600
-        self.check(['git', 'status'])  # the project's clock starts at its first reserved action
-        self.clock += 600
-        self.check(['git', 'status'], tier=3, code='spent')
-
-    def test_tier_one_commands_and_paths(self):
-        self.start(SETUP + '- Max actions per hour: 100\n')
-        for argv in (['git', 'status', '--short'], ['git', 'log', '-5', '--oneline'],
-                     ['git', 'diff', '--stat', 'origin/main...HEAD'], ['git', 'show', '--stat', 'HEAD'],
-                     ['git', 'rev-parse', 'HEAD'], ['git', 'branch', '--show-current'],
-                     ['git', 'add', '--', 'src/example.py', 'tests/test_example.py'],
-                     ['git', 'commit', '-m', 'Fix example'], ['git', 'push', '-u', 'origin', 'HEAD:refs/heads/topic'],
-                     ['git', 'merge', 'origin/main'], ['gh', 'pr', 'view', '7', '--json', 'headRefOid'],
-                     ['gh', 'pr', 'checks', '7'],
-                     ['gh', 'pr', 'create', '--title', 'Example', '--body', 'Details', '--head', 'topic',
-                      '--repo', 'github.com/example/demo'],
-                     ['gh', 'pr', 'edit', '7', '--title', 'Example', '--repo', 'github.com/example/demo'],
-                     ['gh', 'issue', 'list'],
-                     ['gh', 'pr', 'merge', '7', '--squash', '--match-head-commit', 'a' * 40,
-                      '--repo', 'github.com/example/demo']):
-            with self.subTest(argv=argv):
-                self.check(argv)
-        for name in ('ledger.py', 'record.py'):
-            self.check(['python3', '-I', str(SCRIPT.parent / name), 'start' if name == 'ledger.py' else 'run'])
-        self.check(['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'gh', 'pr', 'view', '7'])
-        self.check(['python3', '-I', str(ROOT / 'skills/review-gate/scripts/merge_check.py'), '7', '--independent'])
-        self.check(paths=['src/example.py', 'tests/test_example.py', 'docs/guide.md'])
-        self.assertEqual(self.counts()['runs'], 1)
-
-    def test_install_under_a_dot_claude_folder_keeps_its_own_wrappers(self):
-        # Plugins install under ~/.claude/plugins or ~/.codex; the install path itself must not make
-        # this install's own wrapper scripts protected, while any other .claude token still is.
-        import shutil
-        install = self.home / '.claude/plugins/cache/example/plugin/1.0.0/skills'
-        for skill in ('delegate', 'review-gate'):
-            shutil.copytree(ROOT / 'skills' / skill / 'scripts', install / skill / 'scripts')
-        global SCRIPT
-        saved, SCRIPT = SCRIPT, install / 'delegate/scripts/afk.py'
-        try:
-            self.start()
-            own = install / 'delegate/scripts'
-            self.check(['python3', '-I', str(own / 'ledger.py'), 'start'])
-            self.check(['python3', '-I', str(own / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'gh', 'pr', 'view', '7'])
-            self.check(['python3', '-I', str(install / 'review-gate/scripts/merge_check.py'), '7', '--independent'])
-            self.check(['python3', '-I', str(own / 'heavy_run.py'), 'run', '--', 'rm', '-rf', 'temp'], tier=3, code='forbidden')
-            self.check(['python3', '-I', str(own / 'ledger.py'), 'start', '--note', '.claude'], tier=3, code='protected')
-            self.check(['python3', '-I', str(own / 'heavy_run.py'), 'run', '--', 'cat', str(own / 'ledger.py')], tier=3, code='protected')
-            self.check(['python3', '-I', str(own / 'other.py')], tier=3, code='protected')
-        finally:
-            SCRIPT = saved
-
-    def test_tier_three_commands(self):
-        self.start()
-        for argv, code in ((['git', 'tag', 'v1'], 'forbidden'), (['gh', 'release', 'view'], 'forbidden'),
-                           (['npm', 'publish'], 'forbidden'), (['wrangler', 'deploy'], 'forbidden'),
-                           (['rm', '-rf', 'temp'], 'forbidden'), (['rm', '-r', 'temp'], 'forbidden'),
-                           (['git', 'show', 'HEAD:.env'], 'protected'),
-                           (['git', 'add', 'credentials.json'], 'protected'),
-                           (['git', 'push', '--force-with-lease', 'origin', 'topic'], 'forbidden'),
-                           (['git', 'push', 'origin', 'topic:main'], 'forbidden'),
-                           (['git', 'push', 'origin', 'main'], 'forbidden'),
-                           (['git', 'push'], 'unknown'), (['git', '-c', 'alias.x=!bad', 'x'], 'unknown'),
-                           (['git', 'branch', '-D', 'topic'], 'unknown'),
-                           (['git', 'log', '--output=result'], 'unknown'),
-                           (['git', 'merge', 'other'], 'unknown'), (['gh', 'api', '-X', 'POST', 'anything'], 'unknown'),
-                           (['gh', 'pr', 'checkout', '7'], 'unknown'), (['git', 'commit', '--no-verify'], 'unknown'),
-                           (['git', 'diff', '--output', 'result.txt'], 'unknown'),
-                           (['git', 'status', 'unknown/file.py'], 'unknown'),
-                           (['git', 'show', 'API_KEY'], 'protected'),
-                           (['gh', 'pr', 'merge', '7', '--admin', '--match-head-commit', 'a' * 40], 'unknown'),
-                           (['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--', 'rm', '-rf', 'temp'], 'forbidden'),
-                           (['gh', 'pr', 'merge', '7'], 'unpinned'),
-                           (['gh', 'pr', 'merge', '7', '--match-head-commit', 'bad'], 'unpinned'),
-                           (['echo', 'safe'], 'unknown'), (['python3', '/tmp/ledger.py', 'start'], 'unknown'),
-                           (['git', 'status', ';', 'bad'], 'unknown')):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code=code)
-        self.assertEqual(self.counts()['actions'], 0)
-
-    def test_paths_fail_closed(self):
-        self.start()
-        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')  # source paths are known on a work branch only
-        for path in ('.github/workflows/check.yml', 'src/.github/settings.json', 'hooks/check.py',
-                     'src/pre-commit', 'CLAUDE.md', 'docs/AGENTS.md', 'GEMINI.md',
-                     'src/settings.json', 'host.md', 'state/autopilot/lease.json', 'setup.json',
-                     '.env.local', 'src/secret.key', '.ssh/id_rsa', 'unknown/file.py', '../src/example.py',
-                     '/tmp/example.py', 'skills/example/SKILL.md',
-                     'skills/delegate/scripts/afk.py', 'skills/review-gate/scripts/merge_check.py'):
-            with self.subTest(path=path):
-                self.check(paths=[path], tier=3, code='unknown' if path in {'unknown/file.py', '../src/example.py', '/tmp/example.py'} else 'protected')
-
-    def test_review_findings_round_one(self):
-        self.start(SETUP.replace('- Merge: yes', '- Merge: no'))
-        wrapper = ['python3', '-I', str(SCRIPT.parent / 'heavy_run.py')]
-        pin = ['gh', 'pr', 'merge', '7', '--match-head-commit', 'a' * 40]
-        # The wrapper grammar: a command with no separator, or anything unknown, is never allowed.
-        self.check(wrapper + ['run'] + pin, tier=3, code='unknown')
-        self.check(wrapper + ['run', 'echo', 'safe'], tier=3, code='unknown')
-        self.check(wrapper + ['run', '--poll', '1', '--'] + pin, tier=3, code='unknown')
-        self.check(wrapper + ['run', '--label', 'x', '--'] + pin, tier=3, code='merge-disabled')
-        self.check(wrapper + ['run', '--', 'echo', 'safe'], tier=3, code='unknown')
-        self.check(wrapper + ['status'])
-        # A push to a tag or any other non-branch ref namespace is a Tier 3 action.
-        for refspec in ('topic:refs/tags/v-example', 'topic:tags/v-example', 'topic:refs/remotes/origin/x',
-                        'topic:refs/notes/x', 'refs/tags/v1:topic'):
-            self.check(['git', 'push', 'origin', refspec], tier=3, code='forbidden')
-        self.check(['git', 'push', 'origin', 'topic:refs/heads/topic'])
-        # Instruction files and review enforcers are protected wherever they live (on the default branch).
-        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
-        for path in ('docs/CONVENTIONS.md', 'docs/copilot-instructions.md', 'skills/review-gate/scripts/review_route.py'):
-            self.check(paths=[path], tier=3, code='protected')
-        # A directory operand would stage everything below it, including a protected descendant.
-        (self.repo / 'src/bundle.py').mkdir(parents=True)
-        (self.repo / 'src/bundle.py/settings.json').write_text('{}')
-        self.check(['git', 'add', '--', 'src/bundle.py'], tier=3, code='unknown')
-        self.check(paths=['src/bundle.py/settings.json'], tier=3, code='protected')
-
-    def test_review_findings_round_two(self):
-        self.start()
-        # A bare or abbreviated destination can resolve to a tag, so only an explicit branch ref is known.
-        for refspec in ('v-example', 'topic:v-example', 'topic', 'HEAD', 'v-example:v-example'):
-            self.check(['git', 'push', 'origin', refspec], tier=3, code='unknown')
-        self.check(['git', 'push', 'origin', 'v-example:refs/heads/topic'])
-        # Every trusted wrapper and its dependencies are protected as paths and through git add on the default branch.
-        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
-        for name in ('heavy_run.py', 'ledger.py', 'record.py', 'delegate_env.py', 'run_env.py', 'data_root.py', 'assignments.py'):
-            path = 'skills/delegate/scripts/' + name
-            self.check(paths=[path], tier=3, code='protected')
-            self.check(['git', 'add', '--', path], tier=3, code='protected')
-        self.check(paths=['skills/review-gate/scripts/merge_check.py'], tier=3, code='protected')
-        # Case aliases name the same file on a case-insensitive filesystem.
-        for name in ('Heavy_run.py', 'LEDGER.py', 'Run_env.py', 'Data_Root.py', 'Merge_Check.py'):
-            path = 'skills/delegate/scripts/' + name
-            self.check(paths=[path], tier=3, code='protected')
-            self.check(['git', 'add', '--', path], tier=3, code='protected')
-
-    def test_review_findings_security_one(self):
-        self.start()
-        self.repo = self.cwd = ROOT  # the checkout whose scripts are the installed wrappers
-        # New modules next to the trusted wrappers could shadow an import in them, so the folders are protected.
-        for folder in ('review-gate', 'delegate', 'setup'):
-            for name in ('struct.py', 'zlib.py', 'helper.py', 'pkg/__init__.py'):
-                path = 'skills/%s/scripts/%s' % (folder, name)
-                self.check(paths=[path], tier=3, code='protected')
-                self.check(['git', 'add', '--', path], tier=3, code='protected')
-
-    def test_linked_sibling_skill_folders_are_protected_by_target_and_wrapper_refused(self):
-        # A synthetic install whose review-gate skill is a link to another checkout.
-        install = self.home / 'install/skills'
-        (install / 'delegate/scripts').mkdir(parents=True)
-        checkout = self.home / 'other/skills/review-gate/scripts'
-        checkout.mkdir(parents=True)
-        (checkout / 'merge_check.py').write_text('# synthetic')
-        (install / 'review-gate').symlink_to(self.home / 'other/skills/review-gate')
-        ap = self.load()
-        copy = install / 'delegate/scripts/afk.py'
-        copy.write_text(SCRIPT.read_text())
-        spec = importlib.util.spec_from_file_location('afk_linked', copy)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        with patch('os.getcwd', return_value=str(self.home / 'other')):
-            self.assertTrue(module.plugin_code('skills/review-gate/scripts/difflib.py'))
-        applied = dict(module.DEFAULTS, Merge='yes')
-        wrapper = ['python3', '-I', str(install / 'review-gate/scripts/merge_check.py'), '7', '--independent']
-        self.assertEqual(module.script_command(wrapper, applied), 'unknown')
-
-    def test_merge_and_push_settings(self):
-        self.start(SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no'))
-        self.check(['gh', 'pr', 'merge', '7', '--match-head-commit', 'a' * 40], tier=3, code='merge-disabled')
-        for argv in (['git', 'push', 'origin', 'HEAD:refs/heads/topic'], ['gh', 'pr', 'create']):
-            self.check(argv, tier=3, code='push-disabled')
-        self.check(['gh', 'pr', 'view', '7'])
 
     def test_log_redaction_caps_retention_and_ids(self):
         self.start()
@@ -440,21 +242,6 @@ class AfkTest(AfkBase):
         with patch('subprocess.run', side_effect=AssertionError('check must not execute')):
             self.check(['git', 'status'])
 
-    def test_path_symlink_is_protected_without_reading_target(self):
-        self.start()
-        (self.repo / 'src').mkdir()
-        target = self.home / 'synthetic'
-        target.write_text('unread')
-        (self.repo / 'src/example.py').symlink_to(target)
-        self.check(paths=['src/example.py'], tier=3, code='protected')
-
-    def test_branch_default_is_read_from_metadata_and_main_merge_needs_work_branch(self):
-        self.start()
-        (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/stable\n')
-        self.check(['git', 'push', 'origin', 'topic:stable'], tier=3, code='forbidden')
-        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'])
-        (self.repo / '.git/HEAD').write_text('ref: refs/heads/stable\n')
-        self.check(['git', 'merge', 'origin/main'], tier=3, code='forbidden')
 
     def test_held_lock_and_lease_hash_mismatch_refuse(self):
         self.start()
@@ -463,6 +250,7 @@ class AfkTest(AfkBase):
             self.check(['git', 'status'], tier=3, code='unsafe')
         self.change_lease(lambda v: v.update(settings_hash='0' * 64))
         self.check(['git', 'status'], tier=3, code='setup-changed')
+
 
 
 DISPATCH = 'd20261110-010203-abcd'
@@ -491,26 +279,10 @@ ROWS = {
     'park yes': (('--rung', 'park', '--settled', 'yes', '--by', 'claude'), dict(by='claude')),
 }
 EXTRA = {'--by': 'codex', '--option': '1', '--of': '2', '--probability': '0.9', '--dispatch': DISPATCH, '--model': 'gpt-5.5'}
-SETUP_AWAY = SETUP.replace('Claude Code', 'Claude Code, Codex') + '- Max actions per hour: 1000\n'
-JUDGE = ['python3', '-I', str(SCRIPT.parent / 'judge.py'), 'ask', '--site', 'away-evaluation',
-         '--question', 'Which schema fits the spec settings?', '--option', 'Keep one schema', '--option', 'Split it',
-         '--evidence-file', '.finolabs/briefs/packet.json']
-BRIEF = 'Choose one option for the config question.\n1 Keep one schema\n2 Split it\nReply with the number and a reason.'
-ENV = ['python3', '-I', str(SCRIPT.parent / 'delegate_env.py')]
-# Each form ends its options with a literal `--` right before the brief where the program's parser takes one.
-CODEX = ENV + ['--family', 'codex', '--', 'codex', 'exec', '-m', 'gpt-6-astra', '-c', 'model_reasoning_effort=high',
-               '-s', 'read-only', '--', BRIEF]
-CLAUDE = ENV + ['--family', 'claude', '--', 'claude', '-p', '--model', 'claude-opus-5-5',
-                '--output-format', 'json', '--permission-mode', 'plan', '--', BRIEF]
-AGY = ENV + ['--family', 'antigravity', '--', 'agy', '-p', BRIEF, '--model', 'gemini-4-argon-high', '--mode', 'plan',
-             '--output-format', 'json']
-SETUP_ALL = SETUP.replace('Claude Code', 'Claude Code, Codex, Antigravity') + '- Max actions per hour: 1000\n'
-DANGER = {'codex': '--dangerously-bypass-approvals-and-sandbox', 'claude': '--dangerously-skip-permissions',
-          'antigravity': '--yolo'}
 
 
 class AwayDecisionTest(AfkBase):
-    """Away decisions, scripts part: decision records, reviews, categories, the two ladder forms and the packet check."""
+    """Away decisions, scripts part: decision records, reviews and the packet check."""
 
     def ledger(self):
         path = self.root / 'ledger.jsonl'
@@ -535,59 +307,6 @@ class AwayDecisionTest(AfkBase):
         status, output = self.decide(*flags, **kwargs)
         self.assertEqual(status, 3, output)
         self.assertEqual(self.ledger(), before)
-
-    def record_programs(self, folder=None, programs=None):
-        """The canonical `## Quota probe` record setup writes, for synthetic native programs in a temporary folder."""
-        folder = folder or self.home / 'bin'
-        folder.mkdir(mode=0o700, exist_ok=True)
-        self.load()  # puts the script folder on sys.path
-        import quota_probe
-        excluded = quota_probe.excluded
-        # The temporary folder sits under the system temporary root, which the probe excludes; keep every other check.
-        patcher = patch.object(quota_probe, 'excluded',
-                               side_effect=lambda path: excluded(path) if 'downloads' in str(path).lower() else None)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        lines = ['## Quota probe', '', '- Quota probe: on', '- Date: 2026-11-05', '- Agents: claude, codex, agy',
-                 '- Claude config: default: ' + str(self.home / 'claude-config')]
-        self.paths = {}
-        for agent in ('claude', 'codex', 'agy'):
-            path = (programs or {}).get(agent)
-            if path is None:
-                path = folder / agent
-                path.write_bytes(b'\x7fsynthetic native program\n')
-                path.chmod(0o700)
-            resolved = str(Path(path).resolve())
-            lines += ['- Executable %s: %s' % (agent, path), '- Resolved %s: %s' % (agent, resolved),
-                      '- Resolved digest %s: %s' % (agent, hashlib.sha256(resolved.encode()).hexdigest())]
-            self.paths[agent] = str(path)
-        return '\n' + '\n'.join(lines) + '\n'
-
-    def start_away(self, text=SETUP_AWAY, **kwargs):
-        self.start(text + self.record_programs(**kwargs))
-
-    def real(self, argv):
-        """Put the recorded executable where a form names its program by the placeholder name."""
-        paths = getattr(self, 'paths', {})
-        if len(argv) > 6 and argv[:3] == ENV and argv[5] == '--' and argv[6] in paths:
-            return argv[:6] + [paths[argv[6]]] + argv[7:]
-        return argv
-
-    def check_as(self, argv, coordinator='claude', tier=1, code='allowed', real=True, or_floor=False):
-        argv = self.real(argv) if real else argv
-        flags = ('--coordinator', coordinator) if coordinator else ()
-        status, output = self.invoke('check', *flags, '--argv-json', json.dumps(argv))
-        result = json.loads(output)
-        if or_floor and holds_floor(argv):
-            code = 'floor'  # docs/specs/afk-autonomy.md B: a form holding a secret, key or env file is the floor in strict
-        self.assertEqual(status, 0 if result['tier'] == 1 else 3, output)
-        if code is None:  # any Tier 3 code: a checkout under a protected folder may say `protected` first
-            self.assertEqual(result['tier'], 3, argv)
-        else:
-            expected = {'tier': tier, 'code': code}
-            if code in ENDED_CODES:
-                expected['end'] = ENDED_LINE
-            self.assertEqual(result, expected, argv)
 
     # Record for analysis
 
@@ -790,433 +509,6 @@ class AwayDecisionTest(AfkBase):
 
     # Where it must stop
 
-    def test_category_settings_fixed_rows_unknown_values_consent_and_targets(self):
-        ap = self.load()
-        self.setup_config()
-        applied = ap.settings()
-        for category in ap.CATEGORIES:
-            self.assertEqual(applied[category], 'stop', category)  # missing is stop, even for decide-default rows
-        self.assertEqual((applied['Excerpts leave the machine'], applied['Non-production targets']), ('no', []))
-        self.setup_config(SETUP + '- Production: decide\n- Real users and customer data: decide\n'
-                          '- Tags and releases: decide\n- Publishing: maybe\n- Recoverable deletion: decide\n'
-                          '- Excerpts leave the machine: Yes\n'
-                          '- Non-production targets: npx wrangler deploy --env uat; make deploy-dev\n')
-        applied = ap.settings()
-        self.assertEqual((applied['Production'], applied['Real users and customer data']), ('stop', 'stop'))
-        self.assertEqual((applied['Tags and releases'], applied['Publishing'], applied['Recoverable deletion']),
-                         ('decide', 'stop', 'decide'))
-        self.assertEqual(applied['Excerpts leave the machine'], 'no')
-        self.assertEqual(applied['Non-production targets'], ['npx wrangler deploy --env uat', 'make deploy-dev'])
-        self.setup_config(SETUP + '- Excerpts leave the machine: yes\n- Non-production targets: ok; \x07bad\n')
-        applied = ap.settings()
-        self.assertEqual((applied['Excerpts leave the machine'], applied['Non-production targets']), ('yes', []))
-        self.assertTrue(ap.permits({'Tags and releases'}, dict(applied, **{'Tags and releases': 'decide'})))
-        self.assertFalse(ap.permits({'Tags and releases', 'Publishing'},
-                                    dict(applied, **{'Tags and releases': 'decide', 'Publishing': 'stop'})))
-        self.assertFalse(ap.permits({'Tags and releases'}, {}))
-        self.assertFalse(ap.permits(set(), applied))
-
-    def test_precedence_table_rows_and_examples(self):
-        targets = '- Non-production targets: npx wrangler deploy --env uat; npx wrangler deploy --env production\n'
-        self.start(SETUP + '- Max actions per hour: 1000\n' + targets)
-        # Row 3: tags, releases and publishing stay Tier 3 while their category is stop, missing or invalid.
-        for argv in (['git', 'tag', 'v1.2.0'], ['gh', 'release', 'create', 'v1.2.0'], ['npm', 'publish']):
-            self.check(argv, tier=3, code='forbidden')
-        # Row 5: a listed deploy goes on (a listed UAT run).
-        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'])
-        # Row 2: production parks even when listed by mistake; row 4: an unlisted or changed deploy parks.
-        for argv in (['npx', 'wrangler', 'deploy', '--env', 'production'], ['npx', 'wrangler', 'deploy', '--env', 'uat2'],
-                     ['npx', 'wrangler', 'deploy', '--env', 'uat', '--minify'], ['npx', 'wrangler', 'deploy'],
-                     ['npx', 'wrangler', 'deploy', '--env', 'live']):
-            self.check(argv, tier=3, code='forbidden')
-        # Row 1: credentials or the agent's own limits win over every listed target.
-        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat', '--var', 'API_TOKEN'], tier=3, code='protected')
-        # Row 6: local work no category names is classified as today.
-        self.check(['git', 'status'])
-
-    def test_decide_categories_open_only_the_closed_tag_release_and_publish_forms(self):
-        # Every form below is listed, so only the category and the closed grammar decide (the list is in addition).
-        releases = ('git tag v1.2.0; git tag -a v1.2.0 -m Release; git tag v1.2.0 ' + 'a' * 40 + '; '
-                    'gh release create v1.2.0 --title v1.2.0 --notes Changes --verify-tag --repo github.com/example/demo; '
-                    'npm publish; npm publish --access public; pnpm publish --tag next; git tag -d v1.2.0; '
-                    'git tag -f v1.2.0; gh release delete v1.2.0; npm publish --registry https://example.invalid')
-        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Publishing: decide\n'
-                   '- Release targets: ' + releases + '\n')
-        for argv in (['git', 'tag', 'v1.2.0'], ['git', 'tag', '-a', 'v1.2.0', '-m', 'Release'],
-                     ['git', 'tag', 'v1.2.0', 'a' * 40], ['gh', 'release', 'create', 'v1.2.0', '--title', 'v1.2.0',
-                                                          '--notes', 'Changes', '--verify-tag', '--repo', 'github.com/example/demo'],
-                     ['gh', 'release', 'view', 'v1.2.0'], ['gh', 'release', 'list'], ['npm', 'publish'],
-                     ['npm', 'publish', '--access', 'public'], ['pnpm', 'publish', '--tag', 'next']):
-            with self.subTest(argv=argv):
-                self.check(argv)
-        for argv in (['git', 'tag', '-d', 'v1.2.0'], ['git', 'tag', '-f', 'v1.2.0'], ['git', 'tag', '--delete', 'v1'],
-                     ['gh', 'release', 'delete', 'v1.2.0'], ['gh', 'release', 'upload', 'v1.2.0', 'dist/x.zip'],
-                     ['npm', 'publish', '--registry', 'https://example.invalid'], ['npm', 'unpublish'],
-                     ['git', 'push', 'origin', 'refs/tags/v1.2.0'], ['twine', 'upload', 'dist/x'],
-                     ['npx', 'wrangler', 'deploy', '--env', 'uat']):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code='unknown' if argv[0] == 'twine' or 'unpublish' in argv else 'forbidden')
-        # Recursive deletion keeps its Tier 3 classification in this slice.
-        self.check(['rm', '-rf', 'build'], tier=3, code='forbidden')
-
-    def test_a_release_names_the_verified_target_like_a_merge(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Release targets: '
-                   'gh release create v1.2.0 --repo github.com/example/demo; gh release create v1.2.0; '
-                   'gh release create v1.2.0 -R example/demo; gh release create v1.2.0 --repo github.com/example/elsewhere; '
-                   'gh release create v1.2.0 --repo github.com/example/demo --repo github.com/example/demo\n')
-        create = ['gh', 'release', 'create', 'v1.2.0']
-        self.check(create + ['--repo', 'github.com/example/demo'])
-        self.check(create, tier=3, code='unknown')
-        self.check(create + ['-R', 'example/demo'], tier=3, code='unknown')
-        self.check(create + ['--repo', 'github.com/example/elsewhere'], tier=3, code='forbidden')
-        self.check(create + ['--repo', 'github.com/example/demo', '--repo', 'github.com/example/demo'], tier=3, code='unknown')
-
-    def test_categories_come_from_the_command_not_from_its_free_text(self):
-        base = SETUP + '- Max actions per hour: 1000\n- Release targets: gh release create v1 --notes publish --repo ' \
-            'github.com/example/demo; git tag -a v1 -m publish; git tag -a v1 -m deploy; gh release create v1 --title ' \
-            'deploy:uat --repo github.com/example/demo; npm publish --tag next; pnpm publish --access public\n'
-        repo = ['--repo', 'github.com/example/demo']
-        tag = (['gh', 'release', 'create', 'v1', '--notes', 'publish'] + repo, ['git', 'tag', '-a', 'v1', '-m', 'publish'],
-               ['git', 'tag', '-a', 'v1', '-m', 'deploy'], ['gh', 'release', 'create', 'v1', '--title', 'deploy:uat'] + repo)
-        publish = (['npm', 'publish', '--tag', 'next'], ['pnpm', 'publish', '--access', 'public'])
-        local = (['git', 'commit', '-m', 'publish'], ['gh', 'pr', 'create', '--title', 'deploy', '--body', 'publish', '--head', 'topic',
-                  '--repo', 'github.com/example/demo'], ['git', 'commit', '-m', 'deploy'])
-        # Tags and releases stop, Publishing decide: free text naming publishing opens no tag or release.
-        self.start(base + '- Tags and releases: stop\n- Publishing: decide\n')
-        for argv in tag:
-            with self.subTest(setup='tags stop', argv=argv):
-                self.check(argv, tier=3, code='forbidden')
-        for argv in publish + local:
-            with self.subTest(setup='tags stop', argv=argv):
-                self.check(argv)
-        # The reverse: tags and releases decide, Publishing stop.
-        self.assertEqual(self.invoke('stop')[0], 0)
-        self.start(base + '- Tags and releases: decide\n- Publishing: stop\n')
-        for argv in tag + local:
-            with self.subTest(setup='publishing stop', argv=argv):
-                self.check(argv)
-        for argv in publish:
-            with self.subTest(setup='publishing stop', argv=argv):
-                self.check(argv, tier=3, code='forbidden')
-
-    # How the ladder's calls pass the action gate
-
-    def test_the_judge_form_is_tier_one_under_a_live_lease_and_reserves_an_action(self):
-        self.start(SETUP_AWAY)
-        self.check_as(JUDGE)
-        self.check_as(JUDGE + ['--option', 'Third', '--judge', 'jev'])
-        self.assertEqual(self.counts()['actions'], 2)
-        self.assertEqual(self.counts()['runs'], 0)
-
-    def test_the_judge_form_denies_any_other_site_flag_shape_or_copy(self):
-        self.start(SETUP_AWAY)
-        site = JUDGE.index('away-evaluation')
-        other = str(ROOT / 'skills/checks/scripts/judge.py')
-        option = JUDGE.index('Split it')
-        for argv in (JUDGE[:site] + ['navigator'] + JUDGE[site + 1:], JUDGE + ['--base-url', 'http://127.0.0.1:9'],
-                     JUDGE + ['--dry-run'], JUDGE + ['--answers', 'docs/answers.json'],
-                     JUDGE[:option - 1] + JUDGE[option + 1:],  # one option
-                     JUDGE + [t for n in range(5) for t in ('--option', 'Extra %d' % n)],  # seven options
-                     JUDGE[:option] + ['ghp_' + 'x' * 30] + JUDGE[option + 1:],
-                     JUDGE[:option] + ['Keep one schema'] + JUDGE[option + 1:],  # duplicate option
-                     JUDGE[:7] + ['Which file under /Us' + 'ers/synthetic/private?'] + JUDGE[8:],
-                     JUDGE + ['--judge', 'host'], JUDGE + ['--site', 'away-decision'], JUDGE[:site] + ['away-decision'] + JUDGE[site + 1:],
-                     JUDGE[:-1] + ['../packet.json'], JUDGE[:-1] + ['.env'], JUDGE[:-1] + ['/tmp/packet.json'],
-                     JUDGE[:-1] + ['.finolabs/briefs/packet.sh'],
-                     JUDGE[:3] + ['check-host'] + JUDGE[4:], JUDGE[:3] + JUDGE[5:]):
-            with self.subTest(argv=argv[3:6] + argv[-2:]):
-                self.check_as(argv, tier=3, code='unknown', or_floor=True)
-        # Another copy of judge.py or a call without isolated Python is not the ladder form.
-        for argv in (JUDGE[:2] + [other] + JUDGE[3:], ['python3'] + JUDGE[2:]):
-            self.check_as(argv, tier=3, code=None)
-        self.assertEqual(self.counts()['actions'], 0)
-
-    def test_the_table_check_form_is_tier_one_only_for_a_brief_file(self):
-        self.start(SETUP_AWAY)
-        table = JUDGE[:3] + ['check-table', '--file', '.finolabs/briefs/table.json', '--of', '2']
-        self.check_as(table)
-        self.check_as(table[:4] + ['--of', '6', '--file', '.finolabs/briefs/table.json'])
-        for argv in (table[:-1] + ['1'], table[:-1] + ['7'], table[:-1] + ['two'], table[:-2],
-                     table[:5] + ['.finolabs/briefs/table.md'] + table[6:], table[:5] + ['../table.json'] + table[6:],
-                     table[:5] + ['/tmp/table.json'] + table[6:], table[:5] + ['docs/table.json'] + table[6:],
-                     table + ['--judge', 'jev'], table + ['--of', '3']):
-            with self.subTest(argv=argv[3:]):
-                self.check_as(argv, tier=3, code='unknown')
-
-    def test_the_advisor_form_is_tier_one_for_another_family_in_hosts(self):
-        self.start_away()
-        self.check_as(CODEX)
-        self.check_as(CLAUDE, coordinator='codex')
-        self.check_as(CLAUDE[:-2] + ['--effort', 'high', '--max-turns', '8', '--max-budget-usd', '2'] + CLAUDE[-2:],
-                      coordinator='codex')
-        self.assertEqual(self.counts()['actions'], 3)
-        self.assertEqual(self.counts()['runs'], 0)  # the advisor's ledger start reserves its run, as today
-
-    def test_the_antigravity_advisor_form_is_tier_one_in_plan_mode(self):
-        self.start_away(SETUP_ALL)
-        for coordinator in ('claude', 'codex'):
-            self.check_as(AGY, coordinator=coordinator)
-        self.check_as(AGY + ['--print-timeout', '30m'])
-        mode = AGY.index('plan')
-        for value in ('accept-edits', 'default', 'yolo'):
-            self.check_as(AGY[:mode] + [value] + AGY[mode + 1:], tier=3, code='unknown')
-        self.check_as(AGY, coordinator='antigravity', tier=3, code='unknown')
-        self.assertEqual(self.counts()['actions'], 3)
-
-    def test_a_delegated_run_outside_the_advisor_form_may_be_decided_once(self):
-        # Owner decision 15/11/2026: a review on a fast model, or an implementation run, goes up the ladder.
-        self.start_away(SETUP_ALL)
-        self.cwd = self.repo
-        review = AGY[:AGY.index('gemini-4-argon-high')] + ['gemini-3.8-flash-high'] + AGY[AGY.index('gemini-4-argon-high') + 1:]
-        argv = self.real(review)
-        self.check_as(argv, tier=3, code='unknown')
-        host = ('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '1', '--of', '2',
-                '--model', 'claude-opus-5-5')
-        status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'review run',
-                                     '--precedents', '0', *host, '--approve-argv-json', json.dumps(argv))
-        self.assertEqual(status, 0, output)
-        self.check_as(argv, code='decided')
-        self.check_as(argv, tier=3, code='unknown')
-        # A program other than the recorded executable, or a family outside Hosts, never enters the ladder.
-        for bad in (review, ENV + ['--family', 'zcode', '--', 'zcode', '-p', BRIEF]):
-            with self.subTest(bad=bad):
-                status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'review run',
-                                             '--precedents', '0', *host, '--approve-argv-json', json.dumps(bad))
-                self.assertEqual(status, 3, output)
-
-    def test_the_advisor_model_is_frontier_else_strong(self):
-        self.start_away(SETUP_ALL)
-        forms = {'antigravity': (AGY, AGY.index('gemini-4-argon-high')),
-                 'claude': (CLAUDE, CLAUDE.index('claude-opus-5-5')), 'codex': (CODEX, CODEX.index('gpt-6-astra'))}
-        def form(family, name):
-            argv, index = forms[family]
-            return argv[:index] + [name] + argv[index + 1:]
-        # Unknown names, the fast tier and a near miss deny on every family.
-        for family, name, coordinator in (
-                ('antigravity', 'gemini-3.8-flash-high', 'claude'), ('antigravity', 'gemini-4-argon', 'claude'),
-                ('antigravity', 'gemini-5-argon-high', 'codex'), ('antigravity', 'GEMINI-4-ARGON-HIGH', 'claude'),
-                ('claude', 'claude-haiku-5-5', 'codex'), ('claude', 'haiku', 'antigravity'), ('claude', 'opus', 'codex'),
-                ('claude', 'claude-opus-6-0', 'codex'), ('codex', 'gpt-6.1-terra', 'claude'),
-                ('codex', 'gpt-6-luna', 'antigravity'), ('codex', 'gpt-5.5', 'claude'), ('codex', 'gpt-7-astra', 'claude'),
-                # A Claude model served through Antigravity is Claude: not for a Claude coordinator.
-                ('antigravity', 'claude-opus-5-5-high', 'claude'), ('antigravity', 'claude-sonnet-5-5-low', 'claude')):
-            with self.subTest(family=family, model=name, coordinator=coordinator):
-                self.check_as(form(family, name), coordinator=coordinator, tier=3, code='unknown')
-        self.assertEqual(self.counts()['actions'], 0)
-        # Every listed frontier and strong model is accepted for a coordinator of another family.
-        module, accepted = self.load(), 0
-        for family, names in module.ADVISOR_MODELS.items():
-            for name in sorted(names):
-                coordinator = 'codex' if family != 'codex' else 'claude'
-                with self.subTest(family=family, model=name):
-                    self.check_as(form(family, name), coordinator=coordinator)
-                accepted += 1
-        self.assertEqual(self.counts()['actions'], accepted)
-
-    def test_the_advisor_models_match_the_frontier_and_strong_rows_of_models_md(self):
-        module = self.load()
-        text = (ROOT / 'skills/delegate/references/models.md').read_text()
-        listed = {'claude': set(), 'codex': set(), 'antigravity': set()}
-        for tier in ('frontier', 'strong'):
-            [row] = re.findall(r'^\| %s \|(.*)\|$' % tier, text, re.MULTILINE)
-            claude, codex, antigravity = [cell.strip() for cell in row.split('|')][:3]
-            listed['claude'] |= {'claude-%s-%s-%s' % (name.lower(), major, minor)
-                                 for name, major, minor in re.findall(r'\b(Opus|Fable|Sonnet) (\d+)\.(\d+)', claude)}
-            listed['codex'] |= set(re.findall(r'`([^`]+)`', codex))
-            for name in re.findall(r'`([^`]+)`', antigravity):
-                self.assertTrue(name.endswith('-*'), name)
-                listed['antigravity'] |= {name[:-1] + effort for effort in ('low', 'medium', 'high')}
-        self.assertEqual({family: set(names) for family, names in module.ADVISOR_MODELS.items()}, listed)
-        self.assertIn('`gemini-4-argon-{low,medium,high}`', text)  # the `*` suffixes models.md lists
-
-    def test_the_zcode_advisor_form_denies_even_with_an_approved_program(self):
-        ap = self.load()
-        tail = ['--family', 'zcode', '--', '/opt/synthetic/zcode', '-p', BRIEF, '--model', 'glm-synthetic',
-                '--mode', 'plan', '--output-format', 'json']
-        applied = {'Hosts': 'Claude Code, ZCode'}
-        # Antigravity's grammar would accept this shape; a zcode family must never reach it.
-        with patch.object(ap, 'approved_program', return_value=1) as approved:
-            self.assertEqual(ap.advisor_command(tail, applied, 'claude'), 'unknown')
-        approved.assert_not_called()
-
-    def test_the_advisor_program_is_the_owner_approved_executable(self):
-        self.start_away()
-        program = CODEX.index('codex', 6)
-        recorded = self.paths['codex']
-        def at(path):
-            return CODEX[:program] + [str(path)] + CODEX[program + 1:]
-        self.check_as(at(recorded), real=False)
-        # A matching basename at another path, a PATH shadow (bare name), a relative name and a perl time cap deny.
-        other = self.home / 'other'
-        other.mkdir()
-        (other / 'codex').write_bytes(b'\x7fsynthetic\n')
-        (other / 'codex').chmod(0o700)
-        for argv in (at(other / 'codex'), at('codex'), at('./codex'), at(recorded + '/'),
-                     at(str(Path(recorded).parent) + '/../bin/codex'),
-                     CODEX[:program] + ['perl', '-e', 'alarm 900; exec @ARGV', recorded] + CODEX[program + 1:],
-                     CODEX[:program] + ['/usr/bin/perl', '-e', 'alarm 900; exec @ARGV', recorded] + CODEX[program + 1:]):
-            with self.subTest(argv=argv[program:program + 4]):
-                self.check_as(argv, tier=3, code='unknown', real=False)
-        # A sibling directory in the same repository, with the coordinator in another folder of it.
-        tools = self.repo / 'tools'
-        tools.mkdir()
-        (tools / 'codex').write_bytes(b'\x7fsynthetic\n')
-        (tools / 'codex').chmod(0o700)
-        (self.repo / 'src').mkdir()
-        self.repo = self.cwd = self.repo / 'src'
-        self.check_as(at(tools / 'codex'), tier=3, code='unknown', real=False)
-        # A symlink outside the repository that leads to repository code.
-        links = self.home / 'links'
-        links.mkdir()
-        (links / 'codex').symlink_to(tools / 'codex')
-        self.check_as(at(links / 'codex'), tier=3, code='unknown', real=False)
-        self.assertEqual(self.counts()['actions'], 1)
-
-    def test_a_recorded_program_inside_a_repository_or_without_a_record_denies(self):
-        tools = self.repo / 'tools'
-        tools.mkdir()
-        target = tools / 'codex'
-        target.write_bytes(b'\x7fsynthetic\n')
-        target.chmod(0o700)
-        links = self.home / 'links'
-        links.mkdir()
-        (links / 'codex').symlink_to(target)
-        # Even when setup recorded it: repository code, directly or through a link, is never an approved program.
-        for path in (target, links / 'codex'):
-            with self.subTest(path=path):
-                self.setup_config(SETUP_AWAY + self.record_programs(programs={'codex': path}))
-                self.assertEqual(self.invoke('stop')[0], 0)
-                self.assertEqual(self.invoke('start')[0], 0)
-                self.check_as(CODEX, tier=3, code='unknown')
-        # No record, an unconfirmed record or the probe turned off: the advisor form is denied.
-        record = self.record_programs()
-        digest = re.search(r'- Resolved digest codex: [0-9a-f]+\n', record)[0]
-        for text in ('', record.replace(digest, ''), record.replace('- Quota probe: on', '- Quota probe: off'),
-                     record.replace('- Agents: claude, codex, agy', '- Agents: claude, agy')):
-            with self.subTest(record=text[:40]):
-                self.setup_config(SETUP_AWAY + text)
-                self.assertEqual(self.invoke('stop')[0], 0)
-                self.assertEqual(self.invoke('start')[0], 0)
-                self.check_as(CODEX[:6] + [self.paths['codex']] + CODEX[7:], tier=3, code='unknown', real=False)
-
-    def test_the_advisor_form_denies_writes_other_families_programs_and_shapes(self):
-        self.start_away()
-        mode = CODEX.index('read-only')
-        permission = CLAUDE.index('plan')
-        for argv, coordinator in (
-                (CODEX[:mode] + ['workspace-write'] + CODEX[mode + 1:], 'claude'),
-                (CODEX[:mode] + ['danger-full-access'] + CODEX[mode + 1:], 'claude'),
-                (CODEX[:-2] + ['--dangerously-bypass-approvals-and-sandbox', '--', BRIEF], 'claude'),
-                (CODEX[:-2] + ['-o', 'docs/answer.md', '--', BRIEF], 'claude'),
-                (CODEX[:-2] + ['--full-auto', '--', BRIEF], 'claude'),
-                (CODEX[:6] + ['codex', 'review'] + CODEX[8:], 'claude'),
-                (CLAUDE[:permission] + ['acceptEdits'] + CLAUDE[permission + 1:], 'codex'),
-                (CLAUDE[:-2] + ['--allowedTools', 'Bash', '--', BRIEF], 'codex'),
-                (CLAUDE[:-2] + ['--dangerously-skip-permissions', '--', BRIEF], 'codex'),
-                (CLAUDE, 'claude'),  # the host's own family
-                (CODEX, 'codex'),
-                (CODEX, None),  # the coordinator's family must be stated
-                (ENV + ['--family', 'antigravity', '--', 'agy', '-p', BRIEF, '--model', 'm', '--mode', 'plan',
-                        '--output-format', 'json'], 'claude'),  # a family outside Hosts
-                (CODEX[:6] + ['bash', '-c', 'codex'] + CODEX[9:], 'claude'),  # an unknown program
-                (CODEX[:6] + ['./codex'] + CODEX[7:], 'claude'),
-                (CODEX[:6] + [str(self.repo / 'tools/codex')] + CODEX[7:], 'claude'),
-                (CODEX[:6] + ['claude'] + CODEX[7:], 'claude'),  # another family's program
-                (CODEX[:5] + ['--', 'perl', '-e', 'system("x"); exec @ARGV'] + CODEX[6:], 'claude'),
-                (CODEX[:5] + ['--claude-config-dir', '/opt/x', '--'] + CODEX[6:], 'claude'),
-                (CODEX[:4] + ['claude'] + CODEX[5:], 'claude'),  # wrapper family differs from the program
-                (CODEX[:-1] + ['ghp_' + 'x' * 30], 'claude'),  # a brief with a secret
-                (CODEX[:-1], 'claude'),  # no brief
-                (CODEX[:-2], 'claude'),  # no brief and no separator
-                (['python3'] + CODEX[2:], 'claude')):
-            with self.subTest(argv=argv[3:9], coordinator=coordinator):
-                self.check_as(argv, coordinator=coordinator, tier=3, code='unknown', or_floor=True)
-        # Another copy of the wrapper is not the form; inside this install's checkout it is also a protected path.
-        self.check_as(['python3', '-I', str(ROOT / 'scripts/delegate_env.py')] + CODEX[3:], tier=3, code=None)
-        self.assertEqual(self.counts()['actions'], 0)
-
-    def test_the_brief_position_never_accepts_an_option(self):
-        self.start_away(SETUP_ALL)
-        forms = {'codex': (CODEX, 'claude'), 'claude': (CLAUDE, 'codex'), 'antigravity': (AGY, 'claude')}
-        for family, (form, coordinator) in forms.items():
-            danger = DANGER[family]
-            brief = form.index(BRIEF)
-            shapes = {
-                'dangerous flag as the brief': form[:brief] + [danger] + form[brief + 1:],
-                'stdin as the brief': form[:brief] + ['-'] + form[brief + 1:],
-                'brief starting with a dash': form[:brief] + ['-x ' + BRIEF] + form[brief + 1:],
-                'dangerous flag as the final token': form + [danger],
-                'dangerous flag after the brief': form + [danger, BRIEF],
-            }
-            if family == 'codex':  # the reviewed shape: the last token became the brief, with no separator
-                shapes['old form, dangerous flag last'] = CODEX[:-2] + [danger]
-                shapes['old form, stdin'] = CODEX[:-2] + ['-']
-                shapes['old form'] = CODEX[:-2] + [BRIEF]
-                shapes['flag before the brief'] = CODEX[:-2] + [danger, '--', BRIEF]
-            if family == 'claude':  # -p is a switch; the brief is the positional prompt after `--`
-                shapes['old form, dangerous flag as prompt'] = CLAUDE[:8] + [danger] + CLAUDE[8:-2]
-                shapes['old form, stdin'] = CLAUDE[:8] + ['-'] + CLAUDE[8:-2]
-                shapes['old form'] = CLAUDE[:8] + [BRIEF] + CLAUDE[8:-2]
-                shapes['flag before the brief'] = CLAUDE[:-2] + [danger, '--', BRIEF]
-            if family == 'antigravity':  # the brief is the value of -p
-                shapes['flag before the brief'] = AGY[:7] + [danger] + AGY[7:]
-                shapes['separator then brief'] = AGY[:8] + AGY[9:] + ['--', BRIEF]
-            for name, argv in shapes.items():
-                with self.subTest(family=family, shape=name):
-                    self.check_as(argv, coordinator=coordinator, tier=3, code='unknown', or_floor=True)
-        self.assertEqual(self.counts()['actions'], 0)
-        for form, coordinator in forms.values():
-            self.check_as(form, coordinator=coordinator)
-
-    def test_a_sensitive_assignment_split_across_lines_is_screened(self):
-        module = self.load()
-        for brief in ('session_cookie: "\n  synthetic-fixture-1234567890\n"', "password: '\n  demo\n'", 'password: |\n  demo',
-                      'password:\n  - demo', 'password=$(cat x)', '"token" \n\n = \n "q"',
-                      '{"session_cookie":\n  "synthetic-fixture-1234567890"}', '{"password":\n"demo"}',
-                      'password =\n  demo', 'api_token\n  : abc', '{"password": "demo"}'):
-            with self.subTest(brief=brief):
-                self.assertFalse(module.brief_ok(brief))
-                self.assertTrue(module.screened(brief))
-        self.assertTrue(module.brief_ok('The password setting is described\nin the next section.'))
-
-    def test_branch_deletion_bundled_with_a_merge_needs_its_own_category(self):
-        module = self.load()
-        # Bind the merge target to a fixed verified target, not to whatever Git config the runner's checkout holds.
-        argv = ['gh', 'pr', 'merge', '215', '--merge', '--match-head-commit=' + 'a' * 40,
-                '--repo', 'github.com/example/demo']
-        applied = {**module.DEFAULTS, **{c: 'stop' for c in module.CATEGORIES}, 'Merge': 'yes',
-                   module.CONSENT: 'no', module.TARGETS: [],
-                   module.CONTEXT: module.Context('found', None, 'user', 'github.com/example/demo'),
-                   module.MERGE_OK: {('github.com/example/demo', 215, 'a' * 40)}}
-        self.assertEqual(module.classify_argv(argv, applied), 'allowed')
-        self.assertEqual(module.classify_argv(argv + ['--delete-branch'], applied), 'forbidden')
-        applied['Recoverable deletion'] = 'decide'
-        self.assertEqual(module.classify_argv(argv + ['--delete-branch'], applied), 'allowed')
-
-    def test_the_advisor_brief_is_screened_like_the_judge_and_packet_paths(self):
-        self.start_away()
-        home = '/Us' + 'ers/synthetic'
-        # A sensitive name with any assigned value, however short, and any machine path deny.
-        for brief in ('Use db_password=fixture123 in the fixture.', 'Set API_TOKEN=ab and continue.',
-                      'The test sets secret: x1 first.', "Config has auth_token = 'q'.", 'export PASSWORD=1',
-                      'Read ' + home + '/notes.md first.', 'See ~/private/notes.', 'Look in /ho' + 'me/synthetic/x.',
-                      'Open C:\\work\\x.txt.', BRIEF + '\nsession_cookie=abc'):
-            with self.subTest(brief=brief):
-                self.check_as(CODEX[:-1] + [brief], tier=3, code='unknown', or_floor=True)
-        self.assertEqual(self.counts()['actions'], 0)
-        # Discussing configuration without an assigned value stays possible.
-        for brief in ('Should the db password setting move to the vault, or stay in the env file?',
-                      'Rotate the API key before the release, or after it?',
-                      'Choose: keep the token cache, or drop it.', BRIEF):
-            with self.subTest(brief=brief):
-                self.check_as(CODEX[:-1] + [brief])
-
-    def test_both_forms_deny_without_a_live_lease(self):
-        self.setup_config(SETUP_AWAY)
-        self.check_as(JUDGE, tier=3, code='no-lease')
-        self.check_as(CODEX, tier=3, code='no-lease')
-
-    # The precedent packet
 
     def packet(self, excerpts, goal='Ship the parser with one schema, as the spec says.'):
         path = self.home / 'packet.json'
@@ -1257,1438 +549,12 @@ class AwayDecisionTest(AfkBase):
         self.assertEqual(json.loads(output)['excerpts'], [])
 
 
+
 PIN = ['--match-head-commit', 'a' * 40]
-NO = SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no')
-
-
-class ProjectScopeTest(AfkBase):
-    """A repository's approved `autopilot` object in its settings file wins for five keys; user scope stays default."""
-
-    def setUp(self):
-        super().setUp()
-        spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')
-        self.store = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.store)
-
-    def project(self, value):
-        found, ident = self.store.identity(self.repo)
-        self.store.write_setting(self.repo, 'autopilot', value, ident=ident)
-
-    def settings_file(self):
-        return self.repo / '.finolabs/vibecode/settings.json'
-
-    def test_a_project_mode_wins_over_the_user_mode_line(self):
-        # A repository's approved `mode` replaces the `## afk` Mode line there, in both directions.
-        self.start()  # the user line says strict
-        self.assertEqual(self.effective_mode(), ('strict', 'user'))
-        self.project({'mode': 'open'})
-        self.assertEqual(self.effective_mode(), ('open', 'project'))
-        self.invoke('stop')
-        self.start(SETUP.replace('- Mode: strict\n', '- Mode: open\n'))
-        self.project({'mode': 'strict'})
-        self.assertEqual(self.effective_mode(), ('strict', 'project'))
-        self.check(['npm', 'publish'], tier=3, code='forbidden')  # strict there: Publishing is stop
-
-    def effective_mode(self):
-        status, output = self.invoke('effective')
-        self.assertEqual(status, 0, output)
-        result = json.loads(output)
-        return result['mode'], result['state']
-
-    def test_a_project_value_wins_over_the_user_value_for_merge_and_push(self):
-        self.start(NO)
-        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
-        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'])
-        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'])
-        self.check(['gh', 'pr', 'create', '--head', 'topic', '--repo', 'github.com/example/demo'])
-        self.project({'merge': 'no', 'push-and-pull-requests': 'no'})
-        # check re-reads the project values on each call; the user-only lease hash is unchanged.
-        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
-        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
-        self.check(['git', 'status'])
-
-    def other_repo(self, name):
-        repo = self.home / name
-        (repo / '.git/refs/remotes/origin').mkdir(parents=True)
-        (repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
-        (repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
-        (repo / '.git/config').write_text(ORIGIN_CONFIG)
-        return repo
-
-    HOST_YES = ('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '1', '--of', '2',
-                '--model', 'claude-opus-5-5')
-
-    def approve(self, *request, status=0, rung=HOST_YES):
-        found = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it', '--precedents', '0',
-                            *rung, *request)
-        self.assertEqual(found[0], status, found[1])
-        return found[1]
-
-    def test_an_away_decision_approves_one_unknown_command_once_in_this_folder(self):
-        # Owner decision 15/11/2026: an unknown request goes up the away ladder instead of parking.
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        (self.repo / 'scripts').mkdir(exist_ok=True)
-        (self.repo / 'scripts/ci-local.sh').write_text('#!/bin/sh\n')
-        argv = ['scripts/ci-local.sh', 'fast']
-        self.check(argv, tier=3, code='unknown')
-        self.approve('--approve-argv-json', json.dumps(argv))
-        self.check(argv, code='decided')
-        self.check(argv, tier=3, code='unknown')  # one approval runs once
-        self.approve('--approve-argv-json', json.dumps(argv))
-        self.check(['scripts/ci-local.sh', 'web'], tier=3, code='unknown')  # bound to the exact argv
-        self.cwd = self.other_repo('second')
-        self.check(argv, tier=3, code='unknown')  # and to the repository and folder
-        self.cwd = self.repo
-        self.check(argv, code='decided')
-        (self.repo / 'requirements.txt').write_text('x\n')
-        for test in (['npm', 'test', '--', 'unit'], ['python3', '-m', 'unittest', 'tests.test_x'], ['make', 'ci-local'],
-                     ['go', 'test', './...'], ['go', 'test', '-race', '-count=1', './...'], ['make', 'ci-local', 'TIER=fast'],
-                     ['git', 'fetch', 'origin', 'main'], ['gh', 'issue', 'create', '-R', 'example/demo', '--title', 'x'],
-                     ['python3', '-I', 'scripts/ci-local.sh'],
-                     # git and gh for code, review and workflow work (owner decision, 15/11/2026).
-                     ['git', 'cherry-pick', 'abc1234'], ['git', 'revert', '--no-edit', 'abc1234'],
-                     ['gh', 'workflow', 'run', 'deploy.yml'], ['gh', 'run', 'rerun', '123'],
-                     ['gh', 'issue', 'create', '--title', 'x', '--body', 'y'],
-                     # Installing what the repository declares (owner decision, 15/11/2026).
-                     ['npm', 'ci'], ['npm', 'install'], ['pnpm', 'install', '--frozen-lockfile'], ['uv', 'sync'],
-                     ['pip', 'install', '-r', 'requirements.txt'], ['python3', '-m', 'pip', 'install', '-e', '.'],
-                     ['python3', '-I', '-m', 'pytest', '-q'], ['python3', '-u', '-m', 'pip', 'install', '-r', 'requirements.txt'],
-                     ['go', 'mod', 'download']):
-            with self.subTest(test=test):
-                self.approve('--approve-argv-json', json.dumps(test))
-                self.check(test, code='decided')
-        # A change of paths no rule names, bound to the same set of paths.
-        (self.repo / 'NOTES.md').write_text('x\n')
-        self.check(paths=['NOTES.md'], tier=3, code='unknown')
-        self.approve('--approve-paths', 'NOTES.md')
-        self.check(paths=['NOTES.md'], code='decided')
-        self.check(paths=['NOTES.md'], tier=3, code='unknown')
-
-    def test_an_approval_is_refused_for_known_protected_or_unbounded_requests(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        (self.repo / 'tests').mkdir(exist_ok=True)
-        outside = self.home / 'outside.txt'
-        outside.write_text('x\n')
-        for argv in (['curl', '-o', 'x', 'https://example.com'], ['bash', '-c', 'make'], ['sh', 'run.sh'],
-                     ['python3', '-c', 'print(1)'], ['node', '-e', '1'], ['python3', '-m', 'pip', 'install', 'x'],
-                     ['npm', 'install', 'left-pad'], ['go', 'install', 'x'], ['npm', 'ci', '--registry', 'http://x'],
-                     ['pip', 'install', 'requests'], ['python3', '-m', 'pip', 'install', 'requests'], ['npm', 'i', '-g'],
-                     ['pip', 'install', '-r', '../req.txt'], ['go', 'mod', 'edit', '-require=x'], ['npx', 'tsc'], ['rm', '-rf', 'build'],
-                     ['cat', str(outside)], ['cat', '../outside.txt'], ['cat', '~/x'], ['FOO=1', 'make'],
-                     ['make', 'ci', '|', 'tee'], ['make', '$(id)'], ['sudo', 'make'], ['/bin/rm', 'x'],
-                     ['git', 'reset', '--hard'], ['gh', 'api', 'x'], ['make', 'TOKEN=ghp_' + 'a' * 36],
-                     ['gh', 'repo', 'delete', 'example/demo'], ['gh', 'repo', 'edit', '--visibility', 'public'],
-                     ['gh', 'secret', 'set', 'NAME'], ['git', 'config', 'user.name', 'x'], ['git', '-c', 'a=b', 'log'],
-                     ['git', 'push', '--force'], ['git', 'filter-branch', 'HEAD'], ['git', 'rebase', 'main'],
-                     ['git', 'clean', '-fdx'], ['gh', 'pr', 'merge', '7'], ['gh', 'workflow', 'disable', 'ci'],
-                     # Review round one (PR 295): each of these slipped through the first screen.
-                     ['git', 'restore', 'NOTES.md'], ['git', 'checkout', 'NOTES.md'], ['git', 'merge', 'topic'],
-                     ['git', '-Csub', 'log'], ['git', '--config-env=core.pager=X', 'log'], ['git', 'pull'],
-                     ['python3', '-u', '-m', 'pip', 'install', 'requests'], ['python3', '-c"print(1)"'],
-                     ['python3', '-m', 'timeit', '1'], ['python3', '-m', 'code'], ['python3'], ['node'],
-                     ['node', '-e"1"'], ['deno', 'eval', '1'], ['pwsh', '-Command', 'x'], ['uv', 'run', 'bash'],
-                     ['poetry', 'run', 'sh'], ['bundle', 'exec', 'sh'], ['go', 'mod', 'download', 'x@v1'],
-                     ['go', 'run', 'example.com/x@latest'], ['pip', 'install', 'git+git@example.com:a/b.git'],
-                     ['gh', 'pr', 'review', '7', '--approve'], ['gh', 'issue', 'delete', '7'],
-                     ['gh', 'repo', 'create', 'x'], ['zcode', '-p', 'x'], ['cat', 'git@example.com:a/b'],
-                     # Review round two (PR 295), closed by the allowlist.
-                     ['go', 'test', '-exec', 'sh', './...'], ['git', 'difftool', '-x', 'sh'], ['git', 'bisect', 'run', 'sh'],
-                     ['gh', 'pr', '-R', 'example/demo', 'merge', '7'], ['pip', 'install', 'tests'], ['nodejs', '-e', '1'],
-                     ['pythonw', '-c', '1'], ['git', 'commit'], ['gh', 'pr', 'checkout', '7'], ['gh', 'repo', 'clone', 'x'],
-                     ['git', 'apply', '--unsafe-paths', 'x.patch'], ['git', 'log', '--output=x'], ['git', 'diff', '--ext-diff'],
-                     ['gh', 'issue', 'create', '--repo', 'other/repo', '--title', 'x'], [str(outside)], ['cargo', '--config', 'x', 'test'],
-                     # Review round three (PR 295): options inside the allowed shapes.
-                     ['go', 'test', '--exec', 'sh', './...'], ['go', 'test', '--exec=sh', './...'], ['go', 'vet', '-vettool=sh'],
-                     ['go', 'test', 'example.com/x'], ['gh', 'issue', 'create', '-R=other/repo', '--title', 'x'],
-                     ['gh', 'issue', 'create', '-Rother/repo'], ['make', 'DESTDIR=' + str(outside)], ['make', 'CC=curl'],
-                     ['make', 'SHELL=sh'], ['python3', '-m', 'pylint', '--init-hook=x'], ['python3', '-m', 'coverage', 'run', '-m', 'pip'],
-                     ['git', 'fetch', 'example.com:repo.git'], ['git', 'fetch', 'origin', 'a:b']):
-            with self.subTest(argv=argv):
-                self.approve('--approve-argv-json', json.dumps(argv), status=3)
-                self.check(argv, tier=3, code=json.loads(self.invoke('check', '--argv-json', json.dumps(argv))[1])['code'])
-        self.check(['git', 'status'])
-        self.approve('--approve-argv-json', json.dumps(['git', 'status']), status=3)  # already allowed: no approval
-        self.approve('--approve-paths', '.github/workflows/x.yml', status=3)  # protected never enters the ladder
-        (self.repo / '.git/hooks').mkdir(parents=True, exist_ok=True)
-        (self.repo / 'notes-link').symlink_to(self.repo / '.git/hooks')
-        self.approve('--approve-paths', 'notes-link/pre-commit', status=3)  # a link into a protected folder
-        self.approve('--approve-argv-json', json.dumps(['make', 'notes-link/pre-commit']), status=3)
-        argv = json.dumps(['make', 'ci-local'])
-        for rung in (('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '2', '--of', '2',
-                      '--model', 'claude-opus-5-5'),
-                     ('--rung', 'table', '--settled', 'yes', '--by', 'host-small', '--of', '2', '--probability', '0.9'),
-                     ('--rung', 'park', '--settled', 'yes', '--by', 'claude')):
-            with self.subTest(rung=rung):
-                self.approve('--approve-argv-json', argv, status=3, rung=rung)
-        self.check(['make', 'ci-local'], tier=3, code='unknown')  # nothing was approved
-        # The strict state (a repository whose settings cannot be trusted) never approves.
-        self.cwd = self.home
-        self.approve('--approve-argv-json', argv, status=3)
-
-    def test_production_targets_are_tier_one_only_where_the_repository_listed_and_decides_them(self):
-        targets = '- Non-production targets: npx wrangler deploy --env uat\n'
-        self.start(SETUP + '- Max actions per hour: 1000\n' + targets)
-        production = ['npx', 'wrangler', 'deploy', '--env', 'production']
-        self.check(production, tier=3, code='forbidden')  # the user scope never decides production
-        self.project({'production-targets': ['npx wrangler deploy --env production']})
-        self.check(production, tier=3, code='forbidden')  # listed, but Production is not in this repository's decide
-        self.project({'production-targets': ['npx wrangler deploy --env production'], 'decide': ['production']})
-        self.check(production)
-        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'])  # the user's non-production list is inherited
-        # A token holding a space never matches two listed words, though the joined text is the same.
-        for argv in (['npx', 'wrangler', 'deploy', '--env production'], ['npx', 'wrangler', 'deploy', '--env uat']):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code='forbidden')
-        for argv in (production + ['--minify'], ['npx', 'wrangler', 'deploy', '--env', 'live'],
-                     ['npx', 'wrangler', 'deploy', '--env', 'production-eu']):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code='forbidden')  # an unlisted production deploy parks
-        # An explicit decide list replaces the user's answers: tags were not listed, so they stop here.
-        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
-        # The same argv in another repository, where nothing lists it, parks.
-        self.cwd = self.other_repo('second')
-        self.check(production, tier=3, code='forbidden')
-
-    def test_project_decide_and_target_lists_replace_the_user_values(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n'
-                   '- Non-production targets: npx wrangler deploy --env uat\n- Release targets: git tag v1.2.0\n')
-        self.check(['git', 'tag', 'v1.2.0'])
-        self.project({'decide': [], 'non-production-targets': ['npx wrangler deploy --env qa']})
-        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
-        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'], tier=3, code='forbidden')
-        self.check(['npx', 'wrangler', 'deploy', '--env', 'qa'])
-        self.project({'decide': ['tags-and-releases']})
-        self.check(['git', 'tag', 'v1.2.0'])
-        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'])  # an omitted target list inherits the user's
-        for bad in ({'decide': ['real-users-and-customer-data']}, {'decide': ['credentials']}, {'decide': 'production'},
-                    {'decide': ['production', 'production']}, {'production-targets': []},
-                    {'production-targets': ['npx wrangler deploy; rm -rf /']}, {'production-targets': ['a  b']},
-                    {'non-production-targets': ['$(whoami) deploy']}, {'production-targets': ['x'] * 17}):
-            with self.subTest(bad=bad):
-                self.assertFalse(self.store.valid_autopilot(bad))
-
-    def test_listed_test_commands_are_tier_one_only_in_that_repository(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        unit = ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-        heavy = ['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--']
-        self.check(unit, tier=3, code='unknown')  # nothing listed: today's tier
-        self.project({'test-commands': ['python3 -m unittest discover -s tests', 'npm test',
-                                        'npm run deploy:staging']})
-        self.check(unit)
-        self.check(['npm', 'test'])
-        self.check(heavy + unit)
-        for argv in (['python3', '-m', 'unittest'], ['npm', 'test', '--', '--watch'], ['npm test'],
-                     ['python3', '-m', 'unittest discover', '-s', 'tests'], heavy + ['npm', 'test', 'x']):
-            with self.subTest(unlisted=argv):
-                self.check(argv, tier=3, code='unknown')
-        # A listed entry never relaxes the deploy rules, which run first.
-        self.check(['npm', 'run', 'deploy:staging'], tier=3, code='forbidden')
-        # The same argv in another repository keeps its usual tier.
-        self.cwd = self.other_repo('second')
-        self.check(unit, tier=3, code='unknown')
-        # A settings file changed in the work tree (no longer the approved bytes) is the strict state.
-        self.cwd = self.repo
-        self.settings_file().write_text(self.settings_file().read_text().replace('npm test', 'npm run lint'))
-        self.check(unit, tier=3, code='unknown')
-        for bad in ({'test-commands': []}, {'test-commands': ['git push origin HEAD:refs/heads/main']},
-                    {'test-commands': ['gh pr merge 7']}, {'test-commands': ['rm -rf build']},
-                    {'test-commands': ['npm  test']}, {'test-commands': ['npm test; curl x']},
-                    {'test-commands': ['npm test', 'npm test']}, {'test-commands': ['x'] * 17},
-                    {'test-commands': 'npm test'}):
-            with self.subTest(bad=bad):
-                self.assertFalse(self.store.valid_autopilot(bad))
-
-    def test_user_lists_are_the_default_and_a_repository_list_replaces_them(self):
-        # Owner decision 15/11/2026: the lists load like environment variables.
-        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Test commands: npm test\n'
-                   '- Top-level files: TASKS.md\n- Release targets: git tag v1.2.0\n')
-        (self.repo / 'TASKS.md').write_text('- [ ] one\n')
-        (self.repo / 'NOTES.md').write_text('x\n')
-        second = self.other_repo('second')
-        (second / 'TASKS.md').write_text('x\n')
-        for cwd in (self.repo, second):  # the user lists apply in every repository without its own value
-            self.cwd = cwd
-            with self.subTest(inherited=cwd.name):
-                self.check(['npm', 'test'])
-                self.check(paths=['TASKS.md'])
-                self.check(['git', 'tag', 'v1.2.0'])
-        # A repository's own list replaces the user's whole list, never merges with it.
-        self.cwd = self.repo
-        self.project({'test-commands': ['npm run unit'], 'top-level-files': ['NOTES.md'],
-                      'release-targets': ['git tag v1.3.0']})
-        self.check(['npm', 'run', 'unit'])
-        self.check(paths=['NOTES.md'])
-        self.check(['git', 'tag', 'v1.3.0'])
-        self.check(['npm', 'test'], tier=3, code='unknown')
-        self.check(paths=['TASKS.md'], tier=3, code='unknown')
-        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
-        # The repository's own value never leaks into another repository, which keeps the user's.
-        self.cwd = second
-        self.check(['npm', 'run', 'unit'], tier=3, code='unknown')
-        self.check(['git', 'tag', 'v1.3.0'], tier=3, code='forbidden')
-        self.check(['npm', 'test'])
-
-    def test_user_lists_are_never_used_in_the_strict_or_no_repository_state(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Test commands: npm test\n'
-                   '- Top-level files: TASKS.md\n- Release targets: git tag v1.2.0\n')
-        outside = self.home / 'no-repository'
-        outside.mkdir()
-        (outside / 'TASKS.md').write_text('x\n')
-        self.cwd = outside
-        self.check(['npm', 'test'], tier=3, code='unknown')
-        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
-        self.check(paths=['TASKS.md'], tier=3, code='unknown')
-        # A settings file changed in the work tree is the strict state: none of the lists apply.
-        self.cwd = self.repo
-        self.project({'merge': 'yes'})
-        self.settings_file().write_text(self.settings_file().read_text().replace('"yes"', '"no"'))
-        (self.repo / 'TASKS.md').write_text('x\n')
-        self.check(['npm', 'test'], tier=3, code='unknown')
-        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
-        self.check(paths=['TASKS.md'], tier=3, code='unknown')
-
-    def test_an_invalid_user_list_fails_the_start(self):
-        for line in ('- Test commands: git status', '- Test commands: npm  test', '- Top-level files: CLAUDE.md',
-                     '- Top-level files: notes/TASKS.md', '- Release targets: make release',
-                     '- Release targets: git tag v1; rm -rf x', '- Production targets: npx deploy $(x)'):
-            with self.subTest(line=line):
-                self.setup_config(SETUP + line + '\n')
-                self.assertNotEqual(self.invoke('start')[0], 0)
-
-    def test_release_targets_are_needed_beside_the_category(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        repo = ['--repo', 'github.com/example/demo']
-        tag, release, publish = ['git', 'tag', 'v1.2.0'], ['gh', 'release', 'create', 'v1.2.0'] + repo, ['npm', 'publish']
-        # The category decides, but no command is listed: every tag, release and publish parks.
-        self.project({'decide': ['tags-and-releases', 'publishing']})
-        for argv in (tag, release, publish):
-            with self.subTest(unlisted=argv):
-                self.check(argv, tier=3, code='forbidden')
-        # Reading tags and releases needs no list; it still needs the category.
-        for argv in (['git', 'tag'], ['git', 'tag', '-l'], ['gh', 'release', 'list'], ['gh', 'release', 'view', 'v1.2.0']):
-            with self.subTest(reading=argv):
-                self.check(argv)
-        # Listed, but the category stops: still parks.
-        self.project({'release-targets': ['git tag v1.2.0', 'gh release create v1.2.0 --repo github.com/example/demo',
-                                          'npm publish'], 'decide': []})
-        for argv in (tag, release, publish, ['git', 'tag', '-l']):
-            with self.subTest(stopped=argv):
-                self.check(argv, tier=3, code='forbidden')
-        # Listed with the category at decide: Tier 1 for the exact token list only.
-        self.project({'release-targets': ['git tag v1.2.0', 'gh release create v1.2.0 --repo github.com/example/demo',
-                                          'npm publish'], 'decide': ['tags-and-releases', 'publishing']})
-        for argv in (tag, release, publish):
-            with self.subTest(listed=argv):
-                self.check(argv)
-        for argv in (['git', 'tag', 'v1.2.1'], ['git', 'tag', 'v1.2.0 '], ['git', 'tag', '-a', 'v1.2.0', '-m', 'x'],
-                     ['npm', 'publish', '--access', 'public'], ['npm', 'publish', '--access public']):
-            with self.subTest(unlisted=argv):
-                self.check(argv, tier=3, code='forbidden')
-        for bad in ({'release-targets': []}, {'release-targets': ['make release']}, {'release-targets': ['git push']},
-                    {'release-targets': ['npm  publish']}, {'release-targets': ['npm publish', 'npm publish']},
-                    {'release-targets': ['git tag v1; rm -rf x']}, {'release-targets': ['git tag v%d' % n for n in range(17)]},
-                    {'release-targets': 'npm publish'}):
-            with self.subTest(bad=bad):
-                self.assertFalse(self.store.valid_autopilot(bad))
-
-    def test_start_and_effective_show_the_repository_rules(self):
-        self.project({'decide': ['repository-comments'], 'non-production-targets': ['npm run deploy:staging'],
-                      'test-commands': ['npm test'], 'top-level-files': ['TASKS.md'], 'max-actions-per-hour': 7})
-        self.setup_config(SETUP + '- Tags and releases: decide\n')
-        status, output = self.invoke('start')
-        self.assertEqual(status, 0, output)
-        self.assertIn('- Tags and releases: decide', output)  # the account summary
-        self.assertIn('This folder (project): Max runs: 20; Max runtime minutes: 480; Max actions per hour: 7; '
-                      'Decide: Repository comments; Non-production targets: npm run deploy:staging; '
-                      'Production targets: none; Test commands: npm test; Top-level files: TASKS.md; Release targets: none.', output)
-        status, output = self.invoke('effective')
-        rules = json.loads(output)['rules']
-        self.assertEqual((rules['Decide'], rules['Test commands'], rules['Top-level files'], rules['Max actions per hour']),
-                         (['Repository comments'], ['npm test'], ['TASKS.md'], 7))
-        self.cwd = self.other_repo('second')
-        rules = json.loads(self.invoke('effective')[1])['rules']
-        # Another repository shows the account's rules, never this repository's lists.
-        self.assertEqual((rules['Test commands'], rules['Top-level files'], rules['Max actions per hour']), ([], [], 30))
-        self.assertIn('Tags and releases', rules['Decide'])
-        # The `This folder` line and the `rules` field in the user, strict and no-repository states.
-        account = ('Max runs: 20; Max runtime minutes: 480; Max actions per hour: 30; Decide: %s; '
-                   'Non-production targets: none; Production targets: none; Test commands: none; Top-level files: none; Release targets: none.')
-        empty = {'Max runs': 20, 'Max runtime minutes': 480, 'Max actions per hour': 30, 'Decide': [],
-                 'Non-production targets': [], 'Production targets': [], 'Test commands': [], 'Top-level files': [], 'Release targets': []}
-        outside = self.home / 'no-repository'
-        outside.mkdir()
-        for state, folder, decide in (('user', self.cwd, 'Tags and releases'), ('no-repository', outside, 'none'),
-                                      ('strict', self.repo, 'none')):
-            with self.subTest(state=state):
-                if state == 'strict':  # settings changed in the work tree: no longer the approved bytes
-                    self.settings_file().write_text(self.settings_file().read_text().replace('npm test', 'npm run x'))
-                self.cwd = folder
-                self.invoke('stop')
-                self.clock += 60
-                status, output = self.invoke('start')
-                self.assertEqual(status, 0, output)
-                self.assertIn('This folder (%s): ' % state + account % decide, output)
-                rules = json.loads(self.invoke('effective')[1])['rules']
-                if state == 'user':
-                    self.assertEqual(rules['Decide'], ['Tags and releases'])
-                else:
-                    self.assertEqual(rules, empty)
-
-    def test_a_listed_test_command_with_a_protected_token_stays_protected(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.project({'test-commands': ['npm test -- .env', 'pytest tests/credentials_test.py']})
-        for argv in (['npm', 'test', '--', '.env'], ['pytest', 'tests/credentials_test.py']):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code='protected')
-
-    def test_listed_top_level_files_are_known_paths_only_in_that_repository(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        (self.repo / 'TASKS.md').write_text('- [ ] one\n')
-        (self.repo / 'run.sh').write_text('echo\n')
-        (self.repo / 'DIR.md').mkdir()
-        (self.repo / 'LINK.md').symlink_to('TASKS.md')
-        (self.repo / 'notes').mkdir()
-        (self.repo / 'notes/TASKS.md').write_text('x\n')
-        self.check(paths=['TASKS.md'], tier=3, code='unknown')
-        self.project({'top-level-files': ['TASKS.md', 'run.sh', 'DIR.md', 'LINK.md']})
-        self.check(paths=['TASKS.md'])
-        self.check(['git', 'add', 'TASKS.md'])
-        self.check(paths=['README.md', 'TASKS.md'])
-        for paths, code in ((['notes/TASKS.md'], 'unknown'), (['run.sh'], 'unknown'), (['DIR.md'], 'unknown'),
-                            (['LINK.md'], 'protected'), (['OTHER.md'], 'unknown')):
-            with self.subTest(paths=paths):
-                self.check(paths=paths, tier=3, code=code)
-        self.cwd = self.other_repo('second')
-        (self.cwd / 'TASKS.md').write_text('x\n')
-        self.check(paths=['TASKS.md'], tier=3, code='unknown')
-        self.cwd = self.repo
-        self.settings_file().write_text(self.settings_file().read_text().replace('run.sh', 'go.sh'))
-        self.check(paths=['TASKS.md'], tier=3, code='unknown')
-        for bad in ({'top-level-files': []}, {'top-level-files': ['notes/TASKS.md']}, {'top-level-files': ['../x.md']},
-                    {'top-level-files': ['.env.md']}, {'top-level-files': ['CLAUDE.md']},
-                    {'top-level-files': ['agents.md']}, {'top-level-files': ['*.md']},
-                    {'top-level-files': ['TASKS.md', 'TASKS.md']}, {'top-level-files': ['x.md'] * 17}):
-            with self.subTest(bad=bad):
-                self.assertFalse(self.store.valid_autopilot(bad))
-
-    def test_strict_and_no_repository_states_close_every_category_and_target(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n'
-                   '- Non-production targets: npx wrangler deploy --env uat\n')
-        outside = self.home / 'no-repository'
-        outside.mkdir(exist_ok=True)
-        self.cwd = outside
-        for argv in (['git', 'tag', 'v1.2.0'], ['npx', 'wrangler', 'deploy', '--env', 'uat']):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code='forbidden')
-        # The strict state: a repository whose ancestors cannot be read.
-        locked = self.repo / 'locked'
-        (locked / 'inner').mkdir(parents=True)
-        locked.chmod(0o311)
-        self.addCleanup(locked.chmod, 0o755)
-        self.cwd = locked / 'inner'
-        for argv in (['git', 'tag', 'v1.2.0'], ['npx', 'wrangler', 'deploy', '--env', 'uat']):
-            with self.subTest(strict=argv):
-                self.check(argv, tier=3, code='forbidden')
-
-    def test_limits_are_counted_per_project(self):
-        self.start(SETUP + '- Max actions per hour: 2\n')
-        first, second = self.repo, self.other_repo('second')
-        self.check(['git', 'status'])
-        self.check(['git', 'status'])
-        self.check(['git', 'status'], tier=3, code='limit')
-        self.cwd = second
-        self.check(['git', 'status'])
-        self.check(['git', 'status'])
-        self.check(['git', 'status'], tier=3, code='limit')
-        self.cwd = first
-        self.check(['git', 'status'], tier=3, code='limit')
-        self.assertEqual(sorted(e['actions'] for e in self.lease()['counters'].values()), [2, 2])
-        self.clock += 3601
-        self.check(['git', 'status'])
-
-    def test_repositories_without_limits_each_get_the_account_limits(self):
-        # Owner decision 15/11/2026: no repository limit means the account's limits (here the default 30 actions an
-        # hour), counted separately per repository, never summed across them.
-        self.start()
-        self.project({'merge': 'yes'})  # project settings that set no limit
-        plain = self.other_repo('plain')  # no project settings at all
-        for cwd in (self.repo, plain):
-            self.cwd = cwd
-            for _ in range(30):
-                self.check(['git', 'status'])
-            self.check(['git', 'status'], tier=3, code='limit')
-        self.assertEqual(sorted(e['actions'] for e in self.lease()['counters'].values()), [30, 30])
-
-    def test_spent_runs_in_one_project_leave_the_others_working(self):
-        self.start(SETUP + '- Max runs: 1\n')
-        ledger = ['python3', '-I', str(SCRIPT.parent / 'ledger.py'), 'start']
-        self.check(ledger)
-        self.check(['git', 'status'], tier=3, code='spent')
-        self.cwd = self.other_repo('second')
-        self.check(ledger)
-
-    def test_a_project_limit_replaces_the_user_limit_both_ways(self):
-        self.start(SETUP + '- Max actions per hour: 2\n')
-        self.project({'max-actions-per-hour': 3})
-        for _ in range(3):
-            self.check(['git', 'status'])
-        self.check(['git', 'status'], tier=3, code='limit')
-        narrow = self.other_repo('narrow')
-        found, ident = self.store.identity(narrow)
-        self.store.write_setting(narrow, 'autopilot', {'max-actions-per-hour': 1}, ident=ident)
-        self.cwd = narrow
-        self.check(['git', 'status'])
-        self.check(['git', 'status'], tier=3, code='limit')
-
-    def test_unidentified_checks_share_one_unknown_entry(self):
-        self.start(SETUP + '- Max actions per hour: 2\n')
-        for name in ('plain-one', 'plain-two'):
-            folder = self.home / name
-            folder.mkdir()
-            self.cwd = folder
-            self.check(paths=['src/example.py'], tier=3, code='unknown')  # no identity: nothing is reserved
-        self.assertEqual(self.lease()['counters'], {})
-        ap = self.load()
-        lease = dict(counters={})
-        applied = {'Max runs': 20, 'Max runtime minutes': 480, 'Max actions per hour': 2, ap.CONTEXT: ap.UNKNOWN}
-        self.assertEqual(ap.project_limit(lease, applied, self.clock)[1], 'unknown')
-        absent = ap.Context('absent', None, 'no-repository', None)
-        self.assertEqual(ap.project_key(absent), 'unknown')
-
-    def test_a_full_project_table_answers_limit_and_keeps_its_entries(self):
-        self.start(SETUP + '- Max actions per hour: 100\n')
-        self.check(['git', 'status'])
-        own = next(iter(self.lease()['counters']))
-        fill = {('%064x' % n): dict(runs=0, actions=1, hour_actions=[self.clock], first=self.clock) for n in range(63)}
-        self.change_lease(lambda v: v['counters'].update(fill))
-        self.cwd = self.other_repo('sixty-fifth')
-        self.check(['git', 'status'], tier=3, code='limit')
-        table = self.lease()['counters']
-        self.assertEqual(len(table), 64)
-        self.assertIn(own, table)
-        self.cwd = self.repo
-        self.check(['git', 'status'])
-
-    def test_limit_values_outside_their_range_are_refused(self):
-        for value in ({'max-runs': 0}, {'max-runtime-minutes': 1441}, {'max-actions-per-hour': '5'},
-                      {'max-runs': True}):
-            with self.subTest(value=value):
-                self.assertFalse(self.store.valid_autopilot(value))
-        self.assertTrue(self.store.valid_autopilot({'max-runs': 5, 'max-runtime-minutes': 60}))
-
-    def run_body(self, text, name='a' * 32):
-        folder = self.root / 'state/review-posting' / ('post-' + name)
-        folder.mkdir(parents=True, exist_ok=True)
-        for part in (self.root / 'state', self.root / 'state/review-posting', folder):
-            part.chmod(0o700)
-        body = folder / 'body.md'
-        body.write_text(text)
-        body.chmod(0o600)
-        return body
-
-    def test_post_review_runs_with_its_own_run_body_and_the_comment_category(self):
-        post = ['python3', '-I', str(ROOT / 'skills/review-gate/scripts/post_review.py')]
-        marker = '<!-- fnl-review kind=code head=' + 'a' * 40 + ' verdict=APPROVE -->\n'
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.check(post + ['7'], tier=3, code='forbidden')  # Repository comments is stop
-        self.invoke('stop')
-        self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
-        self.check(post + ['7'])
-        body = self.run_body(marker + 'Reviewer: example\n\nNo findings.\n')
-        self.check(post + ['7', '--body-file', str(body)])
-        self.check(post + ['--body-file', str(body), '7'])
-        for argv, code in ((post + ['07'], 'unknown'), (post + ['7', '8'], 'unknown'),
-                           (post + ['7', '--repo', 'github.com/example/demo'], 'unknown')):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code=code)
-        for text, code in (('Reviewer: no marker\n', 'unsafe'), (marker, 'unsafe'),
-                           (marker + 'Reviewer: x\n<!-- fnl-review kind=security head=' + 'b' * 40
-                            + ' verdict=APPROVE -->\n', 'forbidden'),
-                           (marker + 'Reviewer: x\n' + 'AKIA' + 'ABCDEFGHIJKLMNOP\n', 'unsafe'),
-                           (marker + 'Reviewer: x\n' + 'Fine words.\n' * 6000, 'unsafe')):  # over 64 KiB
-            with self.subTest(text=text[:30]):
-                body = self.run_body(text, 'b' * 32)
-                self.check(post + ['7', '--body-file', str(body)], tier=3, code=code)
-        self.check(post + ['1234567890'])
-        (self.repo / '.git/config').write_text(ORIGIN_CONFIG.replace('github.com/example/demo', 'gitlab.com/example/demo'))
-        self.check(post + ['7'], tier=3, code='unknown')  # no verified GitHub target
-        (self.repo / '.git/config').write_text(ORIGIN_CONFIG)
-        inside = self.repo / 'body.md'
-        inside.write_text(marker + 'Reviewer: x\n')
-        self.check(post + ['7', '--body-file', str(inside)], tier=3, code='unsafe')
-        loose = self.run_body(marker + 'Reviewer: x\n', 'c' * 32)
-        loose.chmod(0o644)
-        self.check(post + ['7', '--body-file', str(loose)], tier=3, code='unsafe')
-
-    def test_an_approved_skill_repository_edits_its_root_skill_and_references(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.check(paths=['SKILL.md'], tier=3, code='protected')
-        self.project({'skill-repository': 'yes'})
-        self.check(paths=['SKILL.md', 'references/guide.md', 'evals/case.json', 'scripts/tool.py'])
-        for nested in ('references/nested/SKILL.md', 'scripts/SKILL.md', 'scripts/tool/SKILL.md', 'evals/SKILL.md'):
-            with self.subTest(path=nested):
-                self.check(paths=[nested], tier=3, code='protected')
-        self.check(paths=['.github/workflows/ci.yml'], tier=3, code='protected')
-        # The same paths as command operands: staging and removing them on the work branch.
-        self.check(['git', 'add', 'SKILL.md', 'references/guide.md'])
-        self.check(['git', 'rm', 'scripts/tool.py'])
-        self.check(['git', 'add', 'references/nested/SKILL.md'], tier=3, code='protected')
-        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')  # the default branch stays protected
-        self.check(paths=['SKILL.md'], tier=3, code='protected')
-        self.check(['git', 'add', 'SKILL.md'], tier=3, code='protected')
-        self.assertFalse(self.store.valid_autopilot({'skill-repository': 'no'}))
-
-    def test_the_lease_hash_covers_the_user_section_only(self):
-        self.start()
-        before = self.lease()['settings_hash']
-        self.project({'merge': 'no', 'roots': ['packages']})
-        self.check(['git', 'status'])
-        self.assertEqual(self.lease()['settings_hash'], before)
-        self.setup_config(SETUP + '- Max runs: 5\n')
-        self.check(['git', 'status'], tier=3, code='setup-changed')
-
-    def test_an_unapproved_or_branch_supplied_file_sets_nothing(self):
-        self.start(NO)
-        self.settings_file().parent.mkdir(parents=True, mode=0o700)
-        self.settings_file().write_text(json.dumps({'version': 1, 'autopilot': {'merge': 'yes', 'roots': ['packages']}}))
-        self.settings_file().chmod(0o600)
-        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
-        (self.repo / 'packages').mkdir()
-        self.check(paths=['packages/app.py'], tier=3, code='unknown')
-
-    def test_a_broken_approved_file_falls_back_to_off_never_wider(self):
-        self.start()
-        self.project({'roots': ['packages']})
-        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'])
-        self.check(paths=['packages/app.py'])
-        for change in (lambda f: f.write_bytes(f.read_bytes() + b' '), lambda f: f.unlink(),
-                       lambda f: f.chmod(0o666)):
-            with self.subTest(change=change):
-                self.store.reset_settings(self.repo)
-                self.project({'roots': ['packages']})
-                change(self.settings_file())
-                self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
-                self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
-                self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
-                self.check(paths=['packages/app.py'], tier=3, code='unknown')
-                self.check(['git', 'status'])
-        # An unreadable project state (an error while resolving it) is off too.
-        self.store.reset_settings(self.repo)
-        ap = self.load()
-        with patch.object(ap.store, 'autopilot_binding', side_effect=OSError('synthetic')):
-            self.assertEqual(ap.effective(dict(ap.DEFAULTS, Merge='yes', Roots=[]), str(self.repo))['Merge'], 'no')
-
-    def test_project_roots_join_the_built_in_roots_with_the_same_path_rules(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        (self.repo / 'packages/app').mkdir(parents=True)
-        self.check(paths=['packages/app/main.ts'], tier=3, code='unknown')
-        self.project({'roots': ['packages', 'services']})
-        self.check(paths=['packages/app/main.ts', 'services/api.py', 'src/example.py'])
-        self.check(['git', 'add', '--', 'packages/app/main.ts'])
-        self.check(['git', 'diff', '--stat', 'services/api.py'])
-        for path, code in (('packages/app/main.exe', 'unknown'), ('packages/../src/example.py', 'unknown'),
-                           ('/packages/app/main.ts', 'unknown'), ('packages', 'unknown'), ('packages/app', 'unknown'),
-                           ('packages/.env', 'protected'), ('packages/app/settings.json', 'protected'),
-                           ('packages/hooks/pre-push.py', 'protected'), ('packages/CLAUDE.md', 'protected'),
-                           ('packages/app/afk.py', 'protected'), ('tools/build.py', 'unknown')):
-            with self.subTest(path=path):
-                self.check(paths=[path], tier=3, code=code)
-        target = self.home / 'synthetic'
-        target.write_text('unread')
-        (self.repo / 'packages/linked.py').symlink_to(target)
-        self.check(paths=['packages/linked.py'], tier=3, code='protected')
-        (self.repo / 'services').symlink_to(self.home, target_is_directory=True)
-        self.check(paths=['services/api.py'], tier=3, code='protected')
-
-    def test_top_level_documentation_files_are_known_paths(self):
-        self.start()
-        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')  # CLAUDE.md is source on a work branch only
-        self.check(paths=['README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'])
-        self.check(['git', 'add', 'README.md'])
-        for path, code in (('LICENSE', 'unknown'), ('NOTES.md', 'unknown'), ('readme.txt', 'unknown'),
-                           ('CLAUDE.md', 'protected'), ('AGENTS.md', 'protected'), ('./README.md', 'unknown')):
-            with self.subTest(path=path):
-                self.check(paths=[path], tier=3, code=code)
-        (self.repo / 'README.md').symlink_to(self.home / 'missing')
-        self.check(paths=['README.md'], tier=3, code='protected')
-
-    def branch(self, name, packed=False):
-        if packed:
-            with open(self.repo / '.git/packed-refs', 'a') as stream:
-                stream.write('a' * 40 + ' refs/heads/' + name + '\n')
-        else:
-            path = self.repo / '.git/refs/heads' / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('a' * 40 + '\n')
-
-    def test_a_local_branch_merge_into_a_work_branch_is_tier_one_when_merge_is_yes(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.branch('feature/one')
-        self.branch('packed', packed=True)
-        for argv in (['git', 'merge', '--no-ff', 'refs/heads/feature/one'], ['git', 'merge', 'feature/one'],
-                     ['git', 'merge', '--no-ff', '--no-edit', 'refs/heads/feature/one'],
-                     ['git', 'merge', '--no-ff', 'packed'], ['git', 'merge', 'origin/main']):
-            with self.subTest(argv=argv):
-                self.check(argv)
-        for argv in (['git', 'merge', 'missing'], ['git', 'merge', 'refs/heads/missing'],
-                     ['git', 'merge', 'refs/tags/v1'], ['git', 'merge', 'refs/remotes/origin/x'],
-                     ['git', 'merge', '-s', 'ours', 'feature/one'], ['git', 'merge', '--squash', 'feature/one'],
-                     ['git', 'merge', 'feature/one', 'packed'], ['git', 'merge', '--no-ff'],
-                     ['git', 'merge', 'refs/heads/../feature/one'], ['git', 'merge', 'topic'],
-                     ['git', 'merge', '-X', 'theirs', 'feature/one'], ['git', 'merge', '--no-ff=x', 'feature/one'],
-                     ['git', 'merge', 'feature/one~1'], ['git', 'merge', '--abort']):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code='unknown')
-        # A bare name that is also a tag (or another ref) is ambiguous: git would pick the tag first.
-        (self.repo / '.git/refs/tags').mkdir(parents=True)
-        (self.repo / '.git/refs/tags/shared').write_text('b' * 40 + '\n')
-        self.branch('shared')
-        self.check(['git', 'merge', 'shared'], tier=3, code='unknown')
-        self.check(['git', 'merge', 'refs/heads/shared'])
-        with open(self.repo / '.git/packed-refs', 'a') as stream:
-            stream.write('c' * 40 + ' refs/tags/packed\n')
-        self.check(['git', 'merge', 'packed'], tier=3, code='unknown')
-        self.branch('abcdef1')
-        self.check(['git', 'merge', 'abcdef1'], tier=3, code='unknown')  # could also read as a commit id
-        self.check(['git', 'merge', 'refs/heads/abcdef1'])
-
-    def test_a_local_merge_needs_merge_yes_and_never_targets_the_default_branch(self):
-        self.start(NO)
-        self.branch('feature')
-        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='merge-disabled')
-        self.project({'merge': 'yes'})
-        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'])
-        for head in ('main', 'stable'):
-            with self.subTest(head=head):
-                (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/stable\n')
-                (self.repo / '.git/HEAD').write_text('ref: refs/heads/' + head + '\n')
-                self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='forbidden')
-        (self.repo / '.git/HEAD').write_text('a' * 40 + '\n')  # a detached head is not a work branch
-        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='forbidden')
-        (self.repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
-        (self.repo / '.git/refs/remotes/origin/HEAD').unlink()
-        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='unknown')
-
-    def test_delegated_runs_outside_the_wrapper_or_in_write_modes_stay_tier_three(self):
-        self.start(SETUP.replace('Claude Code', 'Claude Code, Codex') + '- Max actions per hour: 1000\n')
-        for argv in (['claude', '-p', '--model', 'm', '--output-format', 'json', '--', BRIEF],
-                     ['claudework', '-p', BRIEF], ['/bin/zsh', '-ic', 'claudework "$@"', 'claudework', '-p', BRIEF],
-                     ['codex', 'exec', '-m', 'm', '-s', 'workspace-write', '--', BRIEF],
-                     ['perl', '-e', 'alarm 900; exec @ARGV', 'codex', 'exec', '--', BRIEF],
-                     ENV + ['--family', 'claude', '--', '/bin/zsh', '-ic', 'claudework "$@"', 'claudework', '-p', BRIEF],
-                     CODEX[:CODEX.index('read-only')] + ['workspace-write'] + CODEX[CODEX.index('read-only') + 1:],
-                     CLAUDE[:CLAUDE.index('plan')] + ['acceptEdits'] + CLAUDE[CLAUDE.index('plan') + 1:]):
-            with self.subTest(argv=argv[:6]):
-                self.check(argv, tier=3, code='unknown')
-        self.assertEqual(self.counts()['actions'], 0)
-
-
-class SecurityRoundOneTest(AfkBase):
-    """Repository identity, merge target binding, symbolic branches and hexadecimal names fail closed."""
-
-    def setUp(self):
-        super().setUp()
-        spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')
-        self.store = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.store)
-
-    def project(self, value, repo=None):
-        found, ident = self.store.identity(repo or self.repo)
-        self.store.write_setting(repo or self.repo, 'autopilot', value, ident=ident)
-
-    def test_a_deep_descendant_keeps_the_project_values(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.project({'merge': 'no', 'push-and-pull-requests': 'no'})
-        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
-        deep = self.repo.joinpath(*['level'] * 25)
-        deep.mkdir(parents=True)
-        self.cwd = deep
-        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
-        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
-        self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
-
-    def test_a_discovery_error_is_the_strict_state_not_the_user_values(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        locked = self.repo / 'locked'
-        (locked / 'inner').mkdir(parents=True)
-        locked.chmod(0o311)  # searchable, not listable: an ancestor that cannot be opened
-        self.addCleanup(locked.chmod, 0o755)
-        self.cwd = locked / 'inner'
-        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
-        self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
-        ap = self.load()
-        for state in (('unknown', None),):
-            with patch.object(ap.store, 'identity', return_value=state):
-                result = ap.effective(dict(ap.DEFAULTS, Merge='yes', Roots=['x']), str(self.repo))
-            self.assertEqual({k: result[k] for k in ap.OFF}, ap.OFF)
-            self.assertEqual(ap.context_of(result).cwd, str(self.repo))  # never the process's own cwd
-
-    def test_a_dot_git_link_is_not_skipped_for_a_parent_repository(self):
-        self.start(NO)
-        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
-        nested = self.repo / 'nested'
-        nested.mkdir()
-        (nested / '.git').symlink_to(self.home / 'elsewhere')
-        self.cwd = nested
-        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
-
-    def test_a_merge_or_pull_request_on_another_repository_is_tier_three(self):
-        self.start(NO.replace('- Merge: no', '- Merge: yes').replace('requests: no', 'requests: yes')
-                   + '- Max actions per hour: 1000\n')
-        for flag in (['--repo', 'other/restricted'], ['--repo=other/restricted'], ['-R', 'other/restricted'],
-                     ['-R=other/restricted'], ['-Rother/restricted'], ['--repo', 'other.example/example/demo'],
-                     ['--repo', 'https://github.com/example/demo'], ['--repo', 'example/demo/extra'],
-                     ['--repo', 'example/demo', '--repo', 'other/restricted'], [], ['--repo', 'example/demo'],
-                     ['-R', 'EXAMPLE/Demo'], ['-R', 'github.com/example/demo']):
-            for argv in (['gh', 'pr', 'merge', '7'] + PIN, ['gh', 'pr', 'create', '--head', 'topic'],
-                         ['gh', 'pr', 'edit', '7']):
-                with self.subTest(flag=flag, argv=argv[:3]):
-                    status, output = self.invoke('check', '--argv-json', json.dumps(argv + flag))
-                    self.assertEqual(json.loads(output)['tier'], 3, output)
-        for flag in (['--repo', 'github.com/example/demo'], ['--repo=github.com/EXAMPLE/Demo']):
-            with self.subTest(flag=flag):
-                self.check(['gh', 'pr', 'merge', '7'] + PIN + flag)
-                self.check(['gh', 'pr', 'create', '--head', 'topic'] + flag)
-                self.check(['gh', 'pr', 'edit', '7'] + flag)
-
-    def test_project_merge_never_authorizes_another_repository(self):
-        self.start(NO + '- Max actions per hour: 1000\n')
-        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
-        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'])
-        self.check(['gh', 'pr', 'merge', '7', '--repo', 'github.com/other/restricted'] + PIN, tier=3, code='forbidden')
-        self.check(['gh', 'pr', 'create', '--head', 'topic', '--repo', 'github.com/other/restricted'],
-                   tier=3, code='forbidden')
-
-    def test_the_target_repository_must_be_read_safely_from_the_checkout(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        merge = ['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo']
-        config = self.repo / '.git/config'
-        for text in ('', ORIGIN_CONFIG + '[include]\n\tpath = extra\n',
-                     ORIGIN_CONFIG + '[includeIf "gitdir:x"]\n\tpath = extra\n',
-                     ORIGIN_CONFIG + '[url "https://github.com/other/"]\n\tinsteadOf = https://github.com/example/\n',
-                     ORIGIN_CONFIG + '\turl = https://github.com/other/restricted.git\n',
-                     '[remote "origin"]\n\turl = https://gitlab.example/example/demo.git\n',
-                     '[remote "origin"]\n\turl = /srv/example/demo.git\n',
-                     '[remote "origin"\n\turl = https://github.com/example/demo.git\n'):
-            with self.subTest(text=text):
-                config.write_text(text)
-                self.check(merge, tier=3, code='unknown')
-                self.check(['gh', 'pr', 'create', '--head', 'topic', '--repo', 'github.com/example/demo'],
-                           tier=3, code='unknown')
-        # An explicit --repo equal to origin binds the target even beside another remote.
-        config.write_text(ORIGIN_CONFIG + '[remote "upstream"]\n\turl = https://github.com/other/restricted.git\n')
-        self.check(merge)
-        config.unlink()
-        self.check(merge, tier=3, code='unknown')
-        for url in ('git' '@github.com:example/demo.git', 'ssh://git' '@github.com/example/demo', 'https://github.com/example/demo'):
-            with self.subTest(url=url):
-                config.write_text('[remote "origin"]\n\turl = ' + url + '\n')
-                self.check(merge)
-        (self.repo / '.git/config.worktree').write_text('[remote "origin"]\n\turl = https://github.com/other/restricted\n')
-        self.check(merge, tier=3, code='unknown')
-
-    def test_a_symbolic_current_branch_to_the_default_branch_is_forbidden(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        heads = self.repo / '.git/refs/heads'
-        heads.mkdir(parents=True)
-        (heads / 'feature').write_text('a' * 40 + '\n')
-        (heads / 'work').write_text('b' * 40 + '\n')
-        merge = ['git', 'merge', 'refs/heads/feature']
-        (heads / 'topic').write_text('ref: refs/heads/work\n')
-        self.check(merge)  # a link to an ordinary work branch stays a work branch
-        for target, code in (('refs/heads/main', 'forbidden'), ('refs/heads/stable', 'forbidden'),
-                             ('refs/heads/trunk', 'forbidden'), ('refs/heads/loop', 'unknown'),
-                             ('refs/tags/v1', 'unknown'), ('refs/remotes/origin/main', 'unknown')):
-            with self.subTest(target=target):
-                (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/stable\n')
-                (heads / 'topic').write_text('ref: ' + target + '\n')
-                (heads / 'loop').write_text('ref: refs/heads/topic\n')
-                self.assertIn(self.check_code(merge), {code, 'forbidden'})
-                self.assertEqual(self.check_code(['git', 'merge', 'origin/main']), 'forbidden')
-        (heads / 'loop').unlink()
-        (heads / 'topic').write_text('ref: refs/heads/main\n')
-        self.check(['git', 'push', 'origin', 'HEAD:HEAD'], tier=3, code='forbidden')
-
-    def check_code(self, argv):
-        if argv[:3] == ['gh', 'pr', 'merge'] and self.state.is_dir():
-            self.merge_ok(next(t for t in argv[3:] if t.isdigit()), 'a' * 40)  # every pin here is PIN
-        status, output = self.invoke('check', '--argv-json', json.dumps(argv))
-        result = json.loads(output)
-        self.assertEqual(result['tier'] == 1, result['code'] == 'allowed', output)
-        return result['code']
-
-    def git_repo(self, name):
-        import shutil
-        import subprocess
-        if not shutil.which('git', path=os.defpath + ':/usr/local/bin:/opt/homebrew/bin'):
-            self.skipTest('git is not installed')
-        repo = self.home / name
-        repo.mkdir()
-        env = {'HOME': str(self.home), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
-               'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull}
-
-        def git(*argv, cwd=repo):
-            return subprocess.run(['git', *argv], cwd=cwd, env=env, capture_output=True, check=True,
-                                  text=True).stdout.strip()
-        git('init', '-q', '-b', 'main')
-        git('remote', 'add', 'origin', 'https://github.com/example/demo.git')
-        for message in ('First', 'Second'):
-            git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-q',
-                '--allow-empty', '-m', message)
-        git('update-ref', 'refs/remotes/origin/main', 'HEAD')
-        git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
-        git('branch', 'feature')
-        return repo, git
-
-    def test_real_git_symbolic_head_to_main_in_ordinary_and_linked_worktrees(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        repo, git = self.git_repo('real')
-        git('branch', 'work')
-        git('symbolic-ref', 'refs/heads/topic', 'refs/heads/work')
-        git('symbolic-ref', 'HEAD', 'refs/heads/topic')
-        self.cwd = repo
-        self.assertEqual(self.check_code(['git', 'merge', 'refs/heads/feature']), 'allowed')
-        git('symbolic-ref', 'refs/heads/topic', 'refs/heads/main')
-        self.assertEqual((repo / '.git/HEAD').read_text(), 'ref: refs/heads/topic\n')
-        self.assertEqual(git('rev-parse', '--symbolic-full-name', 'HEAD'), 'refs/heads/main')
-        self.check(['git', 'merge', 'refs/heads/feature'], tier=3, code='forbidden')
-        self.check(['git', 'merge', 'origin/main'], tier=3, code='forbidden')
-        self.check(['git', 'push', 'origin', 'HEAD:HEAD'], tier=3, code='forbidden')
-        linked = self.home / 'linked'
-        git('worktree', 'add', '-q', str(linked), '-b', 'side')
-        git('symbolic-ref', 'refs/heads/alias', 'refs/heads/main')
-        git('symbolic-ref', 'HEAD', 'refs/heads/alias', cwd=linked)
-        self.cwd = linked
-        self.check(['git', 'merge', 'refs/heads/feature'], tier=3, code='forbidden')
-        git('symbolic-ref', 'HEAD', 'refs/heads/side', cwd=linked)
-        self.check(['git', 'merge', 'refs/heads/feature'])
-
-    def test_a_commit_runs_only_on_a_work_branch(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        repo, git = self.git_repo('commits')
-        self.cwd = repo
-        self.check(['git', 'commit', '-m', 'Fix example'], tier=3, code='protected')
-        git('checkout', '-q', '--detach')  # a detached head is not a work branch
-        self.check(['git', 'commit', '-m', 'Fix example'], tier=3, code='protected')
-        git('symbolic-ref', 'HEAD', 'refs/heads/feature')
-        self.check(['git', 'commit', '-m', 'Fix example'])
-        git('symbolic-ref', 'refs/heads/alias', 'refs/heads/main')
-        git('symbolic-ref', 'HEAD', 'refs/heads/alias')
-        self.check(['git', 'commit', '-m', 'Fix example'], tier=3, code='protected')
-
-    def test_real_git_hexadecimal_branch_names_in_any_case_are_ambiguous(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        repo, git = self.git_repo('hex')
-        git('checkout', '-q', '-b', 'topic')
-        first, second = git('rev-parse', 'HEAD~1'), git('rev-parse', 'HEAD')
-        self.cwd = repo
-        for name in (first.upper(), first[:7].upper(), 'AbCdEf1', 'ABCD', 'f' * 64, 'deadBEEF' * 8):
-            with self.subTest(name=name):
-                git('branch', name, second)
-                if name == first.upper():
-                    # Git itself reads the bare name as the first commit, not the branch the classifier validated.
-                    self.assertEqual(git('rev-parse', name), first)
-                    self.assertEqual(git('rev-parse', 'refs/heads/' + name), second)
-                self.check(['git', 'merge', name], tier=3, code='unknown')
-                self.check(['git', 'merge', 'refs/heads/' + name])
-                git('branch', '-q', '-D', name)
-        git('branch', 'shared')
-        git('tag', 'shared')
-        self.check(['git', 'merge', 'shared'], tier=3, code='unknown')
-        self.check(['git', 'merge', 'feature'])
-
-
-MANY = '- Max actions per hour: 1000\n'
-REPO = ['--repo', 'github.com/example/demo']
-MERGE = ['gh', 'pr', 'merge', '7'] + PIN + REPO
-CREATE = ['gh', 'pr', 'create', '--head', 'topic'] + REPO
-EDIT = ['gh', 'pr', 'edit', '7', '--title', 'Reviewed'] + REPO
-PUSH = ['git', 'push', 'origin', 'HEAD:refs/heads/topic']
-STRICT = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
-
-
-class PolicyContextTest(AfkBase):
-    """One identity-bound policy context decides the five project-scoped values, through the full check entry point."""
-
-    def setUp(self):
-        super().setUp()
-        spec = importlib.util.spec_from_file_location('project_store_policy', SCRIPT.parent / 'project_store.py')
-        self.store = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.store)
-
-    def ident(self, root=None):
-        found, ident = self.store.identity(root or self.repo)
-        self.assertEqual(found, 'found')
-        return ident
-
-    def project(self, value, root=None):
-        ident = self.ident(root)
-        self.store.write_setting(ident.checkout, 'autopilot', value, ident=ident)
-
-    def approval(self, root=None):
-        return self.root / 'state/settings-approved' / (self.store.code_of(root or self.repo) + '.json')
-
-    def settings_file(self, root=None):
-        return (root or self.repo) / '.finolabs/vibecode/settings.json'
-
-    def effective(self):
-        status, output = self.invoke('effective')
-        self.assertEqual(status, 0, output)
-        return json.loads(output)
-
-    def check_code(self, argv):
-        if argv[:3] == ['gh', 'pr', 'merge'] and self.state.is_dir():
-            self.merge_ok(next(t for t in argv[3:] if t.isdigit()), 'a' * 40)  # every pin here is PIN
-        status, output = self.invoke('check', '--argv-json', json.dumps(argv))
-        result = json.loads(output)
-        self.assertEqual(result['tier'] == 1, result['code'] == 'allowed', output)
-        return result['code']
-
-    def codes(self):
-        """Every bound mutation's code, and proof that the effective view agrees with check."""
-        found = {name: self.check_code(argv) for name, argv in
-                 (('merge', MERGE), ('create', CREATE), ('edit', EDIT), ('push', PUSH))}
-        values = self.effective()['values']
-        self.assertEqual(found['merge'] == 'allowed', values['Merge'] == 'yes', (found, values))
-        for name in ('create', 'edit', 'push'):
-            self.assertEqual(found[name] == 'allowed', values['Push and pull requests'] == 'yes', (found, values))
-        return found
-
-    def git_repo(self, name, origin='https://github.com/example/demo.git'):
-        import shutil
-        import subprocess
-        if not shutil.which('git', path=os.defpath + ':/usr/local/bin:/opt/homebrew/bin'):
-            self.skipTest('git is not installed')
-        repo = self.home / name
-        repo.mkdir(parents=True)
-        env = {'HOME': str(self.home), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
-               'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull}
-
-        def git(*argv, cwd=repo):
-            return subprocess.run(['git', *argv], cwd=cwd, env=env, capture_output=True, check=True,
-                                  text=True).stdout.strip()
-        git('init', '-q', '-b', 'main')
-        if origin:
-            git('remote', 'add', 'origin', origin)
-        git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-q',
-            '--allow-empty', '-m', 'First')
-        git('update-ref', 'refs/remotes/origin/main', 'HEAD')
-        git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
-        git('checkout', '-q', '-b', 'topic')
-        git('branch', 'feature')
-        return repo, git
-
-    # Part 2: the permission matrix
-
-    def test_both_override_directions_and_omitted_keys_inherit(self):
-        self.start(NO + MANY)
-        self.assertEqual(self.effective()['values'], dict(STRICT, **{'Task choice': 'choose'}))
-        self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
-                                        'edit': 'push-disabled', 'push': 'push-disabled'})
-        # user no -> project yes
-        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
-        self.assertEqual(set(self.codes().values()), {'allowed'})
-        self.assertEqual(self.effective()['values']['Task choice'], 'choose')  # omitted, so inherited
-        # user yes -> project no, with push omitted and so inherited
-        self.assertEqual(self.invoke('stop')[0], 0)
-        self.start(SETUP + MANY)
-        self.project({'merge': 'no'})
-        self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'allowed', 'edit': 'allowed',
-                                        'push': 'allowed'})
-        # A new object replaces the whole old one: merge is no longer set, so the user's yes applies again.
-        self.project({'task-choice': 'listed', 'roots': ['packages']})
-        self.assertEqual(set(self.codes().values()), {'allowed'})
-        self.assertEqual(self.effective()['values'], {'Task choice': 'listed', 'Push and pull requests': 'yes',
-                                                      'Merge': 'yes', 'Trusted authors': 'own',
-                                                      'Roots': ['packages']})
-        self.assertEqual(self.effective()['repository'], 'found')
-
-    def test_every_strict_state_gives_the_whole_strict_vector(self):
-        self.start(SETUP + MANY)
-        config = self.repo / '.git/config'
-        wide = {'merge': 'yes', 'push-and-pull-requests': 'yes', 'task-choice': 'choose', 'roots': ['packages']}
-
-        def invalid():
-            raw = (json.dumps({'version': 1, 'autopilot': {'merge': 'yes', 'hosts': 'Codex'}}) + '\n').encode()
-            self.settings_file().write_bytes(raw)
-            record = json.loads(self.approval().read_text())
-            record['sha256'] = hashlib.sha256(raw).hexdigest()
-            self.approval().write_text(json.dumps(record))
-
-        def untargeted():
-            record = json.loads(self.approval().read_text())
-            record.pop('target')
-            self.approval().write_text(json.dumps(record))
-        for name, inject in (('digest mismatch', lambda: self.settings_file().write_bytes(
-                                  self.settings_file().read_bytes() + b' ')),
-                             ('missing file', lambda: self.settings_file().unlink()),
-                             ('unsafe file', lambda: self.settings_file().chmod(0o666)),
-                             ('unreadable approval', lambda: self.approval().write_text('{')),
-                             ('approval without a target', untargeted),
-                             ('invalid approved settings', invalid),
-                             ('origin changed after approval', lambda: config.write_text(
-                                 ORIGIN_CONFIG.replace('example/demo', 'other/restricted')))):
-            with self.subTest(state=name):
-                config.write_text(ORIGIN_CONFIG)
-                self.store.reset_settings(self.repo)
-                self.project(wide)
-                self.assertEqual(self.effective()['values']['Merge'], 'yes')
-                inject()
-                self.assertEqual(self.effective()['values'], STRICT)
-                self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
-                                                'edit': 'push-disabled', 'push': 'push-disabled'})
-                (self.repo / 'packages').mkdir(exist_ok=True)
-                self.check(paths=['packages/app.py'], tier=3, code='unknown')
-        # Unknown identity: a discovery error and a .git link are strict too, never the user values.
-        config.write_text(ORIGIN_CONFIG)
-        locked = self.repo / 'locked'
-        (locked / 'inner').mkdir(parents=True)
-        locked.chmod(0o311)
-        self.addCleanup(locked.chmod, 0o755)
-        nested = self.repo / 'nested'
-        nested.mkdir()
-        (nested / '.git').symlink_to(self.home / 'elsewhere')
-        for cwd in (locked / 'inner', nested):
-            with self.subTest(cwd=cwd.name):
-                self.cwd = cwd
-                view = self.effective()
-                self.assertEqual((view['repository'], view['values']), ('unknown', STRICT))
-                self.assertEqual(self.check_code(MERGE), 'merge-disabled')
-                self.assertEqual(self.check_code(['git', 'merge', 'origin/main']), 'unknown')
-
-    def test_no_repository_lets_no_repository_mutation_qualify(self):
-        self.start(SETUP + MANY)
-        outside = self.home / 'outside'
-        outside.mkdir()
-        self.cwd = outside
-        view = self.effective()
-        self.assertEqual(view['repository'], 'absent')
-        self.assertEqual(view['values']['Merge'], 'yes')  # the user value, with no extra roots
-        for argv in (MERGE, CREATE, EDIT, PUSH, ['git', 'merge', 'origin/main'], ['git', 'merge', 'refs/heads/feature']):
-            with self.subTest(argv=argv[:3]):
-                self.assertNotEqual(self.check_code(argv), 'allowed')
-
-    # Part 1: identity agreement
-
-    def test_a_rejected_linked_worktree_never_regains_the_user_permissions(self):
-        self.start(SETUP + MANY)
-        main, git = self.git_repo('main')
-        linked = self.home / 'linked'
-        git('worktree', 'add', '-q', str(linked), '-b', 'side')
-        self.project({'merge': 'no', 'push-and-pull-requests': 'no'}, root=main)
-        self.cwd = linked
-        self.assertEqual(self.ident(linked).main, main)
-        self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
-                                        'edit': 'push-disabled', 'push': 'push-disabled'})
-        back = main / '.git/worktrees/linked/gitdir'
-        good = back.read_text()
-        for name, change in (('missing', back.unlink),
-                             ('mismatched', lambda: back.write_text(str(self.home / 'elsewhere/.git') + '\n')),
-                             ('unsafe', lambda: back.chmod(0o666))):
-            with self.subTest(back_pointer=name):
-                if back.exists():
-                    back.unlink()
-                back.write_text(good)
-                back.chmod(0o644)
-                change()
-                view = self.effective()
-                self.assertEqual((view['repository'], view['values']), ('unknown', STRICT))
-                # With no identity the push has no branch context to read, so it is unknown before its permission.
-                self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
-                                                'edit': 'push-disabled', 'push': 'unknown'})
-                for argv in (['git', 'merge', 'refs/heads/feature'], ['git', 'merge', 'origin/main']):
-                    self.assertNotEqual(self.check_code(argv), 'allowed')
-        back.write_text(good)
-        back.chmod(0o644)
-        self.assertEqual(self.effective()['repository'], 'found')
-
-    def test_deep_descendants_and_nested_repositories_use_their_own_identity(self):
-        self.start(SETUP + MANY)
-        self.project({'merge': 'no'})
-        deep = self.repo.joinpath(*['level'] * 30)
-        deep.mkdir(parents=True)
-        self.cwd = deep
-        self.assertEqual(self.check_code(MERGE), 'merge-disabled')
-        self.assertEqual(self.effective()['values']['Merge'], 'no')
-        # A nested repository has its own identity and settings: no approval there, and no origin to bind.
-        nested, _ = self.git_repo('checkout/vendor/inner', origin=None)
-        self.cwd = nested
-        view = self.effective()
-        self.assertEqual((view['repository'], view['values']['Merge']), ('found', 'yes'))
-        self.assertEqual(self.check_code(MERGE), 'unknown')  # the outer repository's target is not this one's
-
-    # Part 3: target agreement
-
-    def test_gh_mutations_need_one_explicit_full_host_repository_equal_to_the_verified_target(self):
-        self.start(SETUP + MANY)
-        for argv in (MERGE, CREATE, EDIT, ['gh', 'pr', 'merge', '7'] + PIN + ['--repo=github.com/EXAMPLE/Demo']):
-            with self.subTest(argv=argv):
-                self.check(argv)
-        bases = (['gh', 'pr', 'merge', '7'] + PIN, ['gh', 'pr', 'create', '--head', 'topic'], ['gh', 'pr', 'edit', '7'])
-        for selector, code in (([], 'unknown'), (['--repo', 'example/demo'], 'unknown'),
-                               (['-R', 'github.com/example/demo'], 'unknown'),
-                               (['--repo', 'https://github.com/example/demo'], 'unknown'),
-                               (['--repo', 'github.com/example/demo.git'], 'unknown'),
-                               (['--repo', 'other.example/example/demo'], 'unknown'),
-                               (REPO + REPO, 'unknown'), (REPO + ['--repo', 'github.com/other/restricted'], 'unknown'),
-                               (['--repo', 'github.com/other/restricted'], 'forbidden')):
-            for base in bases:
-                with self.subTest(selector=selector, argv=base[:3]):
-                    self.assertEqual(self.check_code(base + selector), code)
-        # gh's own implicit choices never matter: an explicit --repo wins over gh-resolved and GH_REPO.
-        config = self.repo / '.git/config'
-        config.write_text(ORIGIN_CONFIG + '\tgh-resolved = other/restricted\n')
-        self.check(MERGE)
-        self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7']), 'unknown')
-        config.write_text(ORIGIN_CONFIG)
-        with patch.dict(os.environ, {'GH_REPO': 'other/restricted'}):
-            self.check(EDIT)
-            self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7']), 'unknown')
-
-    def test_pull_request_creation_needs_an_explicit_validated_head(self):
-        self.start(SETUP + MANY)
-        create = ['gh', 'pr', 'create', '--title', 'Example']
-        self.check(create + ['--head', 'topic'] + REPO)
-        self.check(create + ['--head=feature/one'] + REPO)
-        for head, code in (([], 'unknown'), (['--head', 'main'], 'forbidden'), (['--head', 'MAIN'], 'forbidden'),
-                           (['--head', 'HEAD'], 'unknown'), (['--head', 'other:topic'], 'unknown'),
-                           (['--head', 'refs/heads/topic'], 'unknown'), (['-H', 'topic'], 'unknown'),
-                           (['--head', 'topic', '--head', 'side'], 'unknown'), (['--head', 'a/../b'], 'unknown')):
-            with self.subTest(head=head):
-                self.assertEqual(self.check_code(create + head + REPO), code)
-
-    def test_a_push_qualifies_only_when_its_effective_destination_is_bound(self):
-        self.start(SETUP + MANY)
-        config = self.repo / '.git/config'
-        same, other = 'https://github.com/example/demo.git', 'https://github.com/other/restricted.git'
-        for extra, code in (('', 'allowed'), ('\tpushurl = ' + same + '\n', 'allowed'),
-                            ('\tpushurl = ' + other + '\n', 'unknown'),
-                            ('\tpushurl = ' + same + '\n\tpushurl = ' + other + '\n', 'unknown'),
-                            ('\tmirror = true\n', 'unknown'), ('\treceivepack = other\n', 'unknown'),
-                            ('[url "https://github.com/other/"]\n\tpushInsteadOf = https://github.com/example/\n',
-                             'unknown')):
-            with self.subTest(extra=extra):
-                config.write_text(ORIGIN_CONFIG + extra)
-                self.assertEqual(self.check_code(PUSH), code)
-        # An approved project binds its target: changing origin afterwards invalidates the approval.
-        config.write_text(ORIGIN_CONFIG)
-        self.project({'push-and-pull-requests': 'yes'})
-        self.assertEqual(json.loads(self.approval().read_text())['target'], 'github.com/example/demo')
-        self.check(PUSH)
-        config.write_text(ORIGIN_CONFIG.replace('example/demo', 'other/restricted'))
-        self.assertEqual(self.check_code(PUSH), 'push-disabled')
-        self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7', '--repo', 'github.com/other/restricted']),
-                         'push-disabled')
-
-    # Part 4: setup transitions
-
-    def setup_cli(self, *argv):
-        spec = importlib.util.spec_from_file_location('project_progress_policy',
-                                                      ROOT / 'skills/setup/scripts/project_progress.py')
-        pp = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(pp)
-        out = io.StringIO()
-        with patch('os.getcwd', return_value=str(self.repo)), contextlib.redirect_stdout(out), \
-                contextlib.redirect_stderr(io.StringIO()):
-            status = pp.main(['settings', *argv])
-        return status, out.getvalue()
-
-    def preview(self, *argv):
-        status, output = self.setup_cli(*argv, '--dry-run')
-        self.assertEqual(status, 0, output)
-        return json.loads(output)
-
-    def apply(self, *argv):
-        token = self.preview(*argv)['token']
-        status, output = self.setup_cli(*argv, '--expect', token)
-        self.assertEqual(status, 0, output)
-
-    def test_setup_replaces_or_clears_the_whole_object_and_check_follows(self):
-        self.start(NO + MANY)
-        allow = ('--set', 'autopilot=' + json.dumps({'merge': 'yes', 'push-and-pull-requests': 'yes'}))
-        shown = self.preview(*allow)
-        self.assertEqual(shown['action'], 'replace')
-        self.assertEqual(shown['target'], 'github.com/example/demo')
-        self.assertEqual(shown['effective']['Merge'], 'yes (repository)')
-        self.assertEqual(shown['effective']['Task choice'], 'choose (user)')
-        # The mode and its guards show first (docs/specs/afk-autonomy.md A and C); this setup records `strict`.
-        self.assertEqual(list(shown['effective'])[:3], ['Mode', 'Third-party instructions', 'Default branch'])
-        self.assertEqual(shown['effective']['Mode'], 'strict (user)')
-        self.assertEqual(shown['effective']['Default branch'], 'guard (user)')
-        self.assertEqual(self.preview('--set', 'autopilot=' + json.dumps({'mode': 'open'}))['effective']['Mode'],
-                         'open (repository)')
-        self.assertFalse(self.settings_file().exists())  # a preview writes nothing
-        self.apply(*allow)
-        self.assertEqual(self.check_code(MERGE), 'allowed')
-        # approved merge=yes -> every answer inherits -> the user's merge=no applies again
-        cleared = self.preview('--clear', 'autopilot')
-        self.assertEqual((cleared['action'], cleared['autopilot'], cleared['effective']['Merge']),
-                         ('remove', None, 'no (user)'))
-        self.apply('--clear', 'autopilot')
-        self.assertEqual(self.check_code(MERGE), 'merge-disabled')
-        self.assertEqual(self.preview('--clear', 'autopilot')['action'], 'none')
-        # The reverse: user yes, approved project no, then all inherit.
-        self.assertEqual(self.invoke('stop')[0], 0)
-        self.start(SETUP + MANY)
-        self.apply('--set', 'autopilot={"merge": "no"}')
-        self.assertEqual(self.check_code(MERGE), 'merge-disabled')
-        self.store.write_setting(self.repo, 'parallel', '4')  # an unrelated setting stays when the object goes
-        self.apply('--clear', 'autopilot')
-        self.assertEqual(self.check_code(MERGE), 'allowed')
-        self.assertEqual(json.loads(self.settings_file().read_text()), {'version': 1, 'parallel': '4'})
-
-    def test_apply_binds_to_the_previewed_identity_and_prior_settings(self):
-        self.start(SETUP + MANY)
-        change = ('--set', 'autopilot={"merge": "no"}')
-        # No preview token, a wrong token, or a token from before a concurrent change: nothing is written.
-        self.assertEqual(self.setup_cli(*change)[0], 1)
-        self.assertEqual(self.setup_cli(*change, '--expect', '0' * 64)[0], 1)
-        token = self.preview(*change)['token']
-        self.store.write_setting(self.repo, 'parallel', '4')
-        self.assertEqual(self.setup_cli(*change, '--expect', token)[0], 1)
-        self.assertNotIn('autopilot', json.loads(self.settings_file().read_text()))
-        token = self.preview(*change)['token']
-        (self.repo / '.git/config').write_text(ORIGIN_CONFIG.replace('example/demo', 'example/renamed'))
-        self.assertEqual(self.setup_cli(*change, '--expect', token)[0], 1)
-        (self.repo / '.git/config').write_text(ORIGIN_CONFIG)
-        # Cancelling (no apply after the preview) keeps the current settings.
-        self.preview('--clear', 'autopilot')
-        self.assertEqual(self.check_code(MERGE), 'allowed')
-        self.apply(*change)
-        self.assertEqual(self.check_code(MERGE), 'merge-disabled')
-
-    def test_an_interrupted_settings_and_approval_pair_reads_strict(self):
-        self.start(SETUP + MANY)
-        for before, after in (({'merge': 'yes'}, {'merge': 'no'}), ({'merge': 'no'}, {'merge': 'yes'})):
-            with self.subTest(before=before, after=after):
-                self.store.reset_settings(self.repo)
-                self.project(before)
-                with patch.object(self.store, '_write_approval', side_effect=OSError('interrupted')):
-                    with self.assertRaises(OSError):
-                        self.project(after)
-                self.assertEqual(self.effective()['values'], STRICT)
-                self.assertEqual(self.check_code(MERGE), 'merge-disabled')
-
-    # Part 5: one identity and one base for every grant
-
-    def local_repo(self, path):
-        """A checkout with local Git metadata, a work branch, a feature branch and no origin."""
-        (path / '.git/refs/heads').mkdir(parents=True)
-        (path / '.git/refs/remotes/origin').mkdir(parents=True)
-        (path / '.git/HEAD').write_text('ref: refs/heads/topic\n')
-        (path / '.git/refs/heads/feature').write_text('a' * 40 + '\n')
-        (path / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
-        (path / '.git/config').write_text('[core]\n\trepositoryformatversion = 0\n\tbare = false\n')
-        return path
-
-    def colliding_pair(self):
-        """Two distinct synthetic checkout paths whose eight-character repository codes are equal."""
-        seen = {}
-        for index in range(1 << 22):
-            path = str(self.home / ('collision-%d' % index))
-            code = self.store.code_of(path)
-            if code in seen:
-                return Path(seen[code]), Path(path)
-            seen[code] = path
-        self.fail('no colliding pair')
-
-    def test_a_colliding_repository_code_never_borrows_another_checkouts_approval(self):
-        self.start(NO + MANY)
-        first, second = map(self.local_repo, self.colliding_pair())
-        self.assertNotEqual(first, second)
-        self.assertEqual(self.store.code_of(first), self.store.code_of(second))
-        local = ['git', 'merge', 'refs/heads/feature']
-        self.cwd = second
-        self.assertEqual(self.check_code(local), 'merge-disabled')
-        self.project({'merge': 'yes', 'roots': ['packages']}, root=first)
-        self.cwd = first
-        self.assertEqual(self.effective()['state'], 'project')
-        self.assertEqual(self.check_code(local), 'allowed')
-        # Only the settings bytes are copied: no approval was issued for the second checkout.
-        copied = self.settings_file(second)
-        copied.parent.mkdir(parents=True, mode=0o700)
-        copied.write_bytes(self.settings_file(first).read_bytes())
-        copied.chmod(0o600)
-        (second / 'packages').mkdir()
-        self.cwd = second
-        view = self.effective()
-        self.assertNotEqual(view['state'], 'project')
-        self.assertEqual((view['values']['Merge'], view['values']['Roots']), ('no', []))
-        self.assertEqual(self.check_code(local), 'merge-disabled')
-        self.check(paths=['packages/app.py'], tier=3, code='unknown')
-
-    def test_an_approval_without_this_checkouts_full_identity_grants_nothing(self):
-        self.start(NO + MANY)
-        wide = {'merge': 'yes', 'push-and-pull-requests': 'yes'}
-        self.project(wide)
-        self.assertEqual(json.loads(self.approval().read_text())['identity'],
-                         hashlib.sha256(str(self.repo).encode()).hexdigest())
-        for name, change in (('missing', lambda record: record.pop('identity')),
-                             ('another checkout', lambda record: record.update(identity='0' * 64))):
-            with self.subTest(binding=name):
-                self.store.reset_settings(self.repo)
-                self.project(wide)
-                self.assertEqual(set(self.codes().values()), {'allowed'})
-                record = json.loads(self.approval().read_text())
-                change(record)
-                self.approval().write_text(json.dumps(record))
-                self.assertEqual(self.effective()['values'], STRICT)
-                self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
-                                                'edit': 'push-disabled', 'push': 'push-disabled'})
-        # Approving again binds the record to this checkout, even when the value is unchanged.
-        self.store.reset_settings(self.repo)
-        self.project(wide)
-        record = json.loads(self.approval().read_text())
-        record.pop('identity')
-        self.approval().write_text(json.dumps(record))
-        self.project(wide)
-        self.assertEqual(set(self.codes().values()), {'allowed'})
-
-    def test_paths_are_judged_from_the_repository_root_never_from_cwd(self):
-        self.start(SETUP + MANY)
-        self.project({'roots': ['packages']})
-        for folder in ('restricted/packages', '.github/packages', 'packages', 'src/inner'):
-            (self.repo / folder).mkdir(parents=True, exist_ok=True)
-        for cwd, operand, code in (('.', 'restricted/packages/app.py', 'unknown'),
-                                   ('restricted', 'packages/app.py', 'unknown'),
-                                   ('restricted', 'README.md', 'unknown'),
-                                   ('.', '.github/packages/app.py', 'protected'),
-                                   ('.github', 'packages/app.py', 'protected'),
-                                   ('.github', 'README.md', 'protected'),
-                                   ('.github', 'scripts/build.py', 'protected'),
-                                   ('packages', 'app.py', 'allowed'),
-                                   ('src', 'inner/example.py', 'allowed')):
-            with self.subTest(cwd=cwd, operand=operand):
-                self.cwd = self.repo / cwd
-                self.check(paths=[operand], tier=1 if code == 'allowed' else 3, code=code)
-                self.assertEqual(self.check_code(['git', 'add', '--', operand]), code)
-                self.assertEqual(self.check_code(['git', 'diff', '--stat', operand]) == 'allowed', code == 'allowed')
-
-    def test_an_away_evidence_file_is_judged_from_the_repository_root(self):
-        self.start(SETUP_AWAY)
-        (self.repo / '.github/.finolabs/briefs').mkdir(parents=True)
-        (self.repo / '.finolabs/briefs').mkdir(parents=True)
-        self.check(JUDGE)
-        self.cwd = self.repo / '.github'
-        self.assertEqual(self.check_code(JUDGE), 'unknown')
-        evidence = JUDGE[:-1] + ['docs/notes.md']
-        self.assertEqual(self.check_code(evidence), 'unknown')
-
-
-SOURCE_PATHS = ('skills/example/SKILL.md', 'skills/example/references/hooks.md', 'skills/delegate/scripts/afk.py',
-                'skills/review-gate/scripts/merge_check.py', 'scripts/hooks.py', 'CLAUDE.md', 'AGENTS.md',
-                '.claude-plugin/hooks.json', '.codex-plugin/plugin.json')
-LIVE_PATHS = ('.github/workflows/x.yml', '.claude/settings.json', '.claude/hooks/check.py', '.git/hooks/pre-push',
-              'skills/example/.env', 'scripts/credentials.json', 'skills/example/CLAUDE.md', 'GEMINI.md',
-              'CLAUDE.local.md', 'hooks/check.py', 'src/settings.json', 'host.md', 'state/autopilot/lease.json')
-INSTALL_PATHS = ('skills/delegate/scripts/afk.py', 'skills/review-gate/scripts/merge_check.py',
-                 'skills/delegate/scripts/helper.py', 'scripts/session_start.py', 'scripts/away_gate_hook.py',
-                 '.claude-plugin/hooks.json', 'skills/afk/SKILL.md', 'skills/example/SKILL.md')
 
 
 class AwayFlowTest(AfkBase):
-    """The own-branch flow an away mandate authorizes: worktrees, PR text, limits, exit status, cleanup and source."""
-
+    """The merge pin and the log entries that name it."""
     def git_repo(self, name):
         import shutil
         import subprocess
@@ -2710,163 +576,31 @@ class AwayFlowTest(AfkBase):
         git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
         return repo, git
 
-    def merged(self, pr, head):
-        """An allowed `gh pr merge` check pins the number and head, then the merge entry records them."""
-        self.check(['gh', 'pr', 'merge', pr, '--merge', '--match-head-commit', head, '--repo', 'github.com/example/demo'])
-        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', pr, '--head', head)[0], 0)
-
-    def test_a_merge_needs_a_fresh_merge_ok_receipt_for_its_number_head_and_repository(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.cwd, _ = self.git_repo('receipt')
-        head = 'c' * 40
-        argv = ['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', head, '--repo', 'github.com/example/demo']
-        self.check(argv, tier=3, code='merge-unchecked')  # merge_check has not printed MERGE OK
-        for pr, pinned, repo, age in (('8', head, 'github.com/example/demo', 0), ('7', 'd' * 40, 'github.com/example/demo', 0),
-                                      ('7', head, 'github.com/other/demo', 0), ('7', head, 'github.com/example/demo', 901),
-                                      ('7', head, 'github.com/example/demo', -5)):
-            with self.subTest(pr=pr, head=pinned, repo=repo, age=age):
-                self.merge_ok(pr, pinned, repo, age)
-                self.check(argv, tier=3, code='merge-unchecked')
-        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)  # nothing pinned
-        self.merge_ok('7', head, age=899)
-        self.check(argv)
-        # The repository's commit rules pass the merge commit's author email (UAT 17/11/2026).
-        self.check(argv + ['--author-email', 'synthetic@example.com'])
-        self.check(argv + ['--author-email', '--admin'], tier=3, code='unknown')
-        for value, code in (('not-an-email', 'unknown'), ('a@b', 'unknown'), ('x y@example.com', 'unknown'),
-                            ('a@example.com;rm', 'unknown'), ('$GITHUB_TOKEN', 'protected'), ('${GH_TOKEN}', 'floor'),
-                            ('ghp_' + 'a' * 36, 'protected')):  # code and security reviews of PR 332
-            with self.subTest(value=value):
-                self.check(argv + ['--author-email', value], tier=3, code=code)
-        self.check(argv + ['--author-email=synthetic@example.com'])
-
-    def test_merge_check_records_a_receipt_only_during_a_live_lease(self):
-        sys.path.insert(0, str(SCRIPT.parent))
-        import away_lease
-        self.assertFalse(away_lease.record_merge_ok('github.com/example/demo', 7, 'c' * 40, self.clock))
-        self.start()
-        self.assertTrue(away_lease.record_merge_ok('github.com/example/demo', 7, 'c' * 40, self.clock))
-        self.assertFalse(away_lease.record_merge_ok('github.com/example/demo', 7, 'short', self.clock))
-        self.assertEqual(oct((self.state / 'merge-ok.json').stat().st_mode & 0o777), '0o600')
-        with away_lease.dr.data_folder(away_lease.STATE, private=True) as folder:
-            self.assertEqual(away_lease.merge_receipts(folder, self.clock + 60), {('github.com/example/demo', 7, 'c' * 40)})
-            self.assertEqual(away_lease.merge_receipts(folder, self.clock + 901), set())
-        # Several pull requests keep their own receipts; only the newest 32 are kept.
-        for number in range(1, 41):
-            self.assertTrue(away_lease.record_merge_ok('github.com/example/demo', number, 'c' * 40, self.clock))
-        with away_lease.dr.data_folder(away_lease.STATE, private=True) as folder:
-            kept = away_lease.merge_receipts(folder, self.clock)
-        self.assertEqual({pr for _, pr, _ in kept}, set(range(9, 41)))
-        self.assertEqual(oct((self.state / 'merge-ok.lock').stat().st_mode & 0o777), '0o600')
-
-    def test_a_full_log_refuses_a_merge_before_reserving_an_action(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.cwd, _ = self.git_repo('fulllog')
-        argv = ['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', 'c' * 40, '--repo', 'github.com/example/demo']
-        self.check(['git', 'status'])
-        before = self.counts()['actions']
-        log = self.state / 'log.jsonl'
-        line = json.dumps(dict(time=self.clock, tier=1, kind='action', note='x' * 400)) + '\n'
-        log.write_text(line * (self.load().MAX_LOG // len(line)))
-        log.chmod(0o600)
-        self.merge_ok('7', 'c' * 40)
-        self.check(argv, tier=3, code='log-unwritable')
-        self.assertEqual(self.counts()['actions'], before)
-
-    def test_a_merged_head_counts_only_in_the_repository_its_merge_check_named(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.cwd, _ = self.git_repo('scoped')
-        head = 'c' * 40
-        self.merged('7', head)
-        module = self.load()
-        with module.private_folder() as folder:
-            lease = module.read_lease(folder)
-            self.assertEqual(module.merged_heads(folder, lease, self.clock, 'github.com/example/demo'), {head})
-            self.assertEqual(module.merged_heads(folder, lease, self.clock, 'github.com/other/mirror'), set())
-            self.assertEqual(module.merged_heads(folder, lease, self.clock, None), set())
-
-    def test_a_work_tree_verb_without_a_working_folder_is_protected(self):
-        module = self.load()
-        applied = {**module.DEFAULTS, **{c: 'stop' for c in module.CATEGORIES}, 'Merge': 'yes',
-                   module.CONSENT: 'no', module.TARGETS: [],
-                   module.CONTEXT: module.Context('found', None, 'user', 'github.com/example/demo')}
-        self.assertEqual(module.classify_argv(['git', 'commit', '-m', 'x'], applied), 'protected')
-
     def test_a_merge_entry_needs_an_allowed_merge_check_of_this_lease(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.start()
         self.cwd, _ = self.git_repo('pinned')
         head, other = 'c' * 40, 'd' * 40
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)  # no check yet
-        for number in ('\u0667', '07', '0'):  # an Arabic-Indic seven, a leading zero, zero
-            with self.subTest(number=number):
-                self.check(['gh', 'pr', 'merge', number, '--match-head-commit', head, '--repo', 'github.com/example/demo'],
-                           tier=3, code='unknown')
-        self.check(['gh', 'pr', 'merge', '7', '--match-head-commit', other, '--repo', 'github.com/example/elsewhere'],
-                   tier=3, code='forbidden')  # a denied check pins nothing
-        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', other)[0], 3)
         self.check(['gh', 'pr', 'merge', '7', '--squash', '--match-head-commit=' + head, '--repo', 'github.com/example/demo'])
         for pr, sha in (('8', head), ('7', other)):
             with self.subTest(pr=pr, sha=sha):
                 self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', pr, '--head', sha)[0], 3)
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 0)
+        record = json.loads((self.state / 'log.jsonl').read_text().splitlines()[-1])
+        self.assertEqual((record['kind'], record['repo']), ('merge', 'github.com/example/demo'))
         self.invoke('stop')
         self.clock += 60
-        self.start(SETUP + '- Max actions per hour: 1000\n')  # a new lease does not inherit the old pin
+        self.start()  # a new lease does not inherit the old pin
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)
 
-    def test_a_new_work_branch_is_created_with_switch_or_checkout(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.cwd, _ = self.git_repo('branching')
-        for verb, flag in (('switch', '-c'), ('checkout', '-b')):
-            with self.subTest(verb=verb):
-                self.check(['git', verb, flag, 'afk/subtract'])
-                for name in ('main', 'MAIN', 'master', 'trunk', 'refs/heads/topic', '-f', 'tags/v1', 'remotes/x',
-                             'HEAD', 'a..b', 'topic/', 'top~1', 'topic.', 'topic//sub', 'topic/.hidden'):
-                    with self.subTest(name=name):
-                        self.check(['git', verb, flag, name], tier=3, code='unknown')
-                # Only the plain form: no start point, no force or reset, no other option.
-                for tail in ((flag, 'topic', 'origin/main'), (flag.upper(), 'topic'), ('topic',),
-                             (flag, 'topic', '--force'), ('--orphan', 'topic'), (flag,)):
-                    with self.subTest(tail=tail):
-                        self.check(['git', verb, *tail], tier=3, code='unknown')
-        self.invoke('stop')
-        self.clock += 60
-        self.start(SETUP.replace('Push and pull requests: yes', 'Push and pull requests: no')
-                   .replace('Merge: yes', 'Merge: no') + '- Max actions per hour: 1000\n')
-        self.check(['git', 'switch', '-c', 'afk/subtract'], tier=3, code='push-disabled')
-        # Either permission alone is enough.
-        for push, merge in (('yes', 'no'), ('no', 'yes')):
-            with self.subTest(push=push, merge=merge):
-                self.invoke('stop')
-                self.clock += 60
-                self.start(SETUP.replace('Push and pull requests: yes', f'Push and pull requests: {push}')
-                           .replace('Merge: yes', f'Merge: {merge}') + '- Max actions per hour: 1000\n')
-                self.check(['git', 'switch', '-c', 'afk/subtract'])
-        # Origin's own default branch is refused in any case, even when it is not main, master or trunk.
-        (self.cwd / '.git/refs/remotes/origin').mkdir(parents=True, exist_ok=True)
-        (self.cwd / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/develop\n')
-        for name in ('develop', 'Develop', 'DEVELOP'):
-            with self.subTest(default=name):
-                self.check(['git', 'switch', '-c', name], tier=3, code='unknown')
-        self.check(['git', 'switch', '-c', 'afk/subtract'])
-        # The strict state: an ancestor that cannot be listed.
-        locked = self.cwd / 'locked'
-        (locked / 'inner').mkdir(parents=True)
-        locked.chmod(0o311)
-        self.addCleanup(locked.chmod, 0o755)
-        repo, self.cwd = self.cwd, locked / 'inner'
-        self.check(['git', 'switch', '-c', 'afk/subtract'], tier=3, code='unknown')
-        self.cwd = repo
-        outside = self.home / 'no-repository'
-        outside.mkdir()
-        self.cwd = outside
-        self.invoke('stop')
-        self.clock += 60
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.check(['git', 'switch', '-c', 'afk/subtract'], tier=3, code='unknown')
+    def test_a_merge_needs_no_merge_ok_receipt(self):
+        # `merge-unchecked` belonged to `strict` (docs/specs/afk-one-mode.md): the merge gate stays advisory.
+        self.start()
+        self.check(['gh', 'pr', 'merge', '7', '--merge'] + PIN + ['--repo', 'github.com/example/demo'])
+        self.check(['gh', 'pr', 'merge', '8'])
 
     def test_a_review_fallback_entry_records_the_head_and_pins_nothing(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.start()
         head = 'e' * 40
         self.assertEqual(self.invoke('log', '--kind', 'review-fallback', '--pr', '7', '--head', head)[0], 0)
         for flags in (('--pr', '7'), ('--head', head), ('--pr', '7', '--head', 'E' * 40), ('--pr', '07', '--head', head)):
@@ -2878,304 +612,23 @@ class AwayFlowTest(AfkBase):
                  '--independent', '--fallback-family', 'claude']
         self.check(merge)
 
-    def worktree(self):
-        """A main checkout on main and a registered linked worktree under its .claude/worktrees on branch work."""
-        repo, git = self.git_repo('flow')
-        tree = repo / '.claude/worktrees/wt'
-        git('worktree', 'add', '-q', str(tree), '-b', 'work')
-        return repo, tree, git
-
-    def test_a_worktree_path_is_judged_from_inside_that_worktree(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        repo, tree, _ = self.worktree()
-        ledger = ['python3', '-I', str(SCRIPT.parent / 'ledger.py'), 'start', '--checkout']
-        self.cwd = repo
-        self.check(ledger + [str(tree)])
-        self.check(ledger + ['.claude/worktrees/wt'])
-        self.check(['git', '-C', str(tree), 'status'])
-        self.check(['git', '-C', '.claude/worktrees/wt', 'status', '--short'])
-        self.check(['git', '-C', str(tree), 'add', '--', 'src/example.py'])
-        self.cwd = tree  # the same commands from inside the worktree
-        self.check(['git', 'status'])
-        self.check(['git', 'add', '--', 'src/example.py'])
-        # Inside the worktree its own live paths stay protected, through -C as from inside.
-        self.check(['git', 'add', '--', '.claude/settings.json'], tier=3, code='protected')
-        self.cwd = repo
-        for path in ('.github/workflows/x.yml', '.claude/settings.json', '.git/hooks/pre-push'):
-            with self.subTest(path=path):
-                self.check(['git', '-C', str(tree), 'add', '--', path], tier=3, code='protected')
-                self.check(ledger + [str(tree / path)], tier=3, code='protected')
-        # Anything else under .claude stays protected: a folder that is not a registered worktree, the settings.
-        (repo / '.claude/worktrees/stray').mkdir(parents=True)
-        self.check(ledger + [str(repo / '.claude/worktrees/stray')], tier=3, code='protected')
-        self.check(ledger + ['.claude/worktrees/stray'], tier=3, code='protected')
-        self.check(['git', '-C', str(repo / '.claude/worktrees/stray'), 'status'], tier=3, code='unknown')
-        self.check(['git', '-C', str(repo / '.claude'), 'status'], tier=3, code='unknown')
-        self.check(paths=['.claude/settings.json'], tier=3, code='protected')
-        # A worktree of another repository is never judged relatively.
-        other, git = self.git_repo('other')
-        foreign = other / '.claude/worktrees/x'
-        git('worktree', 'add', '-q', str(foreign), '-b', 'x')
-        self.check(ledger + [str(foreign)], tier=3, code='protected')
-        self.check(['git', '-C', str(foreign), 'status'], tier=3, code='unknown')
-        self.assertEqual(self.counts()['actions'], 7)
-
-    def test_an_own_worktree_is_added_under_the_main_checkouts_claude_worktrees(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        repo, tree, git = self.worktree()
-        self.cwd = repo
-        for argv in (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic'],
-                     ['git', 'worktree', 'add', '-b', 'afk/topic', str(repo / '.claude/worktrees/topic')],
-                     ['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic', 'origin/main'],
-                     ['git', '-C', str(repo), 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic']):
-            with self.subTest(argv=argv):
-                self.check(argv)
-        self.cwd = tree  # from a linked worktree, still into the main checkout's folder
-        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', str(repo / '.claude/worktrees/topic')])
-        self.cwd = repo
-        (repo / '.claude/worktrees/taken').mkdir()
-        other, other_git = self.git_repo('other')
-        for argv, code in ((['git', 'worktree', 'add', '-b', 'main', '.claude/worktrees/topic'], 'unknown'),
-                           (['git', 'worktree', 'add', '-b', 'tags/v1', '.claude/worktrees/topic'], 'unknown'),
-                           (['git', 'worktree', 'add', '-B', 'afk/topic', '.claude/worktrees/topic'], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/settings.json'], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees'], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/a/b'], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/.hidden'], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/hooks'], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/taken'], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/wt'], 'unknown'),  # a registered worktree
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', str(tree / '.claude/worktrees/x')], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', str(other / '.claude/worktrees/x')], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '../elsewhere'], 'unknown'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic', 'HEAD~1'], 'unknown'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic', 'origin/other'], 'unknown'),
-                           (['git', 'worktree', 'add', '-f', '-b', 'afk/topic', '.claude/worktrees/topic'], 'protected'),
-                           (['git', 'worktree', 'add', '.claude/worktrees/topic', '-b', 'afk/topic'], 'protected'),
-                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic', 'origin/main', 'x'], 'protected')):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code=code)
-        # A linked folder on the way could point the new worktree anywhere.
-        import shutil
-        shutil.rmtree(repo / '.claude/worktrees/taken')
-        elsewhere = self.home / 'elsewhere'
-        elsewhere.mkdir()
-        (repo / '.claude/worktrees/link').symlink_to(elsewhere)
-        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/link'], tier=3, code='protected')
-        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/link/topic'], tier=3, code='protected')
-        bare, bare_git = self.git_repo('bare-link')
-        (bare / '.claude').mkdir()
-        (bare / '.claude/worktrees').symlink_to(elsewhere)
-        self.cwd = bare  # a linked .claude/worktrees itself
-        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic'], tier=3, code='protected')
-        linked, linked_git = self.git_repo('linked')
-        (linked / '.claude').symlink_to(elsewhere)
-        self.cwd = linked
-        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic'], tier=3, code='protected')
-        # The branch needs Push and pull requests or Merge, like any new work branch.
-        self.cwd = repo
-        self.invoke('stop')
-        self.clock += 60
-        self.start(SETUP.replace('Push and pull requests: yes', 'Push and pull requests: no')
-                   .replace('Merge: yes', 'Merge: no') + '- Max actions per hour: 1000\n')
-        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic'], tier=3, code='push-disabled')
-
-    def test_the_installs_checks_runner_runs_the_approved_check_list(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.cwd, _ = self.git_repo('checking')
-        checks = ['python3', '-I', str(ROOT / 'skills/checks/scripts/checks.py')]
-        # A delegated run's receipt (owner decision 15/11/2026): checks.py writes it only after a full clean pass.
-        for tail in (['run'], ['run', '--changed'], ['run', '--changed', '--base', 'origin/main'], ['show'],
-                     ['run', '--dispatch', 'd20261115-101500-ab12']):
-            with self.subTest(tail=tail):
-                self.check(checks + tail)
-        for tail in (['run', '--dispatch', 'abc'], ['run', '--dispatch', 'd20261115-101500-ab12', '--changed'],
-                     ['run', '--changed', '--dispatch', 'd20261115-101500-ab12'], ['run', '--base', 'origin/main'], ['run', '--changed', '--base', '-x'],
-                     ['run', '--changed', '--base', 'a..b'], ['usage', '--from', 'runs.json'], [], ['run', 'extra']):
-            with self.subTest(tail=tail):
-                self.check(checks + tail, tier=3, code='unknown')
-        self.check(['python3', str(ROOT / 'skills/checks/scripts/checks.py'), 'run'], tier=3, code='protected')
-        for tail in (['run', '--changed', '--base', 'HEAD~1'], ['run', '--changed', '--base', 'HEAD^']):
-            with self.subTest(tail=tail):
-                self.check(checks + tail, tier=3, code='unknown')
-        # From inside an own linked worktree, where an away session works.
-        import subprocess
-        tree = self.cwd / '.claude/worktrees/wt'
-        subprocess.run(['git', 'worktree', 'add', '-q', str(tree), '-b', 'work'], cwd=self.cwd, check=True,
-                       capture_output=True, env={'HOME': str(self.home), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
-                                                 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull})
-        self.cwd = tree
-        for tail in (['run'], ['run', '--changed'], ['show']):
-            with self.subTest(tree=tail):
-                self.check(checks + tail)
-        outside = self.home / 'no-repository'
-        outside.mkdir()
-        self.cwd = outside
-        self.check(checks + ['run'], tier=3, code='unknown')
-
-    def test_pull_request_text_is_data_and_a_body_file_is_screened(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
-        repo = '--repo', 'github.com/example/demo'
-        create = ['gh', 'pr', 'create', '--head', 'topic', *repo]
-        body = '## Summary\n\n- Fix the afk check for hooks, settings and SKILL.md ($5, 100%).\n\tIndented line.'
-        for argv in (create + ['--title', 'Fix check', '--body', body],
-                     create + ['--title', '-leading dash', '--body', '--repo github.com/other/restricted'],
-                     create + ['--body=' + body],
-                     ['gh', 'pr', 'edit', '7', '--body', body, *repo]):
-            with self.subTest(argv=argv):
-                self.check(argv)
-        for argv, code in ((create + ['--body', 'Run $(id) first'], 'unknown'),
-                           (create + ['--body', 'bell\x07'], 'unknown'),
-                           (create + ['--body', 'Token ghp_' + 'x' * 30], 'unsafe'),
-                           (create + ['--body', 'See /Us' + 'ers/synthetic/notes'], 'unsafe'),
-                           (create + ['--body', 'x', '--body-file', 'body.md'], 'unknown'),
-                           (['gh', 'pr', 'create', '--head', 'topic', '--body', '--repo=github.com/example/demo'], 'unknown'),
-                           (['git', 'commit', '-m', 'Fix $(x)'], 'unknown'),
-                           (['git', 'commit', '-m', 'Key ghp_' + 'x' * 30], 'unsafe')):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code=code)
-        folder = self.repo / '.finolabs'  # the checkout's own git-ignored folder
-        folder.mkdir()
-        good = folder / 'body.md'
-        good.write_text(body + '\nRun `afk.py check` or $(id) in a shell example.\r\n')
-        for argv in (create + ['--body-file', str(good)], create + ['-F', str(good)],
-                     ['gh', 'pr', 'edit', '7', '--body-file=' + str(good), *repo],
-                     ['gh', 'pr', 'comment', '7', '--body-file', str(good), *repo],
-                     ['gh', 'pr', 'comment', '7', '--body', body, *repo]):
-            with self.subTest(argv=argv):
-                self.check(argv)
-        secret = folder / 'leaky.md'
-        secret.write_text('Review notes\nghp_' + 'x' * 30 + '\n')
-        link = folder / 'link.md'
-        link.symlink_to(good)
-        large = folder / 'large.md'
-        large.write_text('x' * 70000)
-        for name in (secret, link, large, folder / 'missing.md', folder, self.home):
-            with self.subTest(name=name):
-                self.check(create + ['--body-file', str(name)], tier=3, code='unsafe')
-        self.check(create + ['--body-file', '-'], tier=3, code='unknown')
-        self.check(['gh', 'pr', 'comment', '7', '--body-file', str(good)], tier=3, code='unknown')
-        self.check(['gh', 'pr', 'comment', '7', *repo], tier=3, code='unknown')
-        self.invoke('stop')  # without the category's decide answer a comment is Tier 3
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.check(['gh', 'pr', 'comment', '7', '--body-file', str(good), *repo], tier=3, code='forbidden')
-
-    def test_only_a_tier_one_answer_reserves_an_action_or_a_run(self):
-        self.start(SETUP + '- Max actions per hour: 2\n')
-        ledger = ['python3', '-I', str(SCRIPT.parent / 'ledger.py'), 'start']
-        for _ in range(5):
-            self.check(ledger + ['--checkout', '.claude/settings.json'], tier=3, code='protected')
-            self.check(['git', 'push', 'origin', 'main'], tier=3, code='forbidden')
-        self.assertEqual(self.lease()['counters'], {})
-        self.check(ledger)
-        self.check(['git', 'status'])
-        self.assertEqual((self.counts()['runs'], self.counts()['actions']), (1, 2))
-        self.check(['git', 'status'], tier=3, code='limit')
-
-    def test_a_commit_message_is_data(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        for argv in (['git', 'commit', '-m', 'Fix x for $5 cases'],
-                     ['git', 'commit', '-q', '-m', 'Update hooks.json and SKILL.md', '-m', 'Body line one\nline two'],
-                     ['git', 'commit', '--message=Rename settings and setup text']):
-            with self.subTest(argv=argv):
-                self.check(argv)
-
-    def text_forms(self):
-        """The pull request create form, its --repo pair and the checkout's own git-ignored .finolabs folder."""
-        repo = ('--repo', 'github.com/example/demo')
-        folder = self.repo / '.finolabs'
-        folder.mkdir(exist_ok=True)
-        return ['gh', 'pr', 'create', '--head', 'topic', *repo], repo, folder
-
-    def test_a_review_marker_in_pull_request_or_commit_text_is_forbidden(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
-        create, repo, folder = self.text_forms()
-        for marker in ('<!-- fnl-code-review head -->', '<!--fnl-security-review-->', '<!--\n  FNL-Code-Review -->'):
-            text = 'Looks good.\n\n' + marker
-            file = folder / 'review.md'
-            file.write_text(text + '\n')
-            for argv in (create + ['--body', text], create + ['--title', marker], create + ['--body=' + text],
-                         create + ['-b=' + text], create + ['--body-file', str(file)], create + ['-F', str(file)],
-                         ['gh', 'pr', 'edit', '7', '--body', text, *repo],
-                         ['gh', 'pr', 'edit', '7', '--body-file', str(file), *repo],
-                         ['gh', 'pr', 'comment', '7', '--body', text, *repo],
-                         ['gh', 'pr', 'comment', '7', '--body-file', str(file), *repo],
-                         ['git', 'commit', '-m', text], ['git', 'commit', '-m=' + text],
-                         ['git', 'commit', '--message=' + text], ['git', 'commit', '-F', str(file)]):
-                with self.subTest(marker=marker, argv=argv[:4]):
-                    self.check(argv, tier=3, code='forbidden')
-        self.check(create + ['--body', 'An HTML comment <!-- note --> and the fnl- prefix are data.'])
-
-    def test_one_exact_router_line_in_a_pull_request_body_is_data(self):
-        # merge_check requires the router line on every pull request, so an away flow must be able to write it.
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        create, repo, folder = self.text_forms()
-        file = folder / 'pr.md'
-        router = '<!-- fnl-router depth=MIN trigger=none -->'
-        file.write_text(router + '\n\nWhat changed.\n')
-        self.check(create + ['--body-file', str(file)])
-        self.check(['gh', 'pr', 'edit', '7', '--body-file', str(file), *repo])
-        for text in (router + '\n' + router, router + ' tail', '<!-- fnl-router depth=HUGE trigger=none -->',
-                     router + '\n<!-- fnl-review kind=code head=x verdict=APPROVE -->'):
-            file.write_text(text + '\n')
-            with self.subTest(text=text):
-                self.check(create + ['--body-file', str(file)], tier=3, code='forbidden')
-
-    def test_inline_text_is_shell_safe_and_file_text_may_hold_shell_examples(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        create, _, folder = self.text_forms()
-        file = folder / 'body.md'
-        for text in ('Fix `check`', 'Uses $NAME', 'Uses ${NAME}', 'Uses $_x', 'Run $(id) first'):
-            file.write_text(text + '\n')
-            for argv in (create + ['--body', text], create + ['--title', text], ['git', 'commit', '-m', text]):
-                with self.subTest(argv=argv[-2:]):
-                    self.check(argv, tier=3, code='unknown')
-            for argv in (create + ['--body-file', str(file)], ['git', 'commit', '-F', str(file)],
-                         ['git', 'commit', '-q', '-F', '.finolabs/body.md']):
-                with self.subTest(argv=argv[-2:], text=text):
-                    self.check(argv)
-        self.check(['git', 'commit', '-m', 'Costs $5, 100% of cases'])
-        for argv in (['git', 'commit', '-F', str(file), '-m', 'Extra'], ['git', 'commit', '-F', str(file), '-F', str(file)],
-                     ['git', 'commit', '-F=' + str(file)], ['git', 'commit', '-F' + str(file)], ['git', 'commit', '-F', '-']):
-            with self.subTest(argv=argv[2:]):
-                self.check(argv, tier=3, code='unknown')
-
-    def test_a_body_file_must_lie_inside_the_checks_own_checkout(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        create, _, folder = self.text_forms()
-        body = 'A clean description.\n'
-        other = self.home / 'other'  # another repository
-        (other / '.git').mkdir(parents=True)
-        outside = (self.home / 'body.md', self.root / 'body.md', other / 'body.md')
-        for path in (*outside, folder / 'body.md'):
-            path.write_text(body)
-        for path in outside:
-            with self.subTest(path=path):
-                self.check(create + ['--body-file', str(path)], tier=3, code='unsafe')
-                self.check(['git', 'commit', '-F', str(path)], tier=3, code='unsafe')
-        self.check(create + ['--body-file', str(folder / 'body.md')])
-        self.check(create + ['--body-file', '.finolabs/body.md'])
-        self.check(['git', 'commit', '-F', str(folder / 'body.md')])
-        # A link on the way out of the checkout, or a `..` step, is refused.
-        (self.repo / 'linked').symlink_to(self.home, target_is_directory=True)
-        for name in ('linked/body.md', '.finolabs/../.finolabs/body.md'):
-            with self.subTest(name=name):
-                self.check(create + ['--body-file', name], tier=3, code='unsafe')
-
     def test_check_exits_three_on_tier_three_and_zero_on_tier_one(self):
         self.start()
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
         for argv, status, tier in ((['git', 'status'], 0, 1), (['git', 'push', 'origin', 'main'], 3, 3),
-                                   (['git', 'show', 'HEAD:.env'], 3, 3), (['echo', 'safe'], 3, 3)):
+                                   (['git', 'show', 'HEAD:.env'], 3, 3), (['echo', 'safe'], 0, 1),
+                                   (['npm', 'publish'], 0, 1)):
             with self.subTest(argv=argv):
                 result = self.invoke('check', '--argv-json', json.dumps(argv))
                 self.assertEqual(result[0], status, result)
                 self.assertEqual(json.loads(result[1])['tier'], tier)
-        self.assertEqual(self.invoke('check', '--paths', '.github/workflows/x.yml')[0], 3)
+        self.assertEqual(self.invoke('check', '--paths', '.env')[0], 3)
+        self.assertEqual(self.invoke('check', '--paths', '.github/workflows/x.yml')[0], 0)
         self.invoke('stop')
         self.assertEqual(self.invoke('check', '--argv-json', '["git", "status"]')[0], 3)  # no lease
 
     def test_a_merge_entry_matching_pins_of_two_repositories_is_refused(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.start()
         head = 'c' * 40
         first, _ = self.git_repo('first')
         second, git = self.git_repo('second')
@@ -3183,247 +636,147 @@ class AwayFlowTest(AfkBase):
         self.cwd = first
         self.check(['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', head, '--repo', 'github.com/example/demo'])
         self.cwd = second
-        self.merge_ok('7', head, repo='github.com/other/demo')
         self.check(['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', head, '--repo', 'github.com/other/demo'])
         status, output = self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)
         self.assertEqual(status, 3, output)
 
-    def test_a_merged_head_does_not_remove_the_worktree_once_origin_names_another_repository(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        repo, tree, git = self.worktree()
-        self.cwd = repo
-        self.merged('7', git('rev-parse', 'HEAD', cwd=tree))
-        self.check(['git', 'worktree', 'remove', str(tree)])
-        git('remote', 'set-url', 'origin', 'https://github.com/other/mirror.git')
-        status, output = self.invoke('check', '--argv-json', json.dumps(['git', 'worktree', 'remove', str(tree)]))
-        self.assertEqual(status, 3, output)
 
-    def test_merged_worktree_and_branch_cleanup_and_tracked_removal(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        repo, tree, git = self.worktree()
-        git('branch', 'done')
-        self.cwd = repo
-        # Only the worktree of a pull request this lease merged: its HEAD is a head a merge entry recorded.
-        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
-        self.merged('7', 'b' * 40)
-        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
-        head = git('rev-parse', 'HEAD', cwd=tree)
-        for flags in (('--kind', 'merge', '--head', head.upper()), ('--kind', 'merge', '--head', head[:12]),
-                      ('--kind', 'action', '--head', head), ('--kind', 'merge', '--head', head)):
-            with self.subTest(flags=flags):
-                self.assertEqual(self.invoke('log', *flags)[0], 3)
-        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
-        self.merged('7', head)
-        for argv in (['git', 'worktree', 'remove', str(tree)], ['git', 'worktree', 'remove', '--', str(tree)],
-                     ['git', 'worktree', 'remove', '.claude/worktrees/wt'],
-                     ['git', 'branch', '-d', 'done'], ['git', 'branch', '-d', '--', 'done']):
-            with self.subTest(argv=argv):
-                self.check(argv)
-        for argv, code in ((['git', 'worktree', 'remove', '--force', str(tree)], 'forbidden'),
-                           (['git', 'worktree', 'remove', '-f', str(tree)], 'forbidden'),
-                           (['git', 'worktree', 'remove', str(repo)], 'forbidden'),
-                           (['git', 'worktree', 'remove', '.'], 'forbidden'),
-                           (['git', 'worktree', 'add', str(tree)], 'unknown'),
-                           (['git', 'branch', '-D', 'done'], 'unknown'),
-                           (['git', 'branch', '-d', 'main'], 'forbidden'),
-                           (['git', 'branch', '-d', 'missing'], 'unknown'),
-                           (['git', 'branch', '-d', 'done', 'work'], 'unknown')):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code=code)
-        self.cwd = tree  # the current checkout and its own branch stay
-        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
-        self.check(['git', 'branch', '-d', 'work'], tier=3, code='unknown')
-        # git rm of tracked files on the work branch classifies each path like a change.
-        for argv in (['git', 'rm', 'src/old.py'], ['git', 'rm', '-q', '--', 'src/old.py', 'docs/old.md'],
-                     ['git', 'rm', '-r', 'skills/example/SKILL.md']):
-            with self.subTest(argv=argv):
-                self.check(argv)
-        for argv, code in ((['git', 'rm', '-f', 'src/old.py'], 'unknown'), (['git', 'rm', '--cached', 'src/old.py'], 'unknown'),
-                           (['git', 'rm', '--', '.github/workflows/x.yml'], 'protected'),
-                           (['git', 'rm', 'unknown/file.py'], 'unknown')):
-            with self.subTest(argv=argv):
-                self.check(argv, tier=3, code=code)
-        self.cwd = repo  # on the default branch
-        self.check(['git', 'rm', 'src/old.py'], tier=3, code='forbidden')
-        self.invoke('stop')
-        self.start(SETUP.replace('- Merge: yes', '- Merge: no'))
-        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='merge-disabled')
-        self.check(['git', 'branch', '-d', 'done'], tier=3, code='merge-disabled')
-
-    def test_plugin_source_is_known_on_a_work_branch_and_live_config_stays_protected(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        self.assertEqual((self.repo / '.git/HEAD').read_text(), 'ref: refs/heads/topic\n')
-        for path in SOURCE_PATHS:
-            with self.subTest(path=path):
-                self.check(paths=[path])
-                self.check(['git', 'add', '--', path])
-        self.check(paths=list(SOURCE_PATHS))
-        for path in LIVE_PATHS:
-            with self.subTest(path=path):
-                self.check(paths=[path], tier=3, code='protected')
-                self.check(['git', 'add', '--', path], tier=3, code='protected')
-        for path in ('/' + 'tmp/settings.json', str(self.home / '.claude/settings.json'), str(self.root / 'host.md')):
-            with self.subTest(path=path):
-                self.check(paths=[path], tier=3, code='protected')
-        # The default branch keeps every source path protected.
-        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
-        for path in SOURCE_PATHS:
-            with self.subTest(path=path, branch='main'):
-                # A manifest with no protected name is outside the built-in roots there.
-                self.check(paths=[path], tier=3, code='unknown' if path == '.codex-plugin/plugin.json' else 'protected')
-                self.check(['git', 'add', '--', path], tier=3,
-                           code='unknown' if path == '.codex-plugin/plugin.json' else 'protected')
-        # Without Push and pull requests and Merge, a work branch is not enough.
-        (self.repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
-        off = SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no')
-        self.invoke('stop')
-        self.start(off)
-        self.check(paths=['skills/example/SKILL.md'], tier=3, code='protected')
-
-    def install_into(self, folder):
-        """Copy this plugin's scripts into `folder`, which then is the running install's plugin root."""
-        import shutil
-        for skill in ('delegate', 'review-gate'):
-            shutil.copytree(ROOT / 'skills' / skill / 'scripts', folder / 'skills' / skill / 'scripts')
-        return folder / 'skills/delegate/scripts/afk.py'
-
-    def test_this_installs_own_scripts_stay_protected_on_a_work_branch(self):
-        # A real repository that is itself this install: every path in its checkout stays protected on every branch.
-        install, git = self.git_repo('install')
-        tree = install / '.claude/worktrees/wt'
-        git('worktree', 'add', '-q', str(tree), '-b', 'work')
-        global SCRIPT
-        saved, SCRIPT = SCRIPT, self.install_into(install)
-        try:
-            self.start(SETUP + '- Max actions per hour: 1000\n')
-            self.cwd = install
-            for branch in ('topic', 'main'):
-                git('symbolic-ref', 'HEAD', 'refs/heads/' + branch)
-                for path in INSTALL_PATHS:
-                    with self.subTest(path=path, branch=branch):
-                        self.check(paths=[path], tier=3, code='protected')
-                        self.check(['git', 'add', '--', path], tier=3, code='protected')
-                        self.check(paths=[str(install / path)], tier=3, code='protected')
-            # An absolute operand from another checkout reaches the install too.
-            self.cwd = self.repo
-            self.check(['git', 'add', '--', str(install / 'scripts/session_start.py')], tier=3, code='protected')
-            # A linked worktree of the install's repository, under its .claude/worktrees, stays editable.
-            self.cwd = tree
-            for path in ('skills/example/SKILL.md', 'skills/afk/SKILL.md', 'scripts/session_start.py',
-                         'scripts/away_gate_hook.py', '.claude-plugin/hooks.json', 'src/example.py'):
-                with self.subTest(path=path, checkout='worktree'):
-                    self.check(paths=[path])
-                    self.check(['git', 'add', '--', path])
-            self.cwd = install
-            self.check(['git', '-C', str(tree), 'add', '--', 'skills/example/SKILL.md'])
-            # A git command that changes the install's work tree without naming a path stays protected too.
-            git('symbolic-ref', 'HEAD', 'refs/heads/topic')
-            for argv in (['git', 'merge', '--no-ff', '--no-edit', 'refs/heads/main'], ['git', 'merge', 'origin/main'],
-                         ['git', 'commit', '-m', 'Example'], ['git', 'pull']):
-                with self.subTest(argv=argv, checkout='install'):
-                    self.check(argv, tier=3, code='protected')
-            self.cwd = tree  # from a linked worktree of the install's own repository, -C reaches the install
-            for argv in (['git', '-C', str(install), 'merge', '--no-ff', '--no-edit', 'refs/heads/main'],
-                         ['git', '-C', str(install), 'commit', '-m', 'Example']):
-                with self.subTest(argv=argv, checkout='-C install'):
-                    self.check(argv, tier=3, code='protected')
-        finally:
-            SCRIPT = saved
-
-    def test_an_install_that_is_the_main_checkout_cleans_up_a_merged_worktree(self):
-        # A dev install read from the main checkout runs the merge gate's cleanup from there: removing another,
-        # merged linked worktree changes neither the install's work tree, its index nor its HEAD.
-        repo, tree, git = self.worktree()
-        global SCRIPT
-        saved, SCRIPT = SCRIPT, self.install_into(repo)
-        try:
-            self.start(SETUP + '- Max actions per hour: 1000\n')
-            self.cwd = repo
-            self.merged('7', git('rev-parse', 'HEAD', cwd=tree))
-            for argv in (['git', 'worktree', 'remove', str(tree)], ['git', 'worktree', 'remove', '--', '.claude/worktrees/wt']):
-                with self.subTest(argv=argv):
-                    self.check(argv)
-            for argv, code in ((['git', 'worktree', 'remove', '--force', str(tree)], 'forbidden'),
-                               (['git', 'worktree', 'remove', '.'], 'protected'),
-                               (['git', 'worktree', 'add', str(repo / 'new')], 'protected'),
-                               (['git', 'worktree', 'prune'], 'unknown'),
-                               (['git', 'commit', '-m', 'Example'], 'protected'),
-                               (['git', 'switch', '-c', 'afk/topic'], 'protected'),
-                               (['git', 'checkout', '-b', 'afk/topic'], 'protected'),
-                               (['git', 'stash'], 'protected'),
-                               (['git', 'reset', '--hard'], 'protected'),
-                               (['git', '-C', 'skills', 'commit', '-m', 'Example'], 'protected'),
-                               (['git', '-C', str(repo / 'skills'), 'restore', '.'], 'protected')):
-                with self.subTest(argv=argv):
-                    self.check(argv, tier=3, code=code)
-            self.cwd = repo / 'skills/delegate'  # a subfolder of the install changes the install's own work tree too
-            for argv in (['git', 'commit', '-m', 'Example'], ['git', 'stash']):
-                with self.subTest(argv=argv, cwd='subfolder'):
-                    self.check(argv, tier=3, code='protected')
-        finally:
-            SCRIPT = saved
-
-    def test_the_worktree_holding_this_install_is_never_removed(self):
-        repo, tree, git = self.worktree()
-        global SCRIPT
-        saved, SCRIPT = SCRIPT, self.install_into(tree)
-        try:
-            self.start(SETUP + '- Max actions per hour: 1000\n')
-            self.cwd = repo
-            self.merged('7', git('rev-parse', 'HEAD', cwd=tree))
-            for operand in (str(tree), '.claude/worktrees/wt'):
-                with self.subTest(operand=operand):
-                    self.check(['git', 'worktree', 'remove', operand], tier=3, code='protected')
-        finally:
-            SCRIPT = saved
+def load_store():
+    spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')
+    store = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(store)
+    return store
 
 
-class DeciderTest(AfkBase):
-    """docs/specs/afk-decider.md: the limit record the stop hook reads, `merge: decide`, the native rules notice and the
-    permission approvals `check` never consumes."""
+class RetiredSetupTest(AfkBase):
+    """Decisions 3 and 4 of docs/specs/afk-one-mode.md: retired lines and keys start normally with one notice."""
 
     def setUp(self):
         super().setUp()
-        spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')
-        self.store = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.store)
+        self.store = load_store()
 
-    project = ProjectScopeTest.project
+    def project(self, value):
+        found, ident = self.store.identity(self.repo)
+        self.store.write_setting(self.repo, 'autopilot', value, ident=ident)  # as an older setup wrote it
+
+    def test_an_old_strict_setup_starts_normally_with_one_line_each(self):
+        ap = self.load()
+        self.setup_config(OLD_STRICT)
+        status, output = self.invoke('start')
+        self.assertEqual(status, 0, output)
+        lines = output.splitlines()
+        self.assertEqual(lines.count(ap.STRICT_REMOVED), 1)
+        self.assertEqual(lines.count(ap.LIMITS_REMOVED), 1)
+        for word in ('- Mode', '- Max', '- Merge', 'Task choice', 'Production', 'Test commands'):
+            self.assertNotIn(word, output)
+        self.assertEqual(set(self.lease()), {'id', 'start', 'expiry', 'settings_hash'})
+        # The retired lines are not read: what strict denied is Tier 1, and no hourly cap of 30 applies.
+        for argv in (['npm', 'publish'], ['gh', 'pr', 'merge', '7'], ['git', 'tag', 'v2.0.0']):
+            self.check(argv)
+        for _ in range(31):
+            self.check(['git', 'status'])
+        self.check(['printenv'], tier=3, code='floor')
+
+    def test_the_notice_lines_name_only_what_the_setup_holds(self):
+        ap = self.load()
+        for text, expected in ((SETUP + '- Mode: strict\n', [ap.STRICT_REMOVED]),
+                               (SETUP + '- Mode: open\n', []),
+                               (SETUP + '- Max runs: 5\n- Max actions per hour: 9\n', [ap.LIMITS_REMOVED]),
+                               (SETUP + '- Merge: no\n- Trusted authors: own\n', []),
+                               (SETUP, [])):
+            with self.subTest(text=text):
+                self.invoke('stop')
+                self.setup_config(text)
+                status, output = self.invoke('start')
+                self.assertEqual(status, 0, output)
+                self.assertEqual([line for line in output.splitlines() if line.startswith('afk: ')], expected)
+
+    def test_a_retired_line_still_may_not_repeat_and_the_lease_hash_ignores_its_value(self):
+        self.setup_config(SETUP + '- Mode: strict\n- Mode: open\n')
+        self.assertEqual(self.invoke('start')[0], 3)
+        self.start(SETUP + '- Max runs: 5\n')
+        self.setup_config(SETUP + '- Max runs: 6\n')  # the hash covers what is read; a retired value is not read
+        self.check(['git', 'status'])
+        self.setup_config(SETUP + '- Lease hours: 7\n')
+        self.check(['git', 'status'], tier=3, code='setup-changed')
+
+    def test_old_repository_keys_are_named_and_not_read(self):
+        self.project({'mode': 'strict', 'max-runs': 5, 'merge': 'no', 'decide': [], 'default-branch': 'open'})
+        self.setup_config()
+        status, output = self.invoke('start')
+        self.assertEqual(status, 0, output)
+        self.assertIn("this repository's `mode` key is no longer read", output)
+        self.assertIn("This repository's max-runs, max-runtime-minutes and max-actions-per-hour keys", output)
+        self.assertIn('This folder (project): Third-party instructions: guard; Default branch: open.', output)
+        self.check(['npm', 'publish'])
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
+        self.check(['git', 'push', 'origin', 'main'])  # the repository's guard key is still read
+        status, output = self.invoke('effective')
+        view = json.loads(output)
+        self.assertEqual((view['state'], view['guards']['Default branch'], len(view['retired'])), ('project', 'open', 2))
+        self.assertNotIn('mode', view)
+
+    def test_a_lease_written_before_0_3_3_reads_invalid_until_stopped(self):
+        self.start()
+        self.change_lease(lambda v: v.update(counters={}))
+        self.check(['git', 'status'], tier=3, code='unsafe')
+        self.assertEqual(self.invoke('start')[0], 3)
+        self.assertEqual(self.invoke('stop')[0], 0)
+        self.assertEqual(self.invoke('start')[0], 0)
+        self.check(['git', 'status'])
+
+
+class SetupNeverWritesRetiredTest(unittest.TestCase):
+    """Decisions 3 and 4: setup asks no mode or limit question and never writes those lines or keys."""
+
+    def test_the_account_section_has_no_retired_line(self):
+        spec = importlib.util.spec_from_file_location('afk_setup_tested', ROOT / 'skills/setup/scripts/afk_setup.py')
+        setup = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(setup)
+        spec = importlib.util.spec_from_file_location('afk_read', SCRIPT)
+        ap = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ap)
+        values = {'Hosts': 'Claude Code', 'Lease hours': 8, 'Quota floor percent': 15,
+                  'Third-party instructions': 'guard', 'Default branch': 'guard', 'Excerpts leave the machine': 'no'}
+        section = setup.render(values)
+        for name in ap.RETIRED:
+            self.assertNotIn('- %s:' % name, section)
+        for extra in ({'Mode': 'open'}, {'Max runs': 20}, {'Merge': 'yes'}):
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                setup.validate({**values, **extra})
+        with contextlib.redirect_stderr(io.StringIO()):
+            for flag in (('--mode', 'strict'), ('--max-runs', '5'), ('--merge', 'yes'), ('--decide', 'publishing')):
+                with self.subTest(flag=flag):
+                    self.assertEqual(setup.main(['preview', *flag]), 1)
+
+    def test_the_repository_writer_refuses_retired_keys(self):
+        store = load_store()
+        for value in ({'mode': 'open'}, {'mode': 'strict'}, {'max-runs': 5}, {'max-runtime-minutes': 60},
+                      {'max-actions-per-hour': 9}, {'merge': 'decide'}, {'default-branch': 'open', 'max-runs': 5}):
+            with self.subTest(value=value):
+                self.assertTrue(store.valid_autopilot(value))  # an older approved file stays readable
+                with self.assertRaises(ValueError):
+                    store.autopilot_value(json.dumps(value))
+        self.assertEqual(store.autopilot_value('{"default-branch": "open", "third-party-instructions": "guard"}'),
+                         {'third-party-instructions': 'guard', 'default-branch': 'open'})
+
+
+class DeciderTest(AfkBase):
+    """docs/specs/afk-decider.md: the lease end the stop hook reads, the native rules notice and the permission
+    approvals `check` never consumes."""
 
     def log_kinds(self):
         return [json.loads(line)['kind'] for line in (self.state / 'log.jsonl').read_text().splitlines()]
 
-    def test_a_reached_limit_is_judged_live_and_writes_no_record(self):
-        # The stop hook asks `limit_reached` itself (afk-decider.md A), so `check` keeps no limit record.
-        self.start()
-        self.change_counts(runs=20)
-        self.check(['git', 'status'], tier=3, code='spent')
-        self.change_counts(runs=0, first=self.clock, hour_actions=[self.clock] * 30)
-        self.check(['git', 'status'], tier=3, code='limit')
-        log = self.state / 'log.jsonl'
-        entries = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
-        self.assertEqual([e for e in entries if e['kind'] == 'limit'], [])
-
-    def test_a_repository_merge_decide_record_merges_under_a_strict_lease_with_merge_no(self):
-        self.start(NO)
-        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'], tier=3,
-                   code='merge-disabled')
-        self.project({'merge': 'decide'})
-        status, output = self.invoke('effective')
-        view = json.loads(output)
-        self.assertEqual((view['values']['Merge'], view['merge_authority']), ('yes', 'decide'))
-        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'])
-        self.project({'merge': 'no'})
-        self.assertEqual(json.loads(self.invoke('effective')[1])['merge_authority'], 'lease')
-        with self.assertRaises(Exception):
-            self.project({'merge': 'always'})
-
-    def test_merge_decide_still_needs_a_merge_ok_receipt(self):
-        self.start(NO)
-        self.project({'merge': 'decide'})
-        flags = ('--argv-json', json.dumps(['gh', 'pr', 'merge', '8'] + PIN + ['--repo', 'github.com/example/demo']))
-        status, output = self.invoke('check', *flags)
-        self.assertEqual((status, json.loads(output)['code']), (3, 'merge-unchecked'))
+    def test_lease_over_follows_the_lease_only(self):
+        ap = self.load()
+        self.start(OLD_STRICT)
+        with ap.private_folder() as folder:
+            self.assertFalse(ap.lease_over(folder, self.clock))
+            self.assertTrue(ap.lease_over(folder, self.clock + 8 * 3600))
+        self.setup_config(SETUP.replace('Claude Code', 'Codex'))  # a setup change ends what the lease allows
+        with ap.private_folder() as folder:
+            self.assertTrue(ap.lease_over(folder, self.clock))
 
     def test_start_offers_the_native_allow_rules_and_warns_without_deny_rules(self):
         self.setup_config()
@@ -3450,20 +803,21 @@ class DeciderTest(AfkBase):
         spec.loader.exec_module(native)
         self.assertEqual(self.load().FLOOR_RULES, native.FLOOR_RULES)
 
-    def test_check_never_consumes_a_permission_approval_and_argv_approvals_ignore_it(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n')
-        (self.repo / 'scripts').mkdir(exist_ok=True)
-        (self.repo / 'scripts/ci-local.sh').write_text('#!/bin/sh\n')
-        argv = ['scripts/ci-local.sh', 'fast']
+    def test_check_never_consumes_a_permission_approval(self):
+        self.start()
         host = ('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '1', '--of', '2',
                 '--model', 'claude-opus-5-5')
         status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it',
                                      '--precedents', '0', *host, '--approve-request', 'c' * 64)
         self.assertEqual(status, 0, output)
-        self.check(argv, tier=3, code='unknown')  # a permission approval is not an argv approval
+        self.check(['scripts/ci-local.sh', 'fast'])
         permits = json.loads((self.state / 'permits.json').read_text())
         self.assertEqual([(e['kind'], e['digest']) for e in permits], [('approval', 'c' * 64)])
         self.assertIn('permit', self.log_kinds())
+        for flag in ('--approve-argv-json', '--approve-paths'):  # removed with `strict`
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it', '--precedents',
+                            '0', *host, flag, '["make"]')
 
 
 if __name__ == '__main__':

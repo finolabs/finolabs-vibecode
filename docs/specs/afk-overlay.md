@@ -2,6 +2,8 @@
 
 Status: implemented; rule recorded as the ninth scoped exception in `CLAUDE.md` (owner decisions 2026-11-16, merged in pull request 319); code in `scripts/afk_overlay.py` (copies in `skills/setup/scripts/` and `skills/delegate/scripts/`), `instructions_write.py`, `session_start.py` and `afk.py`, tests in `tests/test_afk_overlay.py`. Live delivery through the hosts' session start remains unverified.
 
+Since 0.3.3 afk has one mode, and [afk-one-mode.md](afk-one-mode.md) (owner decisions, 19/11/2026) wins where this document disagrees: it removes `strict` and with it the overlay's strict-only protections (the write refusal during a strict lease and `check`'s protection of `AGENTS.afk.md*` and the constitution).
+
 ## Why
 
 `/setup add afk` saves away rules in the host config or in a repository's settings, and `afk.py check` allows the actions they name. A repository's `AGENTS.md`, `CLAUDE.md` or Spec Kit constitution may still say that push, merge or deploy need the owner's approval each time. An agent reads those files and stops to ask, although the script allows the action. On 2026-11-16 the owner hit this in a repository whose constitution and `AGENTS.md` Authority section conflicted with the new away rules.

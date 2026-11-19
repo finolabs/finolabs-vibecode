@@ -37,9 +37,10 @@ sys.argv[0] = script
 runpy.run_path(script, run_name="__main__")
 '''
 SESSION = "0b6f3c1e-1111-4222-8333-944455556666"
-OPEN = "## afk\n- Hosts: Claude Code\n- Mode: open\n"
-STRICT = ("## afk\n- Hosts: Claude Code\n- Task choice: choose\n- Push and pull requests: yes\n- Merge: yes\n"
-          "- Trusted authors: own\n- Mode: strict\n")
+OPEN = "## afk\n- Hosts: Claude Code\n"
+# A setup 0.3.2 wrote for `strict`: its lines are no longer read (docs/specs/afk-one-mode.md).
+OLD_STRICT = ("## afk\n- Hosts: Claude Code\n- Task choice: choose\n- Push and pull requests: yes\n- Merge: yes\n"
+              "- Trusted authors: own\n- Mode: strict\n- Max runs: 1\n")
 
 
 class StopHookTest(unittest.TestCase):
@@ -127,19 +128,9 @@ class StopHookTest(unittest.TestCase):
         self.record("action")
         self.assert_blocks(self.run_hook())
 
-    def test_a_reached_limit_in_this_repository_lets_the_stop_through(self):
-        # `strict` counts per repository; the hook judges the limit itself, with no `check` needed since.
-        value = self.lease(setup=STRICT + "- Max runs: 1\n")
-        self.assert_blocks(self.run_hook())
-        value["counters"] = {"unknown": {"runs": 1, "actions": 1, "hour_actions": [time.time() - 5],
-                                         "first": time.time() - 5}}
-        (self.state / "lease.json").write_text(json.dumps(value))
-        self.assertIsNone(self.run_hook())
-
-    def test_another_repositorys_limit_or_a_limit_record_does_not_count(self):
-        value = self.lease(setup=STRICT + "- Max runs: 1\n")
-        value["counters"] = {"f" * 64: {"runs": 1, "actions": 1, "hour_actions": [], "first": time.time() - 5}}
-        (self.state / "lease.json").write_text(json.dumps(value))
+    def test_old_strict_limits_no_longer_let_the_stop_through(self):
+        # Lease hours is the only limit since 0.3.3: an old `Max runs` line or a limit record changes nothing.
+        self.lease(setup=OLD_STRICT)
         self.record("limit", session=None)
         self.assert_blocks(self.run_hook())
 

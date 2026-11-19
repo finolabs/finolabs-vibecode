@@ -52,23 +52,13 @@ def read_lease(folder):
     if raw is None:
         return None
     value = json.loads(raw)
-    if (not isinstance(value, dict) or set(value) != {'id', 'start', 'expiry', 'settings_hash', 'counters'}
+    # A lease written before 0.3.3 also held per-project `counters`; it reads invalid (docs/specs/afk-one-mode.md).
+    if (not isinstance(value, dict) or set(value) != {'id', 'start', 'expiry', 'settings_hash'}
             or not isinstance(value['id'], str) or not re.fullmatch(r'[0-9a-f]{32}', value['id'])
             or not all(finite(value[k]) for k in ('start', 'expiry'))
             or not value['start'] < value['expiry'] <= value['start'] + 24 * 3600
             or not isinstance(value['settings_hash'], str) or not re.fullmatch(r'[0-9a-f]{64}', value['settings_hash'])):
         raise ValueError('afk lease is invalid')
-    counters = value['counters']
-    # Per-project counters (docs/specs/afk-per-project.md "A"): full identity digest or `unknown` -> entry.
-    if not isinstance(counters, dict) or len(counters) > 64 or not all(
-            isinstance(key, str) and re.fullmatch(r'[0-9a-f]{64}|unknown', key) and isinstance(entry, dict)
-            and set(entry) == {'runs', 'actions', 'hour_actions', 'first'}
-            and all(type(entry[k]) is int and entry[k] >= 0 for k in ('runs', 'actions'))
-            and (entry['first'] is None or finite(entry['first']))
-            and isinstance(entry['hour_actions'], list) and len(entry['hour_actions']) <= 10000
-            and all(finite(t) for t in entry['hour_actions'])
-            for key, entry in counters.items()):
-        raise ValueError('afk counters are invalid')
     return value
 
 

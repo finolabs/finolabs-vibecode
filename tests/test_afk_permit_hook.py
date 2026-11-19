@@ -37,7 +37,7 @@ script = sys.argv.pop(1)
 sys.argv[0] = script
 runpy.run_path(script, run_name="__main__")
 '''
-SETUP = "## afk\n- Hosts: Claude Code\n- Mode: open\n"
+SETUP = "## afk\n- Hosts: Claude Code\n"
 DENY_START = 'The user is away under an afk lease: settle this request through afk "Decide"'
 PARK_START = "The user is away under an afk lease and this request was denied before"
 HOST_YES = ["--rung", "host", "--settled", "yes", "--by", "claude", "--option", "1", "--of", "2",
@@ -65,7 +65,7 @@ class PermitHookTest(unittest.TestCase):
     def lease(self, start=None, expiry=None):
         current = time.time()
         value = {"id": "a" * 32, "start": current - 60 if start is None else start,
-                 "expiry": current + 3600 if expiry is None else expiry, "settings_hash": "b" * 64, "counters": {}}
+                 "expiry": current + 3600 if expiry is None else expiry, "settings_hash": "b" * 64}
         path = self.state / "lease.json"
         path.write_text(json.dumps(value))
         path.chmod(0o600)
@@ -244,10 +244,11 @@ class PermitHookTest(unittest.TestCase):
         base = ["log", "--kind", "decision", "--project", "demo", "--topic", "run it", "--precedents", "0"]
         for extra in (["--rung", "host", "--settled", "yes", "--by", "claude", "--option", "2", "--of", "2",
                        "--model", "claude-opus-5-5", "--approve-request", "a" * 64],
-                      [*HOST_YES, "--approve-request", "A" * 64], [*HOST_YES, "--approve-request", "a" * 63],
-                      [*HOST_YES, "--approve-request", "a" * 64, "--approve-paths", "src/a.py"]):
+                      [*HOST_YES, "--approve-request", "A" * 64], [*HOST_YES, "--approve-request", "a" * 63]):
             with self.subTest(extra=extra):
                 self.assertEqual(self.afk(*base, *extra).returncode, 3)
+        # `--approve-paths` and `--approve-argv-json` went with `strict` (docs/specs/afk-one-mode.md): a usage error.
+        self.assertEqual(self.afk(*base, *HOST_YES, "--approve-request", "a" * 64, "--approve-paths", "src/a.py").returncode, 2)
         self.assertFalse((self.state / "permits.json").exists())
         self.assertEqual(self.afk("log", "--kind", "action", "--approve-request", "a" * 64).returncode, 3)
 

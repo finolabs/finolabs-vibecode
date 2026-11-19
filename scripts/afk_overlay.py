@@ -22,7 +22,6 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
 import git_metadata
-import parallel_slots as slots  # the host.md section reader afk.py settings() uses
 import project_store as store
 
 NAME = 'AGENTS.afk.md'
@@ -232,86 +231,6 @@ def present(cwd):
         return ident is not None and os.path.lexists(Path(ident.main) / NAME)
     except (OSError, ValueError):
         return False
-
-
-# The closed key set and the value checks of `afk.py` `settings()` (a test keeps them equal, since each skill folder
-# stands alone); a section with any other key or a value it refuses fails there, so it fails here too.
-AFK_KEYS = {'Hosts', 'Task choice', 'Push and pull requests', 'Trusted authors', 'Lease hours', 'Max runs',
-            'Max runtime minutes', 'Max actions per hour', 'Quota floor percent', 'Merge', 'Mode',
-            'Third-party instructions', 'Default branch', 'Production', 'Real users and customer data',
-            'Unrecoverable deletion', 'Messages outside the repository', 'Tags and releases', 'Publishing',
-            'Shared settings', 'Recoverable deletion', 'Repository comments', 'Excerpts leave the machine',
-            'Non-production targets', 'Production targets', 'Test commands', 'Top-level files', 'Release targets'}
-AFK_CHOICES = {'Mode': ('open', 'strict'), 'Third-party instructions': ('guard', 'open'),
-               'Default branch': ('guard', 'open'), 'Task choice': ('choose', 'listed'),
-               'Push and pull requests': ('yes', 'no'), 'Merge': ('yes', 'no'), 'Trusted authors': ('own',)}
-AFK_NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
-               'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
-AFK_LISTS = {'Production targets': 'production-targets', 'Test commands': 'test-commands',
-             'Top-level files': 'top-level-files', 'Release targets': 'release-targets'}
-AFK_HOSTS = {'Claude Code', 'Codex', 'Antigravity'}
-
-
-def valid_afk_value(key, value):
-    """True when `afk.py` `settings()` accepts `value` for the known `key`; the categories, the consent and the
-    target list are normalized there, never refused, so any value passes here."""
-    if key in AFK_CHOICES:
-        return value in AFK_CHOICES[key]
-    if key in AFK_NUMBERS:
-        lower, upper = AFK_NUMBERS[key]
-        return bool(re.fullmatch(r'[0-9]{1,5}', value)) and lower <= int(value) <= upper
-    if key in AFK_LISTS:
-        return store.valid_autopilot({AFK_LISTS[key]: value.split('; ')})
-    if key == 'Hosts':
-        hosts = value.split(', ')
-        return len(hosts) == len(set(hosts)) and set(hosts) <= AFK_HOSTS
-    return True
-
-
-def mode(ident):
-    """`open` or `strict` for this repository, as afk.py resolves it: the user's `## afk` `- Mode:` line (absent
-    means open), replaced by an approved, bound repository `autopilot` `mode`. Any doubt raises, including a key or
-    a value `afk.py` `settings()` refuses, so the caller fails closed."""
-    text = dr.read_data('host.md', slots.HOST_LIMIT).decode('utf-8')
-    start, body, end = slots.host_section(text, 'afk')
-    if start == body == end:
-        raise ValueError('afk setup is missing')
-    values = {}
-    for line in text[body:end].splitlines():
-        if not line.strip():
-            continue
-        match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)  # the line grammar of afk.py settings()
-        if not match or match[1] not in AFK_KEYS or match[1] in values:
-            raise ValueError('afk setup is invalid')
-        if not valid_afk_value(match[1], match[2]):
-            raise ValueError('afk setup has an invalid value')
-        values[match[1]] = match[2]
-    result = values.get('Mode', 'open')
-    if result not in ('open', 'strict'):
-        raise ValueError('afk mode is invalid')
-    found, settings, _, record = store.autopilot_binding(ident)
-    project = settings.get('autopilot') if found == 'approved' else None
-    if (isinstance(project, dict) and 'mode' in project and store.valid_autopilot(project)
-            and store.bound(record, ident) and 'target' in record
-            and record['target'] == store.origin_target(ident)):
-        result = project['mode']
-    return result
-
-
-def write_refused(ident):
-    """A reason the overlay may not be written now, else None. While a lease is live only an `open` repository may
-    write it; an unreadable lease, data root or mode fails closed."""
-    try:
-        import away_lease
-        live = away_lease.live_lease(time.time())
-    except Exception:
-        return 'the away lease state cannot be read'
-    if live is None:
-        return None
-    try:
-        return None if mode(ident) == 'open' else 'an away lease is live in strict mode; stop it first'
-    except Exception:
-        return 'the afk mode of this repository cannot be read while a lease is live'
 
 
 def ensure_excluded(ident):

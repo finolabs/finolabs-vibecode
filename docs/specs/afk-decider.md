@@ -2,6 +2,8 @@
 
 Status: in progress; owner direction and decisions 18/11/2026; code for A to D and decisions 1 to 4 and 6 lands in 0.3.3, decision 5 (dropping the syntax allowlist and the general argv classification) is parked and left out of 0.3.3 (19/11/2026), because it redefines `strict` mode and the rules a live lease runs on. It changes [afk-autonomy.md](afk-autonomy.md), [afk-per-project.md](afk-per-project.md) and [away-decisions.md](away-decisions.md) where they say who blocks and when an agent may stop; where they disagree, this document wins from the release that ships its code.
 
+Since 0.3.3 afk has one mode, and [afk-one-mode.md](afk-one-mode.md) (owner decisions, 19/11/2026) wins where this document disagrees: it removes `strict` and with it `merge: decide` (decision 3) and the stop hook's repository-limit escape; decision 5 (the strict syntax allowlist, pull request 370, closed unmerged) is superseded.
+
 ## Why
 
 Owner direction, 18/11/2026: blocking is the native harness's job, and afk's job is autonomy. Claude Code already blocks through permission rules and auto mode, and Codex through its sandbox and approval policy. Agents in auto mode do most of the work themselves, but they still stop to wait for the user to decide or approve something. While the user is away, afk must be the decider that settles those stops in the user's place, within what the user authorized.

@@ -1,57 +1,37 @@
 #!/usr/bin/env python3
 """Local afk lease, action classification and private action log; no execution.
 
-Rule table (each row names its enforcer; unknown input fails closed unless a recorded away decision approved that exact
-request, row `decided` below):
+afk has one mode (owner decision, 19/11/2026; docs/specs/afk-one-mode.md): `check` refuses only the credential floor
+and the default-branch guard when it is on, and answers Tier 1 for everything else. Blocking anything more is the
+host's job (its permission rules and auto mode, the native deny rules setup offers, its sandbox).
+
+Rule table (each row names its enforcer; unknown input fails closed):
 
 | Rule | Enforcer |
 | --- | --- |
-| Setup is one canonical ## afk key/value section (an older ## Autopilot heading is not read); Merge has no default, hours are 1..24 | settings, start |
+| Setup is one canonical ## afk key/value section (an older ## Autopilot heading is not read): Hosts, Lease hours (1..24), Quota floor percent, the two guards and the excerpt consent; a retired line (Mode, the three limits and every other line only `strict` read) is not read, and `start` prints one fixed line for `Mode: strict` and one for the limits | settings, start |
 | State stays outside Git, private (directories 0700/files 0600), no links, atomic and serialized | private_folder, read_private, write_private, data_root, flock |
 | One live lease for the machine; a second start reports it and changes nothing; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
-| Missing/expired/stopped/changed setup denies every check and adds one fixed `end` line telling the caller to stop its loop; limits are counted per project (the full identity digest, or one shared `unknown` entry, at most 64): spent runs or runtime minutes since the project's first reserved action say `spent`, the project's rolling-hour cap or a full project table says `limit`, and neither ends the lease for other projects | lease_guard, project_limit, check |
-| Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release (with `--repo` equal to the verified target) and npm/pnpm publish forms whose every applicable category is `decide`, a deploy matching a non-production target exactly with no production or live word, and a deploy equal to this repository's `production-targets` entry with `production` in its `decide`; a project `decide` list replaces the user's categories, the strict and no-repository states close them all; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
-| Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
-| The ladder's two forms: this install's judge.py at the away-evaluation site with validated options or its check-table on a brief file, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper), and whose model is one models.md lists as that family's frontier or strong tier and, for a Claude coordinator, not a Claude model through Antigravity; the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, table_path, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
+| Missing/expired/stopped/changed setup denies every check and adds one fixed `end` line telling the caller to stop its loop; Lease hours is the only limit | lease_guard, check |
+| The credential floor: a request that changes a credential or reads, prints, copies or sends a secret or key is `floor` (Tier 3), read from every command of the argv, inline code, text values and body files | open_verdict, floored, floor_hit, floor_command, floor_path, text_floor, body_secret |
+| With `Default branch: guard`: a commit on, or a push to, the default branch, every force, delete and mirror push, an unresolved destination and a git alias are `guarded` (Tier 3) | open_verdict, guard_hit, branch_context, git_config_values |
+| Everything else is Tier 1 (`allowed`); a parser error answers `unsafe` (Tier 3) | open_verdict, classified |
+| A repository's approved, bound `third-party-instructions` and `default-branch` keys replace the user values in that repository; any doubt keeps the user values; retired repository keys are not read | effective, project_store.autopilot_binding, project_store.bound |
+| `effective` prints the lease state, the repository context and the two guards read-only | show_effective |
+| `rules` prints this table with the floor and guard data as Markdown (`skills/afk/references/rules.md`); it reads no file | rules |
+| An allowed `gh pr merge` check with `--match-head-commit` records its pin with the verified repository; `log --kind merge --head` needs exactly one pin of this lease for that number and head | check, merge_pin, merge_pins, log |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
-| Hard names (credentials/env/key names, .git, .github, .claude, .codex, git hook names, host/lease/log state) are Tier 3 anywhere in argv or paths; soft names (hooks, settings, config, setup, SKILL.md, CLAUDE.md, AGENTS.md) too, except in a source path of this check's own checkout on a non-default work branch with Push and pull requests or Merge yes, and never inside this install; the one exact script path of this install's own trusted wrapper is spared (the install may lie under ~/.claude or ~/.codex) | protected, own_wrapper_index, source_mode |
-| An argv path operand inside a checkout of this repository (its own, the main checkout or a linked worktree `project_store.identity` validates; never a lexical .claude/worktrees allow) is judged by its path relative to that checkout's root; `git -C <folder>` is judged as the same command run in that folder | token_protected, checkout_of, check |
-| Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper), and so is every path, read from the check's folder, in this install's own checkout on every branch (the checkout `project_store.identity` validates for it is the plugin root, so its linked worktrees stay editable); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3; a git verb that changes a work tree, index or HEAD (not `worktree add` of a new own worktree or `worktree remove` of another worktree) is protected when it would run in that checkout, by its folder or `git -C` | classify_paths, token_protected, install_owned, WORK_TREE_VERBS |
-| On a non-default work branch with Push and pull requests or Merge yes, a source path (skills/**, scripts/**, top-level CLAUDE.md and AGENTS.md, .<host>-plugin/*.json) of this check's own checkout is a known path, enforcer scripts included; the default branch, this install's own checkout and the hard names stay Tier 3 | source_mode, source_path, classify_paths |
-| Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
-| Git add of allowed paths, commit on a work branch (a commit on the default branch, a detached head or an unreadable branch is protected or unknown), origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
-| A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
-| One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
-| The project values (five, plus the three limits) start strict, where the user limits apply; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
-| PR merge/create/edit/comment need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
-| Title and body values of PR create/edit/comment, and `git commit -m` messages, are data (one exact `fnl-router` line included): newlines, tabs and a leading `-` pass; other controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny; a review gate marker (`<!--`, optional space, `fnl-`) is `forbidden`; a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` (gh) or `-F` (git commit) must be a regular file of at most 64 KiB inside the check's own checkout, outside the data root, with no link from that root down, whose text passes the control, marker, secret and path screens, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, file_place, body_file, pr_text, commit_text |
-| With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository whose HEAD is a full SHA a `log --kind merge --pr <number> --head` entry of this lease recorded for this repository's verified target, itself refused unless an allowed `gh pr merge` check of this lease pinned that number and head (never forced, the main checkout, the current checkout or a worktree holding this install) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, head_commit, merged_heads, branch_delete, tracked_remove |
-| `git worktree add -b <branch> <path> [origin/<default>]` is Tier 1 when the path is a new folder directly under the main checkout's `.claude/worktrees` (a plain, unprotected name; no link at `.claude` or `.claude/worktrees`), the one token spared the lexical check, and the branch passes `new_branch` | own_worktree_path, own_worktree_index, worktree_add |
-| `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
-| `rules` prints this table with the mode, floor, guard and strict data as Markdown (`skills/afk/references/rules.md`); it reads no file | rules |
-| The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
-| Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
-| PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA (other options: a long method flag, --delete-branch, --repo, and one plain email address for --author-email or -A) and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`); its pin names the repository and is written before the action is reserved (a full log answers `log-unwritable`) | classify_argv, check |
-| Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run`, `run --changed [--base <branch or commit>]` (no relative revision) or `run --dispatch <dispatch id>` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
-| Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
-| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
 | `--approve-request <digest>` on a rule, advisor or host attempt settled on option 1 stores a permission approval for the afk permission hook (away_lease.record_permit: 64-hex digest, live lease, used once within 30 minutes); `check` never reads or consumes it | log, permit_subject |
-| `log --kind idle` needs a live lease; `--session` belongs to idle and parked and is stored as the first 16 hex of its SHA-256 | log, check |
-| A repository's approved `merge: decide` applies as Merge yes there under any lease; `effective` shows `merge_authority` | effective, show_effective |
+| `log --kind idle` needs a live lease; `--session` belongs to idle and parked and is stored as the first 16 hex of its SHA-256 | log |
 | `start` prints the native allow rules for the lease commands and warns when Claude Code's default config folder and this folder's project settings hold no floor deny rule and no asking approval mode (reads only `permissions.deny` and `permissions.defaultMode`) | native_notice, claude_permissions |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
-| Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
+| The third-party instructions guard, trusted authors, the merge gate, quota readings and actually calling check before execution remain caller obligations | agent judgment, advisory |
 
-A Tier 1 answer is a classification, not proof that a PR passed the full merge
-gate or that its author is trusted. This script has no author input and never
-checks out/tests a PR. It never executes argv, reads credentials, reads the
-process environment, or persists argv/paths/settings contents. The live tick,
-quota probe, scheduler, notices and host backstop are outside this first part.
-Counters are reservations, not evidence that a command ran. Setup changes need
-a new lease. There is no long-lived process. `check` classifies; it cannot
-guarantee that a later command runs with the same working directory, metadata or
-environment.
+A Tier 1 answer is a classification, not proof that a PR passed the merge gate or that its author is trusted. This
+script never executes argv, reads credentials, reads the process environment, or persists argv/paths/settings
+contents. Setup changes need a new lease. There is no long-lived process. `check` classifies; it cannot guarantee
+that a later command runs with the same working directory, metadata or environment.
 """
 import argparse
 from contextlib import contextmanager
@@ -78,54 +58,31 @@ import data_root as dr
 import parallel_slots as slots
 import project_store as store
 import secret_patterns
-from away_lease import finite, merge_receipts, permits_lock, private_info, read_lease, read_private  # the one safe lease reader
+from away_lease import finite, permits_lock, private_info, read_lease, read_private  # the one safe lease reader
 import afk_overlay  # the owner-approved overlay of repository rules (docs/specs/afk-overlay.md)
 
-DEFAULTS = {'Hosts': 'Claude Code', 'Task choice': 'choose', 'Push and pull requests': 'yes',
-            'Trusted authors': 'own', 'Lease hours': 8, 'Max runs': 20,
-            'Max runtime minutes': 480, 'Max actions per hour': 30, 'Quota floor percent': 15}
-# Closed categories of docs/specs/away-decisions.md "Where it must stop": name -> fixed at stop.
-# Setup writes each starting choice; a missing or unknown value, and any value of a fixed row, is stop.
-CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecoverable deletion': False,
-              'Messages outside the repository': False, 'Tags and releases': False, 'Publishing': False,
-              'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
+# Defaults of the numeric lines; a missing line takes its default.
+DEFAULTS = {'Hosts': 'Claude Code', 'Lease hours': 8, 'Quota floor percent': 15}
 CONSENT = 'Excerpts leave the machine'
-# docs/specs/afk-autonomy.md A and C: the lease mode and the two guards of `open`; a missing line is the default.
-MODE = 'Mode'
+# docs/specs/afk-autonomy.md C: the two guards; a missing line is `guard`.
 THIRD_PARTY = 'Third-party instructions'
 DEFAULT_BRANCH = 'Default branch'
-CHOICES = {MODE: ('open', 'strict'), THIRD_PARTY: ('guard', 'open'), DEFAULT_BRANCH: ('guard', 'open')}
-# The other closed values `settings()` reads, and the apps a `Hosts` line may name.
-VALUE_CHOICES = {'Task choice': ('choose', 'listed'), 'Push and pull requests': ('yes', 'no'), 'Merge': ('yes', 'no'),
-                 'Trusted authors': ('own',)}
+CHOICES = {THIRD_PARTY: ('guard', 'open'), DEFAULT_BRANCH: ('guard', 'open')}
 AFK_HOSTS = {'Claude Code', 'Codex', 'Antigravity'}
-TARGETS = 'Non-production targets'
-PRODUCTION_TARGETS = 'Production targets'  # exact production deploys; Production itself is decided only per repository
-TEST_COMMANDS = 'Test commands'  # exact test commands (docs/specs/afk-per-project.md F)
-FILES = 'Top-level files'  # exact top-level file names that become known paths
-RELEASE_TARGETS = 'Release targets'  # exact tag, release and publish commands (docs/specs/afk-per-project.md G)
-# The command and file lists load like environment variables (owner decision 15/11/2026): the host.md value is the
-# default for every repository, a repository's own value replaces it, and the strict and no-repository states use none.
-LISTS = {PRODUCTION_TARGETS: 'production-targets', TEST_COMMANDS: 'test-commands', FILES: 'top-level-files',
-         RELEASE_TARGETS: 'release-targets'}
-CLASSIFIED = {'git', 'gh', 'rm'}  # programs check classifies itself, so a test-command entry never names them
-# A repository's `decide` list names categories by these keys; every category it does not list is stop there.
-DECIDE_NAMES = {'production': 'Production', 'unrecoverable-deletion': 'Unrecoverable deletion',
-                'messages-outside-the-repository': 'Messages outside the repository',
-                'tags-and-releases': 'Tags and releases', 'publishing': 'Publishing', 'shared-settings': 'Shared settings',
-                'recoverable-deletion': 'Recoverable deletion', 'repository-comments': 'Repository comments'}
-HOST_FAMILIES = {'Claude Code': 'claude', 'Codex': 'codex', 'Antigravity': 'antigravity', 'ZCode': 'zcode'}
+# Lines only the removed `strict` mode read (docs/specs/afk-one-mode.md): a setup written before 0.3.3 may still hold
+# them; they are not read, whatever their value, and only `start` mentions two of them.
+MODE = 'Mode'
+LIMITS = ('Max runs', 'Max runtime minutes', 'Max actions per hour')
+RETIRED = {MODE, *LIMITS, 'Task choice', 'Push and pull requests', 'Merge', 'Trusted authors', 'Production',
+           'Real users and customer data', 'Unrecoverable deletion', 'Messages outside the repository',
+           'Tags and releases', 'Publishing', 'Shared settings', 'Recoverable deletion', 'Repository comments',
+           'Non-production targets', 'Production targets', 'Test commands', 'Top-level files', 'Release targets'}
+STRICT_REMOVED = ('afk: `strict` was removed in 0.3.3; the Mode line is no longer read and this lease runs the one afk '
+                  'mode. Write a host deny rule for anything that must stay forbidden while you are away.')
+LIMITS_REMOVED = ('afk: Max runs, Max runtime minutes and Max actions per hour were removed in 0.3.3 and are no longer '
+                  'read; Lease hours still ends the lease.')
 PROGRAMS = {'claude': 'claude', 'codex': 'codex', 'antigravity': 'agy', 'zcode': 'zcode'}
 MODEL = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,79}')
-# The frontier and strong rows of `delegate` references/models.md, the only advisor models (a test keeps them equal);
-# an unknown or fast-tier model is denied. Antigravity's `*` is its low, medium and high suffixes.
-_EFFORTS = ('low', 'medium', 'high')
-ADVISOR_MODELS = {
-    'claude': frozenset({'claude-opus-5-5', 'claude-fable-5-1', 'claude-sonnet-5-5'}),
-    'codex': frozenset({'gpt-6-astra', 'gpt-6.1-sol'}),
-    'antigravity': frozenset(f'{base}-{effort}' for base in ('claude-opus-5-5', 'gemini-4-argon', 'claude-sonnet-5-5')
-                             for effort in _EFFORTS),
-}
 LABEL = re.compile(r'[A-Za-z0-9._-](?:[A-Za-z0-9 ._-]{0,58}[A-Za-z0-9._-])?')
 DECISION_ID = re.compile(r'q[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')
 DISPATCH_ID = re.compile(r'd[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')
@@ -139,8 +96,7 @@ ATTEMPTS = {('rule', 'yes'): ({'by', 'option', 'of'}, set()), ('rule', 'no'): ({
             ('host', 'yes'): ({'by', 'option', 'of', 'model'}, set()), ('park', 'yes'): ({'by'}, set())}
 # Who made the evaluation table: Jev, or the host's small fast model when Jev is absent or failed.
 TABLE_SOURCES = ('jev', 'host-small')
-NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
-           'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
+NUMBERS = {'Lease hours': (1, 24), 'Quota floor percent': (0, 100)}
 KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3, 'idle': 2,
          'run-start': 1, 'run-finish': 1, 'merge': 1, 'review-fallback': 1, 'error': 3}
 # A Claude Code session id as the session-start hook prints it; the log keeps only the first 16 hex of its SHA-256,
@@ -150,67 +106,44 @@ ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,39}')
 SHA = re.compile(r'[0-9a-f]{40}')
 SHA256 = re.compile(r'[0-9a-f]{64}')
 BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
-ROOTS = {'src', 'lib', 'app', 'tests', 'docs', 'scripts', 'skills'}
-DOCUMENTS = {'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'}  # top-level documentation files that are known paths
-# The project-scoped keys of settings.json `autopilot` and their host.md names; broken project settings turn them off.
-PROJECT_KEYS = {'mode': MODE, 'third-party-instructions': THIRD_PARTY, 'default-branch': DEFAULT_BRANCH,
-                'task-choice': 'Task choice', 'push-and-pull-requests': 'Push and pull requests', 'merge': 'Merge',
-                'trusted-authors': 'Trusted authors', 'max-runs': 'Max runs',
-                'max-runtime-minutes': 'Max runtime minutes', 'max-actions-per-hour': 'Max actions per hour'}
-MAX_PROJECTS = 64  # entries in the lease's per-project counter table
-OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
-# The strict and no-repository states also reset every category to stop and both target lists to empty.
-CLOSED = {**{c: 'stop' for c in CATEGORIES}, TARGETS: [], **{name: [] for name in LISTS}}
+# The project-scoped keys of settings.json `autopilot` that are still read, and their host.md names. Older approved
+# settings may hold retired keys (`mode`, the limits and the rest); they stay valid there and are not read.
+PROJECT_KEYS = {'third-party-instructions': THIRD_PARTY, 'default-branch': DEFAULT_BRANCH}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
-MERGE_OK = 'Merge receipts'  # the (target, number, head) MERGE OK receipts merge_check.py wrote in this lease
-MERGE_AUTHORITY = 'Merge authority'  # `decide` when this repository's approved settings record `merge: decide`
-MERGED = 'Merged heads'  # the applied-settings entry holding the heads this lease's `log --kind merge` entries recorded
-EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
 MAX_LOG = 8 * 1024 * 1024
-ENFORCERS = {'afk.py','data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
-             'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
-             'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
-             'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
-             'away_lease.py', 'away_gate_hook.py', 'afk_stop_hook.py', 'afk_permit_hook.py', 'project_store.py', 'project_progress.py', 'afk_overlay.py'}
-ENFORCERS = {name.casefold() for name in ENFORCERS}  # case-insensitive filesystems name one file many ways
-
 
 def now():
     return time.time()
 
 
-def settings():
+def read_settings():
+    """(settings, notices) of the `## afk` section: the values `check` reads and the fixed lines `start` prints for
+    retired lines it found."""
     text = dr.read_data('host.md', slots.HOST_LIMIT).decode('utf-8')
     start, body, end = slots.host_section(text, 'afk')
     if start == body == end:
         raise ValueError('afk setup is missing')
-    result, seen = {**DEFAULTS, MODE: 'open', THIRD_PARTY: 'guard', DEFAULT_BRANCH: 'guard',
-                    **{c: 'stop' for c in CATEGORIES}, CONSENT: 'no', TARGETS: [],
-                    **{name: [] for name in LISTS}}, set()
+    result, seen, notices = {**DEFAULTS, THIRD_PARTY: 'guard', DEFAULT_BRANCH: 'guard', CONSENT: 'no'}, set(), []
     for line in text[body:end].splitlines():
         if not line.strip():
             continue
         match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)
-        if not match or match[1] not in {*DEFAULTS, 'Merge', *CHOICES, *CATEGORIES, CONSENT, TARGETS, *LISTS} or match[1] in seen:
+        if not match or match[1] not in {*DEFAULTS, *CHOICES, CONSENT, *RETIRED} or match[1] in seen:
             raise ValueError('afk setup is invalid')
         key, value = match.groups()
         seen.add(key)
-        if key in LISTS:
-            # The same closed grammar as a repository's list; an invalid line fails the setup, never half-read.
-            value = value.split('; ')
-            if not store.valid_autopilot({LISTS[key]: value}):
-                raise ValueError('afk setup has an invalid list')
-        elif key in CATEGORIES:
-            value = 'decide' if value == 'decide' and not CATEGORIES[key] else 'stop'
-        elif key in CHOICES:
+        if key in RETIRED:
+            # Not read (decisions 3 and 4 of docs/specs/afk-one-mode.md); only these two get a line at start.
+            if key == MODE and value == 'strict' and STRICT_REMOVED not in notices:
+                notices.append(STRICT_REMOVED)
+            elif key in LIMITS and LIMITS_REMOVED not in notices:
+                notices.append(LIMITS_REMOVED)
+            continue
+        if key in CHOICES:
             if value not in CHOICES[key]:
                 raise ValueError('afk setup has an invalid choice')
         elif key == CONSENT:
             value = 'yes' if value == 'yes' else 'no'
-        elif key == TARGETS:
-            entries = value.split('; ')
-            # Exact commands only; one unreadable entry empties the list, so every deploy fails closed to a person.
-            value = entries if all(0 < len(e) <= 200 and e == e.strip() and e.isprintable() for e in entries) else []
         elif key in NUMBERS:
             lower, upper = NUMBERS[key]
             if not re.fullmatch(r'[0-9]{1,5}', value) or not lower <= int(value) <= upper:
@@ -220,24 +153,16 @@ def settings():
             hosts = value.split(', ')
             if len(hosts) != len(set(hosts)) or not set(hosts) <= AFK_HOSTS:
                 raise ValueError('afk setup has invalid hosts')
-        elif value not in VALUE_CHOICES[key]:
-            raise ValueError('afk setup has an invalid choice')
         result[key] = value
-    if 'Merge' not in seen:
-        # In `open` the Merge answer is ignored, so it may be absent; a repository that sets `strict` then reads no.
-        if result[MODE] != 'open':
-            raise ValueError('afk setup needs an explicit Merge answer')
-        result['Merge'] = 'no'
-    return result
+    return result, notices
+
+
+def settings():
+    return read_settings()[0]
 
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-
-
-def permits(categories, applied):
-    """Precedence row 3: an action goes on only when every category that applies to it is `decide`."""
-    return bool(categories) and all(applied.get(c) == 'decide' for c in categories)
 
 
 def write_private(folder, name, raw):
@@ -272,7 +197,7 @@ def save_lease(folder, lease):
 
 
 def start(folder, args):
-    applied = settings()
+    applied, notices = read_settings()
     hours = applied['Lease hours']
     if args.hours is not None:
         if not re.fullmatch(r'[0-9]{1,2}', args.hours) or not 1 <= int(args.hours) <= hours:
@@ -289,22 +214,25 @@ def start(folder, args):
               'Nothing was changed: work under it (check before each action, Decide for every question).')
         print(afk_overlay.lines(os.getcwd()), end='')
         return
-    lease = dict(id=uuid.uuid4().hex, start=current, expiry=current + hours * 3600,
-                 settings_hash=digest(applied), counters={})
+    lease = dict(id=uuid.uuid4().hex, start=current, expiry=current + hours * 3600, settings_hash=digest(applied))
     save_lease(folder, lease)
     try:
         os.unlink('stop', dir_fd=folder)
     except FileNotFoundError:
         pass
-    summary = {MODE: applied[MODE], **applied, 'Lease hours': hours,
-               **{name: '; '.join(applied[name]) or 'none' for name in (TARGETS, *LISTS)}}
+    summary = {THIRD_PARTY: applied[THIRD_PARTY], DEFAULT_BRANCH: applied[DEFAULT_BRANCH], 'Lease hours': hours,
+               'Hosts': applied['Hosts'], 'Quota floor percent': applied['Quota floor percent'],
+               CONSENT: applied[CONSENT]}
     print('afk started\n' + '\n'.join(f'- {key}: {value}' for key, value in summary.items()))
-    # The summary above is the account's; the repository of this folder may apply other rules (U3 of the afk UAT).
+    # Decisions 3 and 4 of docs/specs/afk-one-mode.md: a retired line is named once, then the lease starts as usual.
+    for line in notices:
+        print(line)
+    # The summary above is the account's; the repository of this folder may apply its own guards (U3 of the afk UAT).
     here = effective(applied, os.getcwd())
-    rules = repository_rules(here)
     print(f'This folder ({here[CONTEXT].state}): ' + '; '.join(
-        f'{key}: {", ".join(map(str, value)) or "none"}' if isinstance(value, list) else f'{key}: {value}'
-        for key, value in rules.items()) + '. Run `effective` in each repository you work in.')
+        f'{key}: {value}' for key, value in repository_rules(here).items()) + '. Run `effective` in each repository you work in.')
+    for line in here['Retired']:
+        print(line)
     print(native_notice(os.getcwd()), end='')
     print(afk_overlay.lines(os.getcwd()), end='')
 
@@ -407,147 +335,17 @@ def lease_guard(folder, current):
     return None, lease, applied
 
 
-def project_key(context):
-    """The lease counter key of a check's context: the full identity digest of its main checkout, else `unknown`."""
-    if context.repository == 'found' and context.ident is not None:
-        return store.identity_digest(context.ident.main)
-    return 'unknown'
-
-
-def project_limit(lease, applied, current):
-    """(code, key, entry) for the project of `applied`'s context: code is None while its limits allow an action.
-
-    Spent runs or runtime minutes never come back before the lease ends (`spent`); the rolling-hour cap does
-    (`limit`). A new project beyond the table's size is `limit`. The entry is a copy; `check` stores it on Tier 1."""
-    key = project_key(context_of(applied))
-    table = lease['counters']
-    entry = dict(table.get(key) or dict(runs=0, actions=0, hour_actions=[], first=None))
-    if key not in table and len(table) >= MAX_PROJECTS:
-        return 'limit', key, entry
-    if any(t > current for t in entry['hour_actions']) or entry['first'] is not None and entry['first'] > current:
-        return 'limit', key, entry
-    entry['hour_actions'] = [t for t in entry['hour_actions'] if current - 3600 < t <= current]
-    if (entry['runs'] >= applied['Max runs']
-            or entry['first'] is not None and (current - entry['first']) / 60 >= applied['Max runtime minutes']):
-        return 'spent', key, entry
-    if len(entry['hour_actions']) >= applied['Max actions per hour']:
-        return 'limit', key, entry
-    return None, key, entry
-
-
-# Protected names that live config, state, credentials or Git internals use: Tier 3 everywhere.
-HARD = {'.github', '.git', '.ssh', '.aws', '.gnupg', '.claude', '.codex', '.agents',
-        'claude.local.md', 'agents.override.md', 'gemini.md', 'host.md', 'lease.json', 'log.jsonl', 'root.json', 'stop',
-        '.netrc', '.npmrc', '.pypirc', 'id_rsa', 'id_ed25519', 'pre-commit', 'pre-push', 'commit-msg', 'post-commit',
-        'prepare-commit-msg', 'post-checkout', 'post-merge'}
-# Names the plugin's own source also uses; a source path on a work branch is spared them (`source_path`).
-SOFT = {'claude.md', 'agents.md', 'skill.md', 'settings', 'config', 'hooks'}
-SOFT_PREFIXES = ('settings.', 'config.', 'setup.', 'hooks.')
-# The plugin's own source in a repository, relative to its checkout root: editable on a work branch.
-SOURCE = re.compile(r'(?:skills|scripts)/[A-Za-z0-9_./-]+|\.[a-z0-9]+-plugin/[A-Za-z0-9_.-]+\.json|CLAUDE\.md|AGENTS\.md')
-# A Markdown skill repository the user approved (`skill-repository: yes`): its root SKILL.md and these folders.
-SKILL_SOURCE = re.compile(r'SKILL\.md|(?:references|evals|scripts)/[A-Za-z0-9_./-]+')
-SKILL_REPO = 'Skill repository'  # the applied-settings entry set only by an approved project `skill-repository`
-
-
-def protected(value, source=False):
-    """Lexical check before command parsing; examine ref:path and --option=path too. `source` spares the soft names."""
-    original = value
-    value = value.lower().replace('\\', '/')
-    parts = re.split(r'[/:=\s]+', value)
-    exact = HARD if source else HARD | SOFT
-    # The afk overlay and its backups, and the Spec Kit constitution: protected in strict (open never reaches here).
-    prefixes = ('.env', 'credentials', 'secrets', 'agents.afk.md') + (() if source else SOFT_PREFIXES)
-    if constitution(value) or any(p.startswith('agents.afk.md') for p in re.split(
-            r'[/:=\s]+', unicodedata.normalize('NFKC', original).casefold())):
-        return True  # NFKC and casefold, as APFS folds names (`ſ` is `s`)
-    return any(p in exact or p.startswith(prefixes)
-               or p.endswith(('.pem', '.key', '.p12', '.pfx', '.env'))
-               or 'credential' in p or re.search(r'(?:^|[_.-])(?:token|password|secret)(?:[_.-]|$)', p)
-               for p in parts) or bool(secret_patterns.PREFIX.search(original)) or any(
-                   secret_patterns.NAME.fullmatch(p) and secret_patterns.SENSITIVE.search(p)
-                   for p in re.split(r'[=:\s]+', value.upper()))
-
-
-CONSTITUTION = '.specify/memory/constitution.md'
-
-
-def constitution(value):
-    """True when a path, or the last path in an option or ref token, normalizes to the Spec Kit constitution."""
-    last = re.split(r'[:=\s]+', unicodedata.normalize('NFKC', value).casefold().replace('\\', '/'))[-1]
-    normal = os.path.normpath(last).replace('\\', '/') if last else ''
-    return normal == CONSTITUTION or normal.endswith('/' + CONSTITUTION)
-
-
-def plugin_code(name, base=None):
-    """True for any path inside this install's script folders, so a new module cannot join a trusted import namespace.
-    A work branch's copy of those scripts in another checkout is a different path and is not covered."""
-    try:
-        full = os.path.abspath(os.path.join(base or os.getcwd(), name)).casefold()
-        base = Path(__file__).resolve().parent.parent.parent
-        # Both the lexical folder and, for a linked sibling skill, the checkout it resolves to hold trusted modules.
-        folders = {folder for scripts in base.glob('*/scripts') for folder in (scripts, scripts.resolve())}
-        return any(full == str(folder).casefold() or full.startswith(str(folder).casefold() + os.sep)
-                   for folder in folders)
-    except (OSError, ValueError):
-        return True
-
-
-def install_root():
-    """The running install's plugin root: the folder that holds `skills/delegate/scripts/afk.py`."""
-    return Path(__file__).resolve().parents[3]
-
-
-def install_owned(name, base=None):
-    """True when a path read from `base` lies in this install's own checkout, on every branch: the checkout
-    `project_store.identity` validates for it (by its nearest existing folder, lexical and resolved) is the install
-    root itself, so a linked worktree of the install's repository, even under its `.claude/worktrees`, is not. With
-    no validated identity, a path under the install root is owned. On doubt, True. Link and folder metadata only."""
-    try:
-        install = str(install_root()).casefold()  # a case-insensitive filesystem names one folder many ways
-        full = Path(os.path.abspath(os.path.join(base or os.getcwd(), name)))
-        folder = full
-        while not os.path.lexists(folder) and folder != folder.parent:
-            folder = folder.parent
-        for candidate in {folder, Path(os.path.realpath(folder))}:
-            if not candidate.is_dir() or candidate.is_symlink():
-                candidate = candidate.parent
-            found, ident = store.identity(str(candidate))
-            if found == 'found':
-                if os.path.realpath(ident.checkout).casefold() == install:
-                    return True
-            else:
-                real = os.path.realpath(candidate).casefold()
-                if real == install or real.startswith(install.rstrip(os.sep) + os.sep):
-                    return True
-        return False
-    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
-        return True
-
-
-def path_operand(token, base=None):
-    """True when an argv token reads as a path: absolute, existing from `base`, or a relative name with a slash whose
-    first component exists there. Revisions, branch names, numbers and placeholders are not paths."""
-    if not plain(token) or token.startswith('-') or len(token) > 4096:
-        return False
-    if os.path.isabs(token):
-        return True
-    base = base or os.getcwd()
-    return os.path.lexists(os.path.join(base, token)) or (
-        '/' in token and os.path.lexists(os.path.join(base, token.split('/')[0])))
-
-
 class Context(NamedTuple):
     """The policy context of one check: how the repository resolved, its validated identity, which values apply and
     the GitHub repository a mutation may name (None: no GitHub mutation or push qualifies)."""
     repository: str  # found, absent or unknown
     ident: object  # project_store.Identity when found, else None
-    state: str  # user, project, strict or no-repository
+    state: str  # user, project, unknown or no-repository
     target: object  # 'github.com/<owner>/<name>' or None
     cwd: object = None  # the folder operands are read from (the working directory, or a checked `git -C` folder)
 
 
-UNKNOWN = Context('unknown', None, 'strict', None)
+UNKNOWN = Context('unknown', None, 'unknown', None)
 
 
 def context_of(applied):
@@ -555,225 +353,43 @@ def context_of(applied):
     return found if isinstance(found, Context) else UNKNOWN
 
 
-def screened_lists(applied, project):
-    """The four command and file lists for one found repository: its own value when it has one, else the user's
-    (a list replaces, never merges), each screened as `check` reads it."""
-    lists = {name: list(project[key]) if key in project else list(applied.get(name, []))
-             for name, key in LISTS.items()}
-    lists[TEST_COMMANDS] = [c for c in lists[TEST_COMMANDS] if c.split(' ')[0] not in CLASSIFIED]
-    lists[FILES] = [f for f in lists[FILES] if '/' not in f and not protected(f)]
-    return lists
-
-
 def effective(applied, cwd):
-    """The project-scoped values (five, plus the three limits, which keep the user values in the strict state) and the repository context of one check (docs/specs/autopilot.md "Project scope").
+    """The two guards and the repository context of one check (docs/specs/afk-one-mode.md).
 
-    Starts from the strict vector and leaves it only once each prerequisite holds: a validated identity
-    (`project_store.identity`), then either a positively absent approval (user values, no extra roots) or approved
-    settings whose `autopilot` object is valid, whose approval record carries this identity's full main checkout
-    digest (`project_store.bound`; the short code only names the file) and whose recorded origin binding equals the
-    origin read now (explicit project values replace user values, omitted keys inherit). Unknown identity, an
-    unreadable or unbound approval, a digest mismatch, invalid settings, a changed origin or any error keeps the whole
-    strict vector. Positively no repository
-    keeps the user values with no context to act on, so no repository mutation qualifies. Read on every check, never
-    stored in the lease.
-    """
-    # A strict context keeps the check's folder, so the work-tree gate never falls back to the process's own cwd.
-    strict = {**applied, **OFF, **CLOSED, CONTEXT: UNKNOWN._replace(cwd=cwd if isinstance(cwd, str) else None)}
+    The user values apply unless a validated identity (`project_store.identity`) has approved settings whose
+    `autopilot` object is valid, whose approval record carries this identity's full main checkout digest
+    (`project_store.bound`) and whose recorded origin binding equals the origin read now: then its
+    `third-party-instructions` and `default-branch` keys replace the user values key by key. Any doubt keeps the user
+    values. Retired keys are not read; `start` names a repository's `mode: strict` and limit keys. Read on every
+    check, never stored in the lease."""
+    result = {**applied, CONTEXT: UNKNOWN._replace(cwd=cwd if isinstance(cwd, str) else None), 'Retired': []}
     try:
         cwd = str(cwd)
         found, ident = store.identity(cwd)
         if found == 'absent':
-            return {**applied, **CLOSED, 'Roots': [], CONTEXT: Context('absent', None, 'no-repository', None, cwd)}
+            return {**result, CONTEXT: Context('absent', None, 'no-repository', None, cwd)}
         if found != 'found':
-            return strict
+            return result
         state, values, _, record = store.autopilot_binding(ident)
         target = store.origin_target(ident)
-        if state == 'unset' or state == 'approved' and 'autopilot' not in values:
-            return {**applied, 'Roots': [], **screened_lists(applied, {}),
-                    CONTEXT: Context('found', ident, 'user', target, cwd)}
+        result[CONTEXT] = Context('found', ident, 'user', target, cwd)
         project = values.get('autopilot') if state == 'approved' else None
-        if (not store.valid_autopilot(project) or 'target' not in record or record['target'] != target
-                or not store.bound(record, ident)):
-            return {**strict, CONTEXT: Context('found', ident, 'strict', None, cwd)}
-        result = dict(applied)
+        if (project is None or not store.valid_autopilot(project) or 'target' not in record
+                or record['target'] != target or not store.bound(record, ident)):
+            return result
         for key, name in PROJECT_KEYS.items():
             if key in project:
                 result[name] = project[key]
-        if result.get('Merge') == 'decide':
-            # The standing per-repository record (decision 3): merges here as with Merge yes, under any lease.
-            result['Merge'], result[MERGE_AUTHORITY] = 'yes', 'decide'
-        result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
-        result[SKILL_REPO] = project.get('skill-repository') == 'yes'
-        if 'decide' in project:  # an explicit list, [] included, replaces the user's answers; the fixed rows stay stop
-            listed = {DECIDE_NAMES[k] for k in project['decide'] if k in DECIDE_NAMES}
-            result.update({c: 'decide' if c in listed else 'stop' for c in CATEGORIES})
-            result['Real users and customer data'] = 'stop'
-        else:
-            result['Production'] = 'stop'  # the user scope never decides production
-        if 'non-production-targets' in project:
-            result[TARGETS] = list(project['non-production-targets'])
-        result.update(screened_lists(applied, project))
+        if project.get('mode') == 'strict':
+            result['Retired'].append(STRICT_REMOVED.replace('the Mode line', "this repository's `mode` key"))
+        if any(key in project for key in ('max-runs', 'max-runtime-minutes', 'max-actions-per-hour')):
+            result['Retired'].append(LIMITS_REMOVED.replace('Max runs, Max runtime minutes and Max actions per hour',
+                                                            "This repository's max-runs, max-runtime-minutes and "
+                                                            "max-actions-per-hour keys"))
         result[CONTEXT] = Context('found', ident, 'project', target, cwd)
         return result
     except (OSError, ValueError, TypeError, UnicodeError, KeyError, RecursionError):
-        return strict
-
-
-def repository_path(name, context):
-    """A plain relative operand read from cwd, as a path relative to the checkout root of the check's validated
-    identity; None when the check has no identity, the operand is not plain or it lies outside that checkout."""
-    if (context.ident is None or not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or Path(name).is_absolute()
-            or any(p in {'', '.', '..'} for p in name.split('/'))):
-        return None
-    try:
-        return Path(os.path.abspath(os.path.join(context.cwd or os.getcwd(), name))).relative_to(context.ident.checkout)
-    except ValueError:
-        return None
-
-
-def checkout_of(token, base):
-    """(Identity, relative path) of a path operand read from `base` and lying in a checkout `project_store.identity`
-    validates (a linked worktree only in its canonical reciprocal layout); None for anything else or on doubt. No
-    component from that checkout root down to the operand may be a link. Link and folder metadata only."""
-    if (not plain(token) or len(token) > 4096 or any(c in token for c in ':=\\') or token.startswith('~')
-            or '..' in token.split('/')):
-        return None
-    try:
-        full = Path(os.path.abspath(os.path.join(base, token)))
-        folder = full
-        while not os.path.lexists(folder) and folder != folder.parent:
-            folder = folder.parent
-        if folder.is_symlink():
-            return None
-        if not folder.is_dir():
-            folder = folder.parent
-        found, ident = store.identity(str(folder))
-        if found != 'found':
-            return None
-        relative = full.relative_to(ident.checkout)
-        candidate = ident.checkout
-        for part in relative.parts:
-            candidate /= part
-            if candidate.is_symlink():
-                return None
-        return ident, relative
-    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
-        return None
-
-
-def source_path(relative, mode=True):
-    """True for the plugin's own source (`SOURCE`), judged on the path relative to its checkout root, on any work
-    branch `source_mode` allows; an approved skill repository (`mode` 'skill') adds its root SKILL.md, references/**,
-    evals/** and scripts/** (`SKILL_SOURCE`), and never a SKILL.md below the root."""
-    name = relative.as_posix()
-    if mode == 'skill':
-        if relative.name.casefold() == 'skill.md' and name != 'SKILL.md':
-            return False  # only the root SKILL.md of a skill repository, at any depth below it never
-        if SKILL_SOURCE.fullmatch(name):
-            return True
-    return bool(SOURCE.fullmatch(name))
-
-
-def source_mode(applied):
-    """Source paths are editable only on a non-default work branch with Push and pull requests or Merge yes."""
-    if applied.get('Push and pull requests') != 'yes' and applied.get('Merge') != 'yes':
-        return False
-    try:
-        current, default = branch_context(context_of(applied))
-    except (OSError, ValueError, UnicodeError):
-        return False
-    if not (current and default) or current in {default, 'main', 'master', 'trunk'}:
-        return False
-    return 'skill' if applied.get(SKILL_REPO) is True else True
-
-
-def token_protected(token, applied):
-    """The argv protected check. A path operand inside a checkout of this check's repository (its own, its main
-    checkout or a linked worktree) is judged by its path relative to that checkout's root, exactly as from inside it;
-    a source path in this check's own checkout on a work branch is spared the soft names. Everything else is lexical.
-    A path operand inside this install's own checkout (`install_owned`) is protected on every branch."""
-    context = context_of(applied)
-    base = context.cwd or os.getcwd()
-    if path_operand(token, base) and install_owned(token, base):
-        return True
-    if token.casefold().endswith('constitution.md') and context.ident is not None:
-        # Read from cwd, so `git rm constitution.md` inside .specify/memory is judged like the full path.
-        found = checkout_of(token, base)
-        if found is not None and constitution(found[1].as_posix()):
-            return True
-    if not protected(token):
-        return False
-    if context.ident is None:
-        return True
-    found = checkout_of(token, base)
-    if found is None or found[0].main != context.ident.main:
-        return True
-    ident, relative = found
-    mode = source_mode(applied)
-    own = ident.checkout == context.ident.checkout and bool(mode) and source_path(relative, mode)
-    return protected(relative.as_posix(), own)
-
-
-def no_links(path, context):
-    """True when no component from the checkout root down to the path is a link (link metadata only, never a
-    target or any file contents)."""
-    candidate = context.ident.checkout
-    for part in path.parts:
-        candidate /= part
-        if candidate.is_symlink():
-            return False
-    return True
-
-
-def classify_paths(paths, roots=(), context=UNKNOWN, source=False, files=()):
-    """Known single-file paths only. Each operand is read from cwd, then the protected, enforcer, root, document and
-    link rules apply to its path relative to the checkout root of the check's validated identity, never to the
-    operand alone, so a descendant cwd neither widens a root nor hides a protected ancestor. No identity: unknown.
-    With `source` (a work branch, `source_mode`), a `SOURCE` path is a known path spared the soft names, the
-    enforcer names and the top-level instruction files; this install's own script folders, and every path in this
-    install's own checkout (`install_owned`), stay protected on every branch."""
-    if not paths:
-        return 'unknown'
-    for name in paths:
-        if not isinstance(name, str) or install_owned(name, context.cwd):
-            return 'protected'
-        relative = repository_path(name, context)
-        if relative is not None and constitution(relative.as_posix()):
-            return 'protected'
-        own = bool(source) and relative is not None and source_path(relative, source)
-        if protected(name, own):
-            return 'protected'
-        path = Path(name)
-        if plugin_code(name, context.cwd) or not own and (
-                path.name.casefold() in ENFORCERS or path.name.upper() in slots.INSTRUCTION_FILES):
-            return 'protected'
-        if own and path.name.upper() in slots.INSTRUCTION_FILES and len(relative.parts) != 1:
-            return 'protected'  # only the top-level CLAUDE.md and AGENTS.md are source
-        if (not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or path.is_absolute()
-                or any(p in {'', '.', '..'} for p in name.split('/'))):
-            return 'unknown'
-        path = relative
-        if path is None:
-            return 'unknown'
-        if protected(path.as_posix(), own):
-            return 'protected'
-        if own:
-            if path.suffix not in EXTENSIONS:
-                return 'unknown'
-        elif len(path.parts) < 2:
-            # A repository's approved `top-level-files` name is a known path there, like the documents.
-            if path.as_posix() not in DOCUMENTS and (path.as_posix() not in files or path.suffix not in EXTENSIONS):
-                return 'unknown'
-        elif path.parts[0] not in ROOTS and path.parts[0] not in roots or path.suffix not in EXTENSIONS:
-            return 'unknown'
-        if not no_links(path, context):
-            return 'protected'
-        candidate = context.ident.checkout / path
-        # A directory operand would stage everything below it, so only single files are a known path.
-        if candidate.is_dir():
-            return 'unknown'
-    return 'allowed'
+        return {**applied, CONTEXT: UNKNOWN._replace(cwd=cwd if isinstance(cwd, str) else None), 'Retired': []}
 
 
 def options(tokens, flags=(), valued=(), *, positional=True):
@@ -846,983 +462,8 @@ def branch_context(context):
     return chain[-1], default
 
 
-def flag_operands(tail, flag):
-    """Every value given to a long `flag`, in the separate and the `=` forms."""
-    return ([tail[i + 1] if i + 1 < len(tail) else '' for i, t in enumerate(tail) if t == flag]
-            + [t[len(flag) + 1:] for t in tail if t.startswith(flag + '=')])
-
-
-def target_check(tail, context):
-    """'allowed' only for exactly one explicit `--repo github.com/OWNER/NAME` equal to the context's verified target,
-    'forbidden' for another GitHub repository, else 'unknown'. gh's implicit choice (remotes, gh-resolved, GH_REPO) is
-    never predicted: an explicit --repo takes precedence over all of them, so any form without one is Tier 3, and so
-    are the short -R spellings, other hosts, URL forms, `.git` names and a repeated --repo."""
-    if any(t.startswith('-R') for t in tail):
-        return 'unknown'
-    named = flag_operands(tail, '--repo')
-    if len(named) != 1 or context.target is None:
-        return 'unknown'
-    match = re.fullmatch(r'([^/]+)/([^/]+)/([^/]+)', named[0])
-    if not match or named[0].endswith('.git'):
-        return 'unknown'
-    target = store.repository_target(*match.groups())
-    if target is None:
-        return 'unknown'
-    return 'allowed' if target == context.target else 'forbidden'
-
-
-def head_check(tail, context):
-    """`gh pr create` names its head explicitly (`--head <branch>`, once), so gh pushes nothing itself; the branch is a
-    plain name that is not the default branch, `main`, `master` or `trunk`."""
-    if any(t.startswith('-H') for t in tail):
-        return 'unknown'
-    heads = flag_operands(tail, '--head')
-    if len(heads) != 1:
-        return 'unknown'
-    name = heads[0]
-    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name or '/.' in name
-            or name.endswith(('/', '.', '.lock', 'HEAD'))):
-        return 'unknown'
-    try:
-        _, default = branch_context(context)
-    except (OSError, ValueError, UnicodeError):
-        return 'unknown'
-    if any(kept and name.casefold() == kept.casefold() for kept in ('main', 'master', 'trunk', default)):
-        return 'forbidden'
-    return 'allowed' if default else 'unknown'
-
-
-def local_branch(name, bare, context):
-    """True when refs/heads/<name> exists (loose or packed) and, for a bare name, no ref git would pick first does."""
-    _, common = git_dirs(context)
-
-    def loose(ref):
-        try:
-            with slots.open_dir(common / Path(ref).parent) as fd:
-                slots.read_metadata(fd, Path(ref).name)  # a folder, link or foreign file raises: deny on doubt
-            return True
-        except (FileNotFoundError, NotADirectoryError):
-            return False
-    try:
-        with slots.open_dir(common) as fd:
-            packed = slots.read_metadata(fd, 'packed-refs')
-    except FileNotFoundError:
-        packed = ''
-    names = {line.split(' ', 1)[1].strip() for line in packed.splitlines() if ' ' in line and line[:1] not in '#^'}
-
-    def has(ref):
-        return ref in names or loose(ref)
-    if not has('refs/heads/' + name):
-        return False
-    # git resolves a bare name as <git dir>/<name>, refs/<name> and refs/tags/<name> before refs/heads/<name>.
-    return not bare or not any(has(ref) for ref in (name, 'refs/' + name, 'refs/tags/' + name))
-
-
-def local_merge(tail, applied):
-    """`git merge [--no-ff] [--no-edit] refs/heads/<branch>|<branch>` of a local branch into a work branch."""
-    flags, operands = [t for t in tail if t.startswith('-')], [t for t in tail if not t.startswith('-')]
-    if len(operands) != 1 or len(set(flags)) != len(flags) or not set(flags) <= {'--no-ff', '--no-edit'}:
-        return 'unknown'
-    explicit = operands[0].startswith('refs/heads/')
-    name = operands[0].removeprefix('refs/heads/')
-    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name
-            or name.endswith(('/', '.', '.lock')) or '/.' in name):
-        return 'unknown'
-    # Git reads hexadecimal in any case as an object id (SHA-1 or SHA-256, abbreviated from 4 digits) before a branch.
-    if not explicit and (re.fullmatch(r'[0-9a-fA-F]{4,64}', name) or name.endswith('HEAD')
-                         or name.split('/')[0] in {'origin', 'tags', 'heads', 'remotes'}):
-        return 'unknown'  # a bare name that could read as a commit id or another ref
-    if applied['Merge'] != 'yes':
-        return 'merge-disabled'
-    context = context_of(applied)
-    try:
-        current, default = branch_context(context)
-        if current in {None, default, 'main', 'master', 'trunk'}:
-            return 'forbidden'  # never into the default branch or a detached head
-        if not default or name == current or not local_branch(name, not explicit, context):
-            return 'unknown'
-    except (OSError, ValueError, UnicodeError):
-        return 'unknown'
-    return 'allowed'
-
-
-def own_wrapper_index(argv):
-    """Index of the script token when argv runs one of this install's own trusted wrappers, else None.
-
-    The install folder itself may lie under ~/.claude or ~/.codex; only that one exact token is spared the
-    lexical protected check, and every other token (including a nested command's) is still checked."""
-    if len(argv) < 3 or argv[0] not in {'python3', sys.executable} or argv[1] != '-I':
-        return None
-    index = 3 if argv[2] == '-B' else 2
-    if index >= len(argv):
-        return None
-    own = Path(__file__).resolve().parent
-    trusted = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py', 'judge.py', 'delegate_env.py')}
-    trusted |= {own.parent.parent / 'review-gate/scripts' / name for name in ('merge_check.py', 'post_review.py')}
-    trusted.add(own.parent.parent / 'checks/scripts/checks.py')
-    path = Path(argv[index])
-    if (path not in trusted or path.is_symlink() or not path.is_file()
-            or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
-        return None
-    return index
-
-
-def script_command(argv, applied):
-    if argv[0] not in {'python3', sys.executable} or len(argv) < 3 or argv[1] != '-I':
-        return 'unknown'
-    index = 2
-    if argv[index:index + 1] == ['-B']:
-        index += 1
-    if index >= len(argv):
-        return 'unknown'
-    path = Path(argv[index])
-    own = Path(__file__).resolve().parent
-    gate = own.parent.parent / 'review-gate/scripts'
-    allowed = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py')} | {gate / 'merge_check.py',
-                                                                                     gate / 'post_review.py'}
-    allowed.add(own.parent.parent / 'checks/scripts/checks.py')
-    if (path not in allowed or path.is_symlink() or not path.is_file()
-            or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
-        return 'unknown'  # a linked skill folder could supply a different import namespace
-    tail = argv[index + 1:]
-    if path.name == 'post_review.py':
-        return review_post(tail, applied)
-    if path.name == 'checks.py':
-        return checks_command(tail, applied)
-    if path.name == 'heavy_run.py':
-        if tail == ['status']:
-            return 'allowed'
-        # Only the canonical form `run [--label L] [--pass-env N] [--max-minutes M] -- <command>`; the command
-        # is always classified on its own, and any other spelling (including one with no separator) is unknown.
-        if tail[:1] != ['run'] or '--' not in tail:
-            return 'unknown'
-        head, command = tail[1:tail.index('--')], tail[tail.index('--') + 1:]
-        if not command or options(head, set(), {'--label', '--pass-env', '--max-minutes'}, positional=False) != []:
-            return 'unknown'
-        return classify_argv(command, applied)
-    return 'allowed'
-
-
-def checks_command(tail, applied):
-    """This install's checks.py on the repository's approved check list (written only by setup): `show`, `run`, or
-    `run --changed [--base <branch or commit>]` (no relative revision such as `HEAD~1`), or `run --dispatch <dispatch id>`
-    (owner decision 15/11/2026: accepting a delegated run needs its receipt, which checks.py writes only after the whole
-    list passes on a clean tree at an unmoved head), in a found repository with user or project settings; never `usage`."""
-    if context_of(applied).state not in ('user', 'project'):
-        return 'unknown'
-    if tail in (['show'], ['run'], ['run', '--changed']):
-        return 'allowed'
-    if len(tail) == 3 and tail[:2] == ['run', '--dispatch'] and DISPATCH_ID.fullmatch(tail[2]):
-        return 'allowed'
-    if (len(tail) == 4 and tail[:3] == ['run', '--changed', '--base'] and BRANCH.fullmatch(tail[3])
-            and not tail[3].startswith('-') and '..' not in tail[3]):
-        return 'allowed'
-    return 'unknown'
-
-
-REVIEW_RUN = re.compile(r'post-[0-9a-f]{32}')
-REVIEW_MARKER = re.compile(r'<!-- fnl-review kind=(code|security) head=[0-9a-f]{40} verdict=(APPROVE|REWORK)( lane=yes)? -->')
-REVIEW_POSTING = Path('state/review-posting')
-
-
-def review_post(tail, applied):
-    """`post_review.py <pr>` (creates the run body) or `<pr> --body-file <run body>` in either order: a verified
-    target and `Repository comments` at `decide` (docs/specs/afk-per-project.md "E")."""
-    context = context_of(applied)
-    if context.state not in {'user', 'project'} or context.target is None:
-        return 'unknown'
-    if not permits({'Repository comments'}, applied):
-        return 'forbidden'
-    if len(tail) == 1:
-        number, body = tail[0], None
-    elif len(tail) == 3 and tail[1] == '--body-file':
-        number, body = tail[0], tail[2]
-    elif len(tail) == 3 and tail[0] == '--body-file':
-        number, body = tail[2], tail[1]
-    else:
-        return 'unknown'
-    if not re.fullmatch(r'[1-9][0-9]{0,9}', number):
-        return 'unknown'
-    return 'allowed' if body is None else review_body(body)
-
-
-def review_body(name):
-    """'allowed' only for post_review.py's own run body `<data root>/state/review-posting/post-<32 hex>/body.md`:
-    a regular owner-only 0600 file of at most 64 KiB, no link on the way, whose first line is one review marker and
-    whose rest passes `text_ok` as file text; a second gate marker is 'forbidden'; anything else 'unsafe'."""
-    try:
-        root = dr.consent_root()
-        if root is None or not plain(name):
-            return 'unsafe'
-        path = Path(os.path.abspath(name))
-        relative = path.relative_to(root / REVIEW_POSTING)
-        if (len(relative.parts) != 2 or not REVIEW_RUN.fullmatch(relative.parts[0]) or relative.name != 'body.md'
-                or path.resolve(strict=True) != path):
-            return 'unsafe'
-        with dr.data_folder(REVIEW_POSTING, private=True) as parent:
-            with dr.descend(parent, relative.parts[0], private=True) as folder:
-                fd = os.open('body.md', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
-                try:
-                    info = os.fstat(fd)
-                    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
-                            or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > TEXT_LIMIT):
-                        return 'unsafe'
-                    raw = os.read(fd, TEXT_LIMIT + 1)
-                finally:
-                    os.close(fd)
-        if len(raw) > TEXT_LIMIT:
-            return 'unsafe'
-        first, _, rest = raw.decode('utf-8').partition('\n')
-    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
-        return 'unsafe'
-    if not REVIEW_MARKER.fullmatch(first) or not rest.strip():
-        return 'unsafe'
-    verdict = text_ok(rest.replace('\r', ''), inline=False)
-    return verdict if verdict in {'allowed', 'forbidden'} else 'unsafe'
-
-
-def plain(token):
-    return isinstance(token, str) and 0 < len(token) <= 8192 and not any(
-        unicodedata.category(c).startswith('C') for c in token)
-
-
-def own_script(argv, names):
-    """The script name when argv is `python3 -I [-B] <this install's script>`, else None."""
-    if len(argv) < 3 or argv[0] not in {'python3', sys.executable} or argv[1] != '-I':
-        return None, None
-    index = 3 if argv[2] == '-B' else 2
-    if index >= len(argv):
-        return None, None
-    path, own = Path(argv[index]), Path(__file__).resolve().parent
-    if (path not in {own / name for name in names} or path.is_symlink() or not path.is_file()
-            or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
-        return None, None
-    return path.name, argv[index + 1:]
-
-
-def flag_values(tokens, single, repeated=()):
-    """`--flag value` pairs only; each single flag at most once. None for anything else."""
-    values = {}
-    if len(tokens) % 2:
-        return None
-    for flag, value in zip(tokens[::2], tokens[1::2]):
-        if flag in repeated:
-            values.setdefault(flag, []).append(value)
-        elif flag in single and flag not in values:
-            values[flag] = value
-        else:
-            return None
-    return values
-
-
-def evidence_path(name, context):
-    """A known path, or a brief under the repository's own `.finolabs/briefs/`, both judged from the checkout root."""
-    if not plain(name) or protected(name):
-        return False
-    if classify_paths([name], (), context) == 'allowed':
-        return True
-    path = repository_path(name, context)
-    if path is None or not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.(?:md|json|txt)', path.as_posix()):
-        return False
-    return no_links(path, context) and not (context.ident.checkout / path).is_dir()
-
-
-def table_path(name, context):
-    """An evaluation table the host's small model wrote: a JSON file under `.finolabs/briefs/` of this checkout only."""
-    path = repository_path(name, context)
-    if path is None or not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.json', path.as_posix()):
-        return False
-    return no_links(path, context) and not (context.ident.checkout / path).is_dir()
-
-
-def judge_command(tail, applied):
-    """`judge.py ask --site away-evaluation --question Q --option O (2 to 6) --evidence-file F [--judge jev]`, or
-    `judge.py check-table --file F --of K` for a table under `.finolabs/briefs/`; nothing else."""
-    if tail[:1] == ['check-table']:
-        values = flag_values(tail[1:], {'--file', '--of'}, set())
-        if (values is None or set(values) != {'--file', '--of'} or not re.fullmatch(r'[2-6]', values['--of'])
-                or not table_path(values['--file'], context_of(applied))):
-            return 'unknown'
-        return 'allowed'
-    if tail[:1] != ['ask']:
-        return 'unknown'
-    values = flag_values(tail[1:], {'--site', '--question', '--evidence-file', '--judge'}, {'--option'})
-    if (values is None or values.get('--site') != 'away-evaluation' or values.get('--judge', 'jev') != 'jev'
-            or not {'--question', '--evidence-file', '--option'} <= set(values)):
-        return 'unknown'
-    question, options = values['--question'], values['--option']
-    if (not all(plain(t) for t in (question, *options))
-            or not evidence_path(values['--evidence-file'], context_of(applied))):
-        return 'unknown'
-    try:
-        import judge
-        judge.choice_fields('away-evaluation', question, options, '')
-    except (ImportError, ValueError):
-        return 'unknown'
-    return 'allowed'
-
-
-def brief_ok(brief):
-    """At least as strict as the judge and packet paths: secrets, machine paths, and any sensitive-name assignment."""
-    if (not isinstance(brief, str) or not 0 < len(brief.encode()) <= 65536
-            or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in brief)):
-        return False
-    return not screened(brief)
-
-
-def approved_program(family, rest):
-    """Length of the owner-approved executable that starts `rest`, else 0; nothing is run.
-
-    The identity is the record setup wrote for the quota probe in the canonical host config (`Executable`, `Resolved`
-    and its confirmed digest), re-checked now by quota_probe.checked_executable: owner and mode of every component,
-    no repository, temporary or downloads folder, and an unchanged target. The program must be the absolute argv those
-    checks return, or for a native program the recorded `Executable` path itself. Bare names, PATH lookups and other
-    paths deny, and so does a time-cap wrapper such as perl, which has no such record.
-    """
-    import quota_probe
-    agent = PROGRAMS[family]
-    entry = quota_probe.canonical_config().get(agent)
-    if entry is None:
-        return 0
-    try:
-        checked = quota_probe.checked_executable(agent, entry)
-    except (OSError, ValueError, UnicodeError):
-        return 0
-    forms = [checked] + ([[entry['executable']]] if len(checked) == 1 else [])
-    for form in forms:
-        if all(isinstance(t, str) and Path(t).is_absolute() for t in form) and rest[:len(form)] == form:
-            return len(form)
-    return 0
-
-
-def advisor_command(tail, applied, coordinator):
-    """`delegate_env.py --family F -- [hard cap] <program> <closed read-only argv>`, F in Hosts and not the coordinator's."""
-    if len(tail) < 4 or tail[0] != '--family' or tail[2] != '--':
-        return 'unknown'
-    family, rest = tail[1], tail[3:]
-    # ZCode has no verified read-only advisor form; never parse it with another family's grammar.
-    if family == 'zcode':
-        return 'unknown'
-    hosts = {HOST_FAMILIES[h] for h in applied['Hosts'].split(', ')}
-    if family not in PROGRAMS or family not in hosts or coordinator not in PROGRAMS or coordinator == family:
-        return 'unknown'
-    size = approved_program(family, rest)
-    if not size:
-        return 'unknown'
-    args, brief = rest[size:], None
-    # The brief sits behind an unambiguous boundary: Codex and Claude end their options with a literal `--` right
-    # before it (`codex exec [OPTIONS] [PROMPT]`, `claude [options] [prompt]` with -p a switch); Antigravity takes it
-    # as the value of -p. In every form a brief starting with `-` (an option, or `-` for unvalidated stdin) denies.
-    if family == 'codex':
-        if args[:1] != ['exec'] or len(args) < 3 or args[-2] != '--':
-            return 'unknown'
-        brief, values = args[-1], flag_values(args[1:-2], {'-m', '-c', '-s'})
-        if (values is None or values.get('-s') != 'read-only' or '-m' not in values
-                or not re.fullmatch(r'model_reasoning_effort=(?:low|medium|high|xhigh)', values.get('-c', 'model_reasoning_effort=high'))):
-            return 'unknown'
-        model = values['-m']
-    else:
-        if family == 'claude':
-            if args[:1] != ['-p'] or len(args) < 3 or args[-2] != '--':
-                return 'unknown'
-            brief, values = args[-1], flag_values(args[1:-2], {'--model', '--output-format', '--permission-mode',
-                                                                '--effort', '--max-turns', '--max-budget-usd'})
-            required = {'--model', '--output-format', '--permission-mode'}
-        else:
-            values = flag_values(args, {'-p', '--model', '--output-format', '--mode', '--print-timeout'})
-            required = {'-p', '--model', '--output-format', '--mode'}
-            brief = values.get('-p') if values is not None else None
-        if values is None or not required <= set(values) or values['--output-format'] != 'json':
-            return 'unknown'
-        if values.get('--permission-mode', values.get('--mode')) != 'plan':
-            return 'unknown'
-        if (values.get('--effort', 'high') not in {'low', 'medium', 'high', 'xhigh', 'max'}
-                or not re.fullmatch(r'[1-9][0-9]{0,2}', values.get('--max-turns', '1'))
-                or not re.fullmatch(r'[0-9]{1,3}(?:\.[0-9]{1,2})?', values.get('--max-budget-usd', '1'))
-                or not re.fullmatch(r'[1-9][0-9]{0,2}m', values.get('--print-timeout', '30m'))):
-            return 'unknown'
-        model = values['--model']
-    others = [t for t in rest if t is not brief]
-    # Frontier, else strong: only the names ADVISOR_MODELS lists; a Claude model served through Antigravity counts
-    # as Claude, so it is the coordinator's own family when that is Claude.
-    if (model not in ADVISOR_MODELS[family]
-            or (coordinator == 'claude' and model.startswith('claude'))):
-        return 'unknown'
-    if (not isinstance(brief, str) or brief.startswith('-') or not MODEL.fullmatch(model) or not brief_ok(brief)
-            or not all(plain(t) and not protected(t) for t in others)):
-        return 'unknown'
-    return 'allowed'
-
-
-def ladder_command(argv, applied, coordinator):
-    """The two command forms the away ladder needs (judge and advisor), or None when argv is neither."""
-    name, tail = own_script(argv, ('judge.py', 'delegate_env.py'))
-    if name is None:
-        return None
-    return judge_command(tail, applied) if name == 'judge.py' else advisor_command(tail, applied, coordinator)
-
-
-TAG = re.compile(r'v?[0-9A-Za-z][0-9A-Za-z._-]{0,63}')
-REVISION = re.compile(r'HEAD|[0-9a-f]{7,40}')
-
-
-DEPLOY = re.compile(r'deploy(?::[\w-]+)?')
-
-
-def command_categories(argv):
-    """Every category the command itself applies, read from its program and subcommand, never from free-text data."""
-    categories = set()
-    if argv[:2] in (['git', 'tag'], ['gh', 'release']):
-        categories.add('Tags and releases')
-    if argv[0] in {'npm', 'pnpm'} and argv[1:2] == ['publish']:
-        categories.add('Publishing')
-    return categories
-
-
-def is_deploy(argv):
-    """Git and gh have no deploy subcommand, so a deploy word there is data; elsewhere any such word fails closed."""
-    return argv[0] not in {'git', 'gh'} and any(DEPLOY.fullmatch(t) for t in argv[1:])
-
-
-def release_command(argv, applied, categories, deploy):
-    """Precedence rows 2 to 5 for the command forms a script can read: tags, releases, publishing and deploys."""
-    if context_of(applied).state in ('strict', 'no-repository'):
-        return 'forbidden'  # no verified repository settings: tags, releases, publishing and deploys wait for a person
-    if categories and not permits(categories, applied):
-        return 'forbidden'  # row 3: every applicable category must be decide
-    # Token lists, not joined text: a token holding a space must never equal two listed words.
-    listed = lambda key: [entry.split(' ') for entry in applied.get(key, [])]
-    reading = argv[:2] == ['git', 'tag'] and argv[2:] in ([], ['-l'], ['--list']) or argv[:3] in (
-        ['gh', 'release', 'view'], ['gh', 'release', 'list'])
-    if categories and not reading and argv not in listed(RELEASE_TARGETS):
-        return 'forbidden'  # a tag, release or publish runs only as an exact listed command (owner decision 15/11/2026)
-    if deploy:
-        production = argv in listed(PRODUCTION_TARGETS) and applied.get('Production') == 'decide'
-        if not production and any(re.search(r'prod|live', t, re.I) for t in argv):
-            return 'forbidden'  # row 2: production or live, unless this repository listed it and decides Production
-        if not production and argv not in listed(TARGETS):
-            return 'forbidden'  # row 4
-        if not categories:
-            return 'allowed'  # row 5
-    tail = argv[2:]
-    if argv[:2] == ['git', 'tag']:
-        if tail in ([], ['-l'], ['--list']):
-            return 'allowed'
-        operands = options(tail, {'-a'}, {'-m', '--message'})
-        if (operands and len(operands) <= 2 and TAG.fullmatch(operands[0])
-                and all(REVISION.fullmatch(o) for o in operands[1:])):
-            return 'allowed'
-    elif argv[:2] == ['gh', 'release']:
-        verb, rest = tail[:1], tail[1:]
-        if verb == ['create']:
-            operands = options(rest, {'--draft', '--verify-tag', '--prerelease'},
-                               {'--title', '-t', '--notes', '-n', '--target', '--repo', '-R'})
-            if operands is not None and len(operands) == 1 and TAG.fullmatch(operands[0]):
-                # Like a pull request merge: exactly one explicit --repo equal to the verified target.
-                return target_check(rest, context_of(applied))
-        elif verb in (['view'], ['list']):
-            operands = options(rest, set(), {'--repo', '-R', '--limit', '-L', '--json'})
-            if operands is not None and len(operands) <= (verb == ['view']) and all(TAG.fullmatch(o) for o in operands):
-                return 'allowed'
-    elif argv[0] in {'npm', 'pnpm'} and argv[1:2] == ['publish']:
-        values = flag_values(tail, {'--access', '--tag'})
-        if values is not None and values.get('--access', 'public') in {'public', 'restricted'} and TAG.fullmatch(values.get('--tag', 'latest')):
-            return 'allowed'
-    return 'forbidden'
-
-
-TEXT_FLAGS = {'--title', '-t', '--body', '-b'}
-COMMIT_TEXT_FLAGS = {'-m', '--message'}  # a commit message is data like a PR body
 TEXT_LIMIT = 65536
-# A review gate marker (`<!-- fnl-... -->`): only post_review.py posts one, so PR or commit text carrying it is refused.
-MARKER = re.compile(r'<!--\s*fnl-', re.I)
-# The one marker a pull request body must carry (`coding-router`; merge_check.py's ROUTER): one exact line is data.
-ROUTER_LINE = re.compile(r'<!-- fnl-router depth=(MIN|NORMAL|DEEP) trigger=(none|contract|security|privacy|permission|'
-                         r'migration|dependency|uncertainty|consumers|irreversible|calculation|prediction|input) -->')
-# Inline argv text passes through a shell in many callers: command substitution and parameter expansion deny.
-EXPANSION = re.compile(r'\$\(|\$[A-Za-z_{]|`')
 
-
-def text_values(argv):
-    """For `gh pr create|edit|comment` and `git commit`: argv with each title, body and message value replaced by a placeholder, and the values.
-    Left to right like gh's parser; a flag-looking value of another option then fails that option's grammar."""
-    if argv[:2] == ['git', 'commit']:
-        flags, start = COMMIT_TEXT_FLAGS, 2
-    elif argv[:2] == ['gh', 'pr'] and argv[2:3] in (['create'], ['edit'], ['comment']):
-        flags, start = TEXT_FLAGS, 3
-    else:
-        return argv, []
-    out, values, index = argv[:start], [], start
-    while index < len(argv):
-        token = argv[index]
-        key, equal, value = token.partition('=')
-        if equal and key in flags:  # `-b=value` and `-m=value` carry text too
-            out.append(key + '=text')
-            values.append(value)
-        elif token in flags and index + 1 < len(argv):
-            out += [token, 'text']
-            values.append(argv[index + 1])
-            index += 1
-        else:
-            out.append(token)
-        index += 1
-    return out, values
-
-
-def text_ok(value, inline=True):
-    """'allowed' for title, body or message data: newlines, tabs and a leading `-` are data; a review gate marker is
-    'forbidden'; other controls, and inline a backtick, `$(` or `$` before a letter, `_` or `{`, are 'unknown'; a
-    secret, machine path or sensitive assignment is 'unsafe'. File text (`inline` false) skips the shell screen."""
-    lines = value.split('\n')
-    routers = [i for i, line in enumerate(lines) if ROUTER_LINE.fullmatch(line)]
-    rest = '\n'.join(line for i, line in enumerate(lines) if i not in routers[:1])
-    if len(routers) > 1 or MARKER.search(rest):
-        return 'forbidden'
-    if (not 0 < len(value) <= TEXT_LIMIT or inline and EXPANSION.search(value)
-            or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in value)):
-        return 'unknown'
-    return 'unsafe' if screened(value) else 'allowed'
-
-
-def file_place(full, context):
-    """True when `full` lies inside the check's own checkout, outside the data root, with no link in any component
-    from that checkout root down (link metadata only)."""
-    if context.ident is None:
-        return False
-    try:
-        relative = full.relative_to(context.ident.checkout)
-        if not relative.parts or not no_links(relative, context):
-            return False
-        real = Path(os.path.realpath(full))
-        roots = {dr.default_root(), dr.data_root()[0]}
-        return not any(real == r or r in real.parents for r in {Path(os.path.realpath(r)) for r in roots})
-    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
-        return False
-
-
-def body_file(name, context):
-    """'allowed' for a regular file (never a link) of at most 64 KiB inside the check's own checkout (`file_place`),
-    read from the check's folder, whose UTF-8 text passes `text_ok` as file text (carriage returns also allowed);
-    a review gate marker is 'forbidden'; else 'unsafe'. Only the verdict leaves this function."""
-    if not plain(name) or name.startswith('-') or '..' in name.split('/'):
-        return 'unsafe'  # `..` after a link resolves elsewhere than the lexical path this check reads
-    full = Path(os.path.abspath(os.path.join(context.cwd or os.getcwd(), name)))
-    if not file_place(full, context):
-        return 'unsafe'
-    try:
-        fd = os.open(full, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        try:
-            info = os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode) or info.st_size > TEXT_LIMIT:
-                return 'unsafe'
-            raw = os.read(fd, TEXT_LIMIT + 1)
-        finally:
-            os.close(fd)
-        text = raw.decode('utf-8').replace('\r', '')
-    except (OSError, ValueError, UnicodeError):
-        return 'unsafe'
-    if len(raw) > TEXT_LIMIT or not text:
-        return 'unsafe'
-    verdict = text_ok(text, inline=False)
-    return verdict if verdict in {'allowed', 'forbidden'} else 'unsafe'
-
-
-def commit_text(tail, context):
-    """`git commit` grammar: at most one message source, `-m`/`--message` (repeatable) or one `-F <file>` passing
-    `body_file`; any other option is 'unknown'."""
-    if any(t.startswith('-F') and t != '-F' for t in tail):
-        return 'unknown'  # git reads `-F=x` and `-Fx` as other file names
-    if not tail or options(tail, {'--amend', '--no-edit', '-q', '--quiet'}, {'-m', '--message', '-F'},
-                           positional=False) != []:
-        return 'unknown'
-    files = [tail[i + 1] for i, t in enumerate(tail) if t == '-F']
-    if files and (len(files) > 1 or any(t in COMMIT_TEXT_FLAGS or t.startswith(('-m=', '--message=')) for t in tail)):
-        return 'unknown'
-    return body_file(files[0], context) if files else 'allowed'
-
-
-def pr_text(tail, context):
-    """At most one body source; a `--body-file`/`-F` must pass `body_file`."""
-    files = flag_operands(tail, '--body-file') + [tail[i + 1] if i + 1 < len(tail) else '' for i, t in enumerate(tail) if t == '-F']
-    bodies = sum(1 for t in tail if t in {'--body', '-b'} or t.startswith('--body='))
-    if any(t.startswith('-F') and t != '-F' for t in tail) or len(files) + bodies > 1:
-        return 'unknown'
-    return body_file(files[0], context) if files else 'allowed'
-
-
-def worktree_remove(tail, applied):
-    """`git worktree remove [--] <path>`: a linked worktree of this repository whose HEAD is a full SHA a
-    `log --kind merge --pr <number> --head` entry of this lease recorded, never its main checkout, the current checkout, a worktree
-    that is or contains this install, or a forced removal; Merge must be yes."""
-    if tail[:1] != ['remove']:
-        return 'unknown'
-    if any(t in {'-f', '--force'} or t.startswith('--force') or re.fullmatch(r'-[a-zA-Z]*f[a-zA-Z]*', t) for t in tail):
-        return 'forbidden'
-    rest = tail[1:]
-    rest = rest[1:] if rest[:1] == ['--'] else rest
-    if len(rest) != 1 or rest[0].startswith('-'):
-        return 'unknown'
-    if applied['Merge'] != 'yes':
-        return 'merge-disabled'
-    context = context_of(applied)
-    if context.ident is None:
-        return 'unknown'
-    found = checkout_of(rest[0], context.cwd or os.getcwd())
-    if found is None or found[1].parts or found[0].main != context.ident.main:
-        return 'unknown'
-    ident = found[0]
-    if ident.checkout == ident.main or ident.git == ident.common:
-        return 'forbidden'  # the main checkout
-    if ident.checkout == context.ident.checkout:
-        return 'unknown'
-    try:
-        tree = os.path.realpath(ident.checkout).casefold()
-        if install_owned(str(ident.checkout)) or str(install_root()).casefold().startswith(tree.rstrip(os.sep) + os.sep):
-            return 'forbidden'  # a worktree that is or contains this install
-        head = head_commit(ident)
-    except (OSError, ValueError, UnicodeError):
-        return 'unknown'
-    # Only the worktree of a pull request this lease merged: its HEAD is a head a `log --kind merge` entry recorded.
-    return 'allowed' if head and head in applied.get(MERGED, ()) else 'unknown'
-
-
-WORKTREE_LEAF = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
-
-
-def own_worktree_path(token, applied):
-    """True when `token`, read from the check's folder, names a new folder directly under the main checkout's
-    .claude/worktrees: a plain leaf that is not a protected name and does not exist yet, with no link at .claude or
-    .claude/worktrees. Link and folder metadata only; on doubt, False."""
-    context = context_of(applied)
-    if (context.repository != 'found' or context.ident is None or not plain(token) or len(token) > 4096
-            or any(c in token for c in ':=\\') or token.startswith(('~', '-')) or '..' in token.split('/')):
-        return False
-    try:
-        full = Path(os.path.abspath(os.path.join(context.cwd or os.getcwd(), token)))
-        folder = Path(context.ident.main) / '.claude' / 'worktrees'
-        if not WORKTREE_LEAF.fullmatch(full.name) or protected(full.name) or os.path.lexists(full):
-            return False
-        for part in (folder.parent, folder):
-            if os.path.islink(part) or (os.path.lexists(part) and not os.path.isdir(part)):
-                return False
-        return os.path.realpath(full.parent) == os.path.realpath(folder)
-    except (OSError, ValueError):
-        return False
-
-
-def own_worktree_index(argv, applied):
-    """Index of the path token of `git worktree add -b <branch> <path> [<start>]` when it names a new own worktree
-    folder (`own_worktree_path`): the one token spared the lexical protected check; every other token is checked."""
-    if argv[:4] == ['git', 'worktree', 'add', '-b'] and len(argv) in (6, 7) and own_worktree_path(argv[5], applied):
-        return 5
-    return None
-
-
-def worktree_add(tail, applied):
-    """`git worktree add -b <branch> <path> [origin/<default>]`: a new own work branch (`new_branch`) checked out in
-    a new folder directly under the main checkout's .claude/worktrees (`own_worktree_path`); no other option or
-    start point."""
-    if tail[:2] != ['add', '-b'] or len(tail) not in (4, 5) or not own_worktree_path(tail[3], applied):
-        return 'unknown'
-    verdict = new_branch(tail[2], applied)
-    if verdict != 'allowed' or len(tail) == 4:
-        return verdict
-    try:
-        _, default = branch_context(context_of(applied))
-    except (OSError, ValueError, UnicodeError):
-        return 'unknown'
-    return 'allowed' if default and tail[4] == 'origin/' + default else 'unknown'
-
-
-def head_commit(ident):
-    """The full commit id a checkout's HEAD names (detached, or through one local branch ref, loose or packed), else
-    None. Local metadata only, no Git process."""
-    with slots.open_dir(ident.git) as fd:
-        head = slots.read_metadata(fd, 'HEAD').strip()
-    if head.startswith('ref: refs/heads/'):
-        name = head.removeprefix('ref: ')
-        if not BRANCH.fullmatch(name.removeprefix('refs/heads/')) or '..' in name:
-            return None
-        try:
-            with slots.open_dir(ident.common / Path(name).parent) as fd:
-                head = slots.read_metadata(fd, Path(name).name).strip()
-        except FileNotFoundError:
-            try:
-                with slots.open_dir(ident.common) as fd:
-                    packed = slots.read_metadata(fd, 'packed-refs')
-            except FileNotFoundError:
-                return None
-            head = next((line.split(' ', 1)[0] for line in packed.splitlines()
-                         if line[:1] not in '#^' and line.split(' ', 1)[1:] == [name]), '')
-    return head if SHA.fullmatch(head) else None
-
-
-def branch_delete(tail, applied):
-    """`git branch -d [--] <branch>` of an existing local branch other than the current and default branches."""
-    rest = tail[1:]
-    rest = rest[1:] if rest[:1] == ['--'] else rest
-    if len(rest) != 1:
-        return 'unknown'
-    name = rest[0]
-    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name or '/.' in name
-            or name.endswith(('/', '.', '.lock', 'HEAD'))):
-        return 'unknown'
-    if applied['Merge'] != 'yes':
-        return 'merge-disabled'
-    context = context_of(applied)
-    try:
-        current, default = branch_context(context)
-        if any(kept and name.casefold() == kept.casefold() for kept in ('main', 'master', 'trunk', default)):
-            return 'forbidden'
-        if not default or not current or name == current or not local_branch(name, False, context):
-            return 'unknown'
-    except (OSError, ValueError, UnicodeError):
-        return 'unknown'
-    return 'allowed'
-
-
-def tracked_remove(tail, applied):
-    """`git rm [-r] [-q] [--] <paths>` on a work branch; each path is classified like a change."""
-    index = 0
-    while index < len(tail) and tail[index] in {'-r', '-q'} and tail[index] not in tail[:index]:
-        index += 1
-    rest = tail[index:]
-    if rest[:1] == ['--']:
-        rest = rest[1:]
-    elif any(t.startswith('-') for t in rest):
-        return 'unknown'  # any other option (--cached, -f, a repeated flag) is outside the grammar
-    if not rest:
-        return 'unknown'
-    context = context_of(applied)
-    try:
-        current, default = branch_context(context)
-    except (OSError, ValueError, UnicodeError):
-        return 'unknown'
-    if not current or not default or current in {default, 'main', 'master', 'trunk'}:
-        return 'forbidden'
-    return classify_paths(rest, applied.get('Roots', ()), context, source_mode(applied), applied.get(FILES, ()))
-
-
-# git verbs that change a checkout's work tree, index or HEAD; never run inside this install's own checkout.
-# `worktree` is not one: its Tier 1 forms add a new own worktree under the main checkout's .claude/worktrees and remove
-# another linked worktree (worktree_remove refuses the install); neither changes this checkout's files.
-def new_branch(name, applied):
-    """`git switch -c <name>` or `git checkout -b <name>`: a new own work branch from HEAD, in a found repository with
-    user or project settings and Push and pull requests or Merge yes; never a default-branch name, a full ref name or a
-    reserved namespace. Git itself refuses a name that already exists (no `-C`/`-B`)."""
-    context = context_of(applied)
-    if context.repository != 'found' or context.state not in {'user', 'project'}:
-        return 'unknown'
-    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name or '/.' in name
-            or name.endswith(('/', '.', '.lock')) or name == 'HEAD' or name.split('/')[0] in {'tags', 'remotes', 'notes', 'replace', 'stash', 'changes'}):
-        return 'unknown'
-    try:
-        _, default = branch_context(context)
-    except (OSError, ValueError, UnicodeError):
-        return 'unknown'
-    if not default or name.casefold() in {'main', 'master', 'trunk', default.casefold()}:
-        return 'unknown'
-    if applied['Push and pull requests'] != 'yes' and applied['Merge'] != 'yes':
-        return 'push-disabled'
-    return 'allowed'
-
-
-WORK_TREE_VERBS = {'merge', 'commit', 'add', 'rm', 'mv', 'checkout', 'switch', 'restore', 'reset',
-                   'pull', 'rebase', 'cherry-pick', 'revert', 'stash', 'apply', 'am'}
-
-
-def classify_argv(argv, applied, coordinator=None):
-    if not isinstance(argv, list) or not argv or len(argv) > 256 or not all(isinstance(t, str) and t for t in argv):
-        return 'unknown'
-    ladder = ladder_command(argv, applied, coordinator)
-    if ladder is not None:
-        return ladder  # its data tokens (question, options, brief) are checked by the form itself
-    argv, texts = text_values(argv)
-    for value in texts:
-        verdict = text_ok(value)
-        if verdict != 'allowed':
-            return verdict
-    if any(len(t) > 8192 or any(unicodedata.category(c).startswith('C') for c in t) for t in argv):
-        return 'unknown'
-    if any(t in {';', '&&', '||', '|', '>', '>>', '<'} or '$(' in t or '`' in t for t in argv):
-        return 'unknown'
-    spared = {own_wrapper_index(argv), own_worktree_index(argv, applied)}
-    if any(token_protected(t, applied) for i, t in enumerate(argv) if i not in spared):
-        return 'protected'
-    command = argv[0]
-    categories, deploy = command_categories(argv), is_deploy(argv)
-    if categories or deploy:
-        return release_command(argv, applied, categories, deploy)
-    # A listed test command (the repository's list, else the user's), exactly (token lists); only after the rules above.
-    if (context_of(applied).state in ('user', 'project') and argv[0] not in CLASSIFIED
-            and argv in [entry.split(' ') for entry in applied.get(TEST_COMMANDS, [])]):
-        return 'allowed'
-    if command == 'rm' and any(t.startswith('-') and ('r' in t[1:] or t == '--recursive') for t in argv[1:]):
-        return 'forbidden'
-    if command in {'python3', sys.executable}:
-        return script_command(argv, applied)
-    if command == 'git' and len(argv) >= 2:
-        verb, tail = argv[1], argv[2:]
-        if verb in WORK_TREE_VERBS:
-            context = context_of(applied)
-            if context.cwd is None or install_owned('.', context.cwd):
-                # Changes this install's own files without naming a path (a merge, a commit); a context without its
-                # own working folder (an error path) is never judged from the process's folder instead.
-                return 'protected'
-        if verb == 'push':
-            if any(t.startswith(('--force', '--delete', '--mirror', '--all', '--tags')) or t.startswith('+')
-                   or t in {'-f', '-d'} for t in tail):
-                return 'forbidden'
-            operands = options(tail, {'-u', '--set-upstream', '--porcelain'})
-            if operands is None or len(operands) != 2 or operands[0] != 'origin':
-                return 'unknown'
-            refspec = operands[1].split(':')
-            if len(refspec) > 2 or any(not BRANCH.fullmatch(b) or '..' in b or b.endswith('/') for b in refspec):
-                return 'unknown'
-            # Only the branch namespace: tags, remotes, notes and other full ref names are Tier 3.
-            if any(b.startswith('refs/') and not b.startswith('refs/heads/')
-                   or b.split('/')[0] in {'tags', 'remotes', 'notes', 'replace', 'stash', 'changes'} for b in refspec):
-                return 'forbidden'
-            context = context_of(applied)
-            try:
-                current, default = branch_context(context)
-            except (OSError, ValueError, UnicodeError):
-                return 'unknown'
-            destination = refspec[-1]
-            target = destination.removeprefix('refs/heads/')
-            target = current if target == 'HEAD' else target
-            if target in {'main', 'master', 'trunk', default}:
-                return 'forbidden'
-            if not default or not target:
-                return 'unknown'
-            # A bare or abbreviated destination can resolve to a tag, so only an explicit branch ref is a known push.
-            if len(refspec) != 2 or not destination.startswith('refs/heads/'):
-                return 'unknown'
-            if applied['Push and pull requests'] != 'yes':
-                return 'push-disabled'
-            # Git pushes to origin's pushurl when one is set, else its url: that one destination must be the target.
-            if context.target is None or store.push_target(context.ident) != context.target:
-                return 'unknown'
-            return 'allowed'
-        if verb in {'switch', 'checkout'} and len(tail) == 2 and tail[0] == {'switch': '-c', 'checkout': '-b'}[verb]:
-            return new_branch(tail[1], applied)
-        if verb == 'merge':
-            if tail not in (['origin/main'], ['--no-edit', 'origin/main']):
-                return local_merge(tail, applied)
-            # The synchronization exemption: a local merge of origin/main into a work branch needs no Merge setting.
-            try:
-                current, default = branch_context(context_of(applied))
-            except (OSError, ValueError, UnicodeError):
-                return 'unknown'
-            return 'allowed' if current and default and current not in {default, 'main', 'master', 'trunk'} else 'forbidden'
-        if verb == 'add':
-            return classify_paths(tail[1:] if tail[:1] == ['--'] else tail, applied.get('Roots', ()),
-                                  context_of(applied), source_mode(applied), applied.get(FILES, ()))
-        if verb == 'worktree':
-            return worktree_add(tail, applied) if tail[:1] == ['add'] else worktree_remove(tail, applied)
-        if verb == 'branch' and tail[:1] == ['-d']:
-            return branch_delete(tail, applied)
-        if verb == 'rm':
-            return tracked_remove(tail, applied)
-        if verb == 'commit':
-            verdict = commit_text(tail, context_of(applied))
-            if verdict != 'allowed':
-                return verdict
-            # A lease commits only on its own work branch, never on the local default branch (owner, 15/11/2026).
-            try:
-                current, default = branch_context(context_of(applied))
-            except (OSError, ValueError, UnicodeError):
-                return 'unknown'
-            return 'allowed' if current and default and current not in {default, 'main', 'master', 'trunk'} else 'protected'
-        query = {
-            'status': ({'--short', '-s', '--porcelain', '--branch', '-b'}, set()),
-            'log': ({'--oneline', '--stat', '--all', '--decorate', '--graph', '--no-decorate', '-N'}, {'-n', '--max-count', '--format', '--pretty'}),
-            'diff': ({'--stat', '--name-only', '--name-status', '--cached', '--staged', '--check', '--no-ext-diff', '--no-textconv'}, set()),
-            'show': ({'--stat', '--name-only', '--format=fuller', '--no-patch', '--no-ext-diff', '--no-textconv'}, {'--format'}),
-            'rev-parse': ({'--show-toplevel', '--show-prefix', '--abbrev-ref', '--verify'}, set()),
-            'ls-files': ({'--stage', '--cached', '--modified', '--others', '--exclude-standard'}, set()),
-            'ls-tree': ({'-r', '--name-only'}, set()),
-            'branch': ({'--show-current', '--list', '-a', '--all', '-r', '--remotes', '-v', '-vv'}, set()),
-            'remote': ({'-v', '--verbose'}, set()),
-        }
-        if verb in query:
-            operands = options(tail, query[verb][0] | {'--'}, query[verb][1])
-            if operands is not None and (verb not in {'branch', 'remote'} or not operands):
-                for operand in operands:
-                    if operand == '--':
-                        continue
-                    # Revisions are an explicit grammar; path operands use the same path gate.
-                    revision = r'(?:HEAD(?:[~^][0-9]*)?|[0-9a-f]{7,40}|origin/[A-Za-z0-9_./-]+)'
-                    if re.fullmatch(revision + r'(?:\.\.\.?' + revision + r')?', operand):
-                        continue
-                    if classify_paths([operand], applied.get('Roots', ()), context_of(applied),
-                                      source_mode(applied), applied.get(FILES, ())) != 'allowed':
-                        return 'unknown'
-                return 'allowed'
-        return 'unknown'
-    if command == 'gh' and len(argv) >= 3:
-        group, verb, tail = argv[1], argv[2], argv[3:]
-        common = {'--repo', '-R', '--json', '--jq', '-q', '--template', '-t'}
-        if group == 'pr' and verb == 'merge':
-            if applied['Merge'] != 'yes':
-                return 'merge-disabled'
-            pins = [t.split('=', 1)[1] if t.startswith('--match-head-commit=') else tail[i + 1] if i + 1 < len(tail) else ''
-                    for i, t in enumerate(tail) if t == '--match-head-commit' or t.startswith('--match-head-commit=')]
-            if len(pins) != 1 or not SHA.fullmatch(pins[0]):
-                return 'unpinned'
-            if '--delete-branch' in tail and not permits({'Recoverable deletion'}, applied):
-                return 'forbidden'  # row 3: the deletion is its own category beside Merge
-            operands = options(tail, MERGE_FLAGS, MERGE_VALUED)
-            if operands is None or len(operands) != 1 or not re.fullmatch(r'[1-9][0-9]{0,9}', operands[0]):
-                return 'unknown'  # the same ASCII number grammar `log --pr` takes, so a pin names what gh merges
-            emails = [t.split('=', 1)[1] if '=' in t else tail[i + 1] if i + 1 < len(tail) else ''
-                      for i, t in enumerate(tail) if t.split('=', 1)[0] in {'--author-email', '-A'}]
-            if any(not EMAIL.fullmatch(e) for e in emails):
-                return 'unknown'  # the merge commit's author: one plain email address, nothing else
-            result = target_check(tail, context_of(applied))  # the permission is this context's target, never another
-            if result == 'allowed' and (context_of(applied).target, int(operands[0]), pins[0]) not in applied.get(MERGE_OK, ()):
-                return 'merge-unchecked'  # merge_check.py --independent has not printed MERGE OK for this head lately
-            return result
-        if group == 'pr' and verb in {'create', 'edit'}:
-            if applied['Push and pull requests'] != 'yes':
-                return 'push-disabled'
-            operands = options(tail, {'--draft', '--fill'}, {'--title', '-t', '--body', '-b', '--body-file', '-F', '--base', '-B', '--head', '-H', '--repo', '-R', '--add-label', '--remove-label'})
-            # Create takes no operand; edit names one pull request by number (never the current branch's).
-            expected = 0 if verb == 'create' else 1
-            if operands is None or len(operands) != expected or not all(o.isdigit() for o in operands):
-                return 'unknown'
-            context = context_of(applied)
-            if verb == 'create':
-                head = head_check(tail, context)
-                if head != 'allowed':
-                    return head
-            text = pr_text(tail, context)
-            return text if text != 'allowed' else target_check(tail, context)
-        if group == 'pr' and verb == 'comment':
-            # `gh pr comment <number> --body|--body-file ... --repo github.com/OWNER/NAME`: its own category.
-            if not permits({'Repository comments'}, applied):
-                return 'forbidden'
-            operands = options(tail, set(), {'--body', '-b', '--body-file', '-F', '--repo', '-R'})
-            if operands is None or len(operands) != 1 or not operands[0].isdigit():
-                return 'unknown'
-            if not any(t in {'--body', '-b', '--body-file', '-F'} or t.startswith(('--body=', '--body-file=')) for t in tail):
-                return 'unknown'  # without a body gh opens an editor
-            context = context_of(applied)
-            text = pr_text(tail, context)
-            return text if text != 'allowed' else target_check(tail, context)
-        queries = {'pr': {'view', 'checks', 'list', 'status', 'diff'}, 'issue': {'view', 'list', 'status'},
-                   'repo': {'view'}, 'run': {'view', 'list'}}
-        if verb in queries.get(group, set()):
-            operands = options(tail, {'--watch', '--required', '--summary', '--comments', '--patch', '--stat'},
-                               common | {'--state', '--limit', '-L', '--base', '--head', '--author', '--label', '--search', '--branch', '--status'})
-            return 'allowed' if operands is not None else 'unknown'
-    return 'unknown'
-
-
-# ---- `open` mode (docs/specs/afk-autonomy.md A, B, C) ----------------------------------------------------------------
-# The floor is defined by its purpose: a request that changes a credential, or reads, prints, copies or sends a secret
-# or key. The lists below are its matcher, owned here with the corpus in tests/test_afk_open.py; a form that serves
-# that purpose and passes is a bug fixed by a corpus case and an entry here, never by a spec change.
 OPERATORS = {';', '&&', '||', '|', '&', '|&', '\n'}
 # Inside a token: in inline code every operator; in a top-level argv token not a lone `|` or `&`, which a pattern
 # (`rg 'import|export'`) or a URL holds as data.
@@ -2520,105 +1161,41 @@ def open_verdict(argv, paths, applied):
     return 'allowed'
 
 
-def classified(folder, argv_json, paths, coordinator, current):
-    """(code, lease, applied, key, entry, argv, cwd) for one request, exactly as `check` judges it; nothing is stored."""
+def classified(folder, argv_json, paths, current):
+    """(code, applied, argv) for one request, exactly as `check` judges it; nothing is stored."""
     code, lease, applied = lease_guard(folder, current)
-    key = entry = None
-    argv, cwd = None, os.getcwd()
-    if code is None:
-        if argv_json is not None:
-            try:
-                argv = json.loads(argv_json)
-            except ValueError:
-                argv = None
-        here = effective(applied, cwd)
-        if here.get(MODE) == 'open':
-            # `open`: no list, category, limit or repository state applies; only the floor and the guards (A).
-            try:
-                verdict = open_verdict(argv if argv_json is not None else None, paths, here)
-            except Exception:  # any parser error answers Tier 3, never Tier 1 (fails closed)
-                verdict = 'unsafe'
-            return verdict, lease, here, None, None, argv, cwd
-        if argv_json is not None:
-            if isinstance(argv, list) and len(argv) >= 3 and argv[:2] == ['git', '-C']:
-                # `git -C <folder> ...` is judged as the same command run in that folder, which must lie in a
-                # checkout of this repository and not under a protected path; anything else is Tier 3.
-                found = checkout_of(argv[2], cwd) if isinstance(argv[2], str) else None
-                here = store.identity(cwd)
-                if (found is None or here[0] != 'found' or found[0].main != here[1].main
-                        or protected(found[1].as_posix()) or not os.path.isdir(os.path.join(cwd, argv[2]))):
-                    code = 'unknown'
-                else:
-                    argv, cwd = ['git', *argv[3:]], os.path.abspath(os.path.join(cwd, argv[2]))
-        if code is None:
-            # The lease hash covers the user section only; the repository's project values are read on every check.
-            applied = effective(applied, cwd)
-            code, key, entry = project_limit(lease, applied, current)
-        if code is None:
-            if isinstance(argv, list) and argv[:3] == ['git', 'worktree', 'remove']:
-                applied[MERGED] = merged_heads(folder, lease, current, context_of(applied).target)
-            if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
-                applied[MERGE_OK] = merge_receipts(folder, current)
-            if argv_json is not None:
-                code = classify_argv(argv, applied, coordinator)
-            else:
-                code = classify_paths(paths, applied['Roots'], context_of(applied), source_mode(applied),
-                                      applied.get(FILES, ()))
-            if code == 'unknown':
-                # The floor applies in `strict` too (A, B): an unknown request that touches it is never decidable.
-                try:
-                    valid = argv_json is None or isinstance(argv, list) and all(isinstance(t, str) for t in argv)
-                    if valid and floored(argv if argv_json is not None else None, paths, cwd):
-                        code = 'floor'
-                except Exception:
-                    code = 'unsafe'
-    return code, lease, applied, key, entry, argv, cwd
-
-
-def limit_reached(folder, cwd, current):
-    """True when the lease no longer lets an action run in `cwd`'s repository, exactly as `check` judges its limits: the
-    lease ended, changed or has not started, or (in `strict`) that repository's runs, runtime or hourly actions are
-    spent or at their cap. `open` keeps no per-project limits. Read by the afk stop hook; nothing is stored."""
-    code, lease, applied = lease_guard(folder, current)
+    argv = None
     if code is not None:
-        return True
-    here = effective(applied, cwd)
-    if here.get(MODE) == 'open':
-        return False
-    return project_limit(lease, here, current)[0] is not None
+        return code, applied, argv
+    if argv_json is not None:
+        try:
+            argv = json.loads(argv_json)
+        except ValueError:
+            argv = None
+    here = effective(applied, os.getcwd())
+    try:
+        return open_verdict(argv if argv_json is not None else None, paths, here), here, argv
+    except Exception:  # any parser error answers Tier 3, never Tier 1 (fails closed)
+        return 'unsafe', here, argv
+
+
+def lease_over(folder, current):
+    """True when the lease lets no action run: it ended, its setup changed or it has not started, exactly as `check`
+    judges it. Lease hours is the only limit (docs/specs/afk-one-mode.md). Read by the afk stop hook; nothing is
+    stored."""
+    return lease_guard(folder, current)[0] is not None
 
 
 def check(folder, args):
     current = now()
-    code, lease, applied, key, entry, argv, cwd = classified(folder, args.argv_json, args.paths, args.coordinator, current)
-    if code == 'unknown' and entry is not None:
-        # An away decision may have approved this exact request once (`log --kind decision --approve-...`).
-        subject = request_subject(applied, cwd, argv if args.argv_json is not None else None, args.paths)
-        if subject is not None and subject in open_approvals(folder, lease, current):
-            code = 'decided'
-            append_log(folder, dict(time=current, tier=1, kind='approval-used', subject=subject, note=''), current)
-    # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
-    if code in {'allowed', 'decided'} and isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
-        if entry is not None:
-            try:  # the pin first: a full or invalid log refuses the merge before an action is reserved
-                append_log(folder, merge_pin(argv, current, context_of(applied).target), current)
-            except (OSError, ValueError, UnicodeError):
-                code = 'log-unwritable'
-        elif any(t.startswith('--match-head-commit') for t in argv):
-            try:  # `open`: a pinned merge still records its pin, so `log --kind merge` can name it afterwards
-                append_log(folder, merge_pin(argv, current, context_of(applied).target), current)
-            except (OSError, ValueError, UnicodeError, TypeError, StopIteration, IndexError):
-                pass  # an argv the pin grammar cannot read records no pin; the open answer stays Tier 1
-    if code in {'allowed', 'decided'} and entry is not None:  # `open` keeps no per-project counters
-        entry['actions'] += 1
-        entry['hour_actions'].append(current)
-        if entry['first'] is None:
-            entry['first'] = current
-        if argv and any(Path(t).name == 'ledger.py' for t in argv) and 'start' in argv:
-            entry['runs'] += 1
-        lease['counters'][key] = entry
-        save_lease(folder, lease)
-    tier = 1 if code in {'allowed', 'decided'} else 3
+    code, applied, argv = classified(folder, args.argv_json, args.paths, current)
+    if code == 'allowed' and isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge'] and any(
+            t.startswith('--match-head-commit') for t in argv):
+        try:  # a pinned merge records its pin, so `log --kind merge` can name it afterwards
+            append_log(folder, merge_pin(argv, current, context_of(applied).target), current)
+        except (OSError, ValueError, UnicodeError, TypeError, StopIteration, IndexError):
+            pass  # an argv the pin grammar cannot read records no pin; the answer stays Tier 1
+    tier = 1 if code == 'allowed' else 3
     result = {'tier': tier, 'code': code}
     if code in ENDED:
         # A host loop can outlive the lease; the answer itself tells the caller to end it.
@@ -2629,45 +1206,18 @@ def check(folder, args):
     return tier
 
 
-def merged_heads(folder, lease, current, target):
-    """The full head SHAs that `log --kind merge --pr <number> --head` entries recorded during this lease for the
-    repository `target`; empty on any doubt, for an entry without a repository and with no verified target."""
-    try:
-        raw = read_private(folder, 'log.jsonl', MAX_LOG) or b''
-        heads = set()
-        for line in raw.splitlines():
-            entry = json.loads(line)
-            if (isinstance(entry, dict) and entry.get('kind') == 'merge' and isinstance(entry.get('head'), str)
-                    and SHA.fullmatch(entry['head']) and finite(entry.get('time')) and target is not None
-                    and entry.get('repo') == target and lease['start'] <= entry['time'] <= current):
-                heads.add(entry['head'])
-        return heads
-    except (OSError, ValueError, UnicodeError, TypeError, KeyError):
-        return set()
-
-
 def repository_rules(result):
-    """The rules `check` applies in this repository beyond the five values: limits, decided categories and the lists."""
-    if result.get(MODE) == 'open':
-        return {MODE: 'open', THIRD_PARTY: result[THIRD_PARTY], DEFAULT_BRANCH: result[DEFAULT_BRANCH]}
-    return {'Max runs': result['Max runs'], 'Max runtime minutes': result['Max runtime minutes'],
-            'Max actions per hour': result['Max actions per hour'],
-            'Decide': [c for c in CATEGORIES if result.get(c) == 'decide'],
-            **{key: list(result.get(key, [])) for key in (TARGETS, PRODUCTION_TARGETS, TEST_COMMANDS, FILES, RELEASE_TARGETS)}}
+    """The guards `check` applies in this repository."""
+    return {THIRD_PARTY: result[THIRD_PARTY], DEFAULT_BRANCH: result[DEFAULT_BRANCH]}
 
 
 def show_effective(folder):
-    """Read-only: the five values `check` would apply in this working directory now, for advisory consumers (Task
-    choice, Trusted authors). Reserves nothing and changes no counter; prints no path."""
+    """Read-only: the guards `check` would apply in this working directory now. Reserves nothing; prints no path."""
     code, _, applied = lease_guard(folder, now())
     result = effective(applied if applied is not None else settings(), os.getcwd())
     context = result[CONTEXT]
     print(json.dumps({'lease': code or 'live', 'repository': context.repository, 'state': context.state,
-                      'target': context.target, 'mode': result[MODE],
-                      'guards': {THIRD_PARTY: result[THIRD_PARTY], DEFAULT_BRANCH: result[DEFAULT_BRANCH]},
-                      'values': {name: result[name] for name in OFF},
-                      'merge_authority': result.get(MERGE_AUTHORITY, 'lease'),
-                      'rules': repository_rules(result)},
+                      'target': context.target, 'guards': repository_rules(result), 'retired': result['Retired']},
                      separators=(',', ':')))
 
 
@@ -2828,8 +1378,7 @@ def packet_check(args):
 
 
 def log(folder, args):
-    decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS,
-                      'approve_argv_json', 'approve_paths', 'approve_request')
+    decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS, 'approve_request')
     if args.kind != 'decision' and any(getattr(args, key) is not None for key in decision_flags):
         raise Refusal('decision fields (--rung, --settled, --precedents, --topic, --project, --decision and the row fields) belong to --kind decision only')
     current = now()
@@ -2845,8 +1394,8 @@ def log(folder, args):
             raise Refusal('--pr is a pull request number')
         fields['pr'] = int(args.pr)
     if args.head is not None:
-        # The merged pull request's full head SHA: the one worktree `git worktree remove` may then take away. A
-        # review-fallback line records the head whose same-family reviews counted, for the user's return; it pins nothing.
+        # The merged pull request's full head SHA, for the user's return. A review-fallback line records the head
+        # whose same-family reviews counted; it pins nothing.
         if args.kind not in ('merge', 'review-fallback') or not SHA.fullmatch(args.head) or args.pr is None:
             raise Refusal('--head belongs to --kind merge or review-fallback with its --pr and is a full lowercase SHA')
         fields['head'] = args.head
@@ -2867,21 +1416,15 @@ def log(folder, args):
             raise Refusal('--head matches no allowed `gh pr merge` check of this lease, or matches checks of two repositories')
         fields['repo'] = repos.pop()  # the merged head counts only in the repository the merge check named
     note = safe_note(args.note or '')
-    subject = permit = None
+    permit = None
     if args.kind == 'decision' and args.approve_request is not None:
         attempt(args)  # the row itself must be valid before the approval is stored
         permit = permit_subject(args)
-    elif args.kind == 'decision' and (args.approve_argv_json is not None or args.approve_paths is not None):
-        attempt(args)  # the row itself must be valid before the request is judged
-        subject = approval_subject(folder, args, current)
     # Every other check passes before the decision line reaches the ledger.
     identifier = decide(folder, args, current) if args.kind == 'decision' else None
     if identifier:
         fields['decision'] = identifier
     append_log(folder, dict(time=current, tier=KINDS[args.kind], kind=args.kind, **fields, note=note), current)
-    if subject is not None:
-        append_log(folder, dict(time=current, tier=2, kind='approval', subject=subject, decision=identifier, note=''),
-                   current)
     if permit is not None:
         import away_lease
         if not away_lease.record_permit(permit, current):
@@ -2909,16 +1452,15 @@ def append_log(folder, record, current):
     write_private(folder, 'log.jsonl', payload)
 
 
-# `gh pr merge` options a merge check reads: the method and branch flags, and the pin, repository and commit author
-# email values (`--author-email` sets the merge commit's author, as the repository's commit rules ask).
-EMAIL = re.compile(r'[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})+')
+# `gh pr merge` options the merge pin reads: the method and branch flags, and the pin, repository and commit author
+# values.
 MERGE_FLAGS = frozenset({'--squash', '--merge', '--rebase', '--delete-branch'})
 MERGE_VALUED = frozenset({'--match-head-commit', '--repo', '-R', '--author-email', '-A'})
 
 
 def merge_pin(argv, current, target):
-    """The `merge-pin` record of an allowed `gh pr merge <n> --match-head-commit <sha>` check (classify_argv has
-    already required one number operand and one full pin)."""
+    """The `merge-pin` record of an allowed `gh pr merge <n> --match-head-commit <sha>` check; raises when the argv
+    holds no number operand or no full pin, so the caller records nothing."""
     tail = argv[3:]
     pr = next(t for t in options(tail, MERGE_FLAGS, MERGE_VALUED))
     head = next(t.split('=', 1)[1] if t.startswith('--match-head-commit=') else tail[i + 1]
@@ -2946,286 +1488,16 @@ def merge_pins(folder, current):
         return set()
 
 
-
-# Decidable commands are an allowlist of fixed shapes (owner decision, 15/11/2026, after two review rounds showed a
-# deny list cannot be complete): a script of this checkout, the repository's own test, run, build and lint entry
-# points, installs of what the repository declares, listed git and gh verbs, and this install's delegated runs.
-# Every other program, form, option or verb stays parked.
-PY_OPTIONS = frozenset({'-I', '-B', '-u', '-O', '-OO', '-s', '-E', '-S', '-q', '-v', '-b', '-bb'})
-# Modules that run this checkout's tests and linters; never one that runs another module or code from an option
-# (`coverage run -m`, `pylint --init-hook`) or installs from the network (`build`, `tox`, `nox`).
-PY_MODULES = frozenset({'unittest', 'pytest', 'doctest', 'py_compile', 'compileall', 'mypy', 'ruff', 'black', 'flake8',
-                        'pyflakes'})
-WORD = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,120}')
-# `make VAR=value`: a plain value without a slash, and never a variable that names a program, flags or a path.
-MAKE_VAR = re.compile(r'([A-Z][A-Z0-9_]{0,40})=[A-Za-z0-9_.,-]{0,120}')
-MAKE_TOOL_VAR = re.compile(r'SHELL|MAKE|MAKEFLAGS|MFLAGS|CC|CXX|CPP|LD|AR|AS|FC|RM|INSTALL|SUDO|DESTDIR|PREFIX|'
-                           r'[A-Z0-9_]*(?:FLAGS|CMD|COMMAND|BIN|PATH|DIR|EXEC|PROGRAM|TOOL|RUNNER)')
-JS_TOOLS = frozenset({'npm', 'pnpm', 'yarn', 'bun'})
-JS_INSTALL_FLAGS = frozenset({'--frozen-lockfile', '--immutable', '--no-audit', '--no-fund', '--prefer-offline',
-                              '--ignore-scripts', '--silent', '-s'})
-CARGO_VERBS = frozenset({'test', 'build', 'check', 'clippy', 'fmt', 'bench', 'fetch', 'run', 'doc'})
-GO_VERBS = frozenset({'test', 'build', 'vet', 'fmt', 'run'})
-# go flags from a closed list, written with `=` (Go accepts one or two dashes); package operands are local paths.
-GO_FLAG = re.compile(r'-{1,2}(?:v|race|short|cover|failfast|json|count=[0-9]{1,4}|run=[A-Za-z0-9_.|^$()/*-]{1,120}|'
-                     r'timeout=[0-9]{1,4}[smh]|tags=[A-Za-z0-9_,]{1,120}|p=[0-9]{1,2})')
-# git: verbs that change only this checkout's commits and index in ways the owner allows, or read; options from a
-# closed list, so no option runs a program (`--ext-diff`, `-x` of difftool, `--exec`) or writes a file (`--output`).
-GIT_VERBS = frozenset({'fetch', 'cherry-pick', 'revert', 'add', 'mv', 'log', 'show', 'diff', 'status', 'blame',
-                       'grep', 'ls-files', 'shortlog', 'describe', 'rev-parse', 'merge-base'})
-GIT_FLAGS = frozenset({'--no-edit', '-x', '--continue', '--abort', '--skip', '--quiet', '-q', '--prune', '--oneline',
-                       '--stat', '--name-only', '--name-status', '--cached', '--staged', '-p', '--no-color',
-                       '--porcelain', '-s', '--short', '-b', '-n', '--all', '-A', '-u', '--update', '--', '-i', '-l',
-                       '--no-ext-diff', '--no-textconv', '--abbrev-ref', '--show-toplevel', '-v'})
-GIT_NUMBER = re.compile(r'-n?[0-9]{1,4}|--max-count=[0-9]{1,4}')
-# gh: (group, verb) pairs at fixed positions, then data; another repository than the verified one denies.
-GH_VERBS = {'pr': {'view', 'list', 'checks', 'diff', 'status'},
-            'issue': {'create', 'view', 'list', 'comment', 'edit', 'close', 'reopen'},
-            'run': {'view', 'list', 'watch', 'rerun'}, 'workflow': {'run', 'view', 'list'},
-            'repo': {'view'}, 'release': {'view', 'list'}, 'label': {'list', 'create'}}
-
-
-def script_inside(token, context):
-    """A script operand: an existing regular file inside this checkout, not an option."""
-    if token.startswith('-') or not inside(token, context):
-        return False
-    return os.path.isfile(os.path.join(context.cwd or os.getcwd(), token))
-
-
-def pip_declared(args, context):
-    """`pip install` of declared requirements only: every operand follows `-r`, `-c` or `-e` and is an existing path
-    inside this checkout; at least one such pair; no other option."""
-    pairs, i = 0, 0
-    while i < len(args):
-        if args[i] not in {'-r', '--requirement', '-e', '--editable', '-c', '--constraint'} or i + 1 >= len(args):
-            return False
-        operand = args[i + 1]
-        if (operand.startswith('-') or any(c in operand for c in '@+:')
-                or not os.path.lexists(os.path.join(context.cwd or os.getcwd(), operand)) or not inside(operand, context)):
-            return False
-        pairs, i = pairs + 1, i + 2
-    return pairs > 0
-
-
-def shape_decidable(name, first, args, context):
-    """True when the command has one of the allowlisted shapes."""
-    if '/' in first or first.startswith('.'):
-        return script_inside(first, context)  # a script of this checkout, with data arguments
-    if name == 'make':
-        return all((WORD.fullmatch(t) and '=' not in t) or t in {'-k', '-s', '-n'} or re.fullmatch(r'-j[0-9]{0,2}', t)
-                   or (MAKE_VAR.fullmatch(t) and not MAKE_TOOL_VAR.fullmatch(MAKE_VAR.fullmatch(t).group(1)))
-                   for t in args)
-    if name in JS_TOOLS:
-        if not args:
-            return name == 'yarn'
-        verb, rest = args[0], args[1:]
-        if verb in {'test', 't'}:
-            return True
-        if verb in {'run', 'run-script'}:
-            return bool(rest) and WORD.fullmatch(rest[0]) is not None
-        if verb in {'install', 'i', 'ci'}:
-            return all(t in JS_INSTALL_FLAGS for t in rest)  # no package named: install what the lockfile declares
-        return False
-    if name == 'python':
-        i = 0
-        while i < len(args) and args[i] in PY_OPTIONS:
-            i += 1
-        if args[i:i + 1] == ['-m']:
-            module = args[i + 1] if i + 2 <= len(args) else ''
-            if module == 'pip':
-                return args[i + 2:i + 3] == ['install'] and pip_declared(args[i + 3:], context)
-            return module in PY_MODULES
-        return i < len(args) and script_inside(args[i], context)
-    if name == 'pip':
-        return args[:1] == ['install'] and pip_declared(args[1:], context)
-    if name == 'node':
-        if args[:1] == ['--test']:
-            return all(not t.startswith('-') and inside(t, context) for t in args[1:])
-        return bool(args) and script_inside(args[0], context)
-    if name == 'cargo':
-        return bool(args) and args[0] in CARGO_VERBS and not any(t.startswith(('--config', '-Z')) for t in args)
-    if name == 'go':
-        if args[:1] == ['mod']:
-            return args[1:2] in (['download'], ['tidy'], ['verify']) and all(GO_FLAG.fullmatch(t) for t in args[2:])
-        return bool(args) and args[0] in GO_VERBS and all(
-            GO_FLAG.fullmatch(t) or (t.startswith('.') and '@' not in t and inside(t.rstrip('.').rstrip('/') or '.', context))
-            for t in args[1:])
-    if name in {'uv', 'poetry', 'bundle'}:
-        verb = {'uv': 'sync', 'poetry': 'install', 'bundle': 'install'}[name]
-        return args[:1] == [verb] and all(t in {'--frozen', '--locked', '--no-root', '--quiet'} for t in args[1:])
-    if name == 'git':
-        if not args or args[0] not in GIT_VERBS:
-            return False
-        if args[0] == 'fetch':
-            # Only from origin, by branch name: no other host, URL, scp-like remote or refspec.
-            operands = [t for t in args[1:] if not t.startswith('-')]
-            if operands[:1] not in ([], ['origin']) or any(':' in t or not BRANCH.fullmatch(t) for t in operands):
-                return False
-        return all(not t.startswith('-') or t in GIT_FLAGS or GIT_NUMBER.fullmatch(t) for t in args[1:])
-    if name == 'gh':
-        if len(args) < 2 or args[1] not in GH_VERBS.get(args[0], ()):
-            return False
-        for i, t in enumerate(args):
-            if t.startswith(('-R', '--repo')):
-                # pflag reads `-R x`, `-R=x`, `-Rx`, `--repo x` and `--repo=x` alike.
-                if t in {'-R', '--repo'}:
-                    value = args[i + 1] if i + 1 < len(args) else ''
-                elif t.startswith('--repo='):
-                    value = t[len('--repo='):]
-                elif t.startswith('-R'):
-                    value = t[2:].removeprefix('=')
-                else:
-                    return False  # another long option starting with --repo
-                if context.target is None or value.removeprefix('github.com/').lower() != context.target.removeprefix('github.com/'):
-                    return False
-        return True
-    return False
-
-
-def program_name(token):
-    """The base program name with a trailing version stripped (`python3.12` reads as `python`)."""
-    return re.sub(r'[0-9][0-9.]*$', '', Path(token).name) or Path(token).name
-
-
-def inside(token, context):
-    """True when a path token resolves, through every link, inside the checkout the request runs in and outside its
-    protected paths (`.git/`, `.github/`, `.claude/`, credential and key names), so a link cannot lead there."""
-    if token.startswith('~') or context.ident is None:
-        return False
-    root = os.path.realpath(context.ident.checkout)
-    full = os.path.realpath(os.path.join(context.cwd or os.getcwd(), token))
-    if full == root:
-        return True
-    if not full.startswith(root + os.sep):
-        return False
-    return not protected(os.path.relpath(full, root))
-
-
-REMOTE = re.compile(r'(?:[^\s/]*@)?[A-Za-z0-9_.-]+\.[A-Za-z]{2,}:|[^\s/]*@[^\s/]+:')  # an scp-like remote, `[user@]host:path`
-
-
-def decidable_argv(argv, context, hosts=frozenset()):
-    """True when an `unknown` command may enter the away ladder for approval: a found repository with user or project
-    settings, one of the allowlisted shapes (shape_decidable) or this install's delegated run (dispatch_prefix), no
-    shell syntax, URL, remote, secret or machine path, and every path operand inside this checkout, outside its
-    protected paths. Everything else stays parked."""
-    if context.repository != 'found' or context.state not in {'user', 'project'} or not argv:
-        return False
-    # Without a shell, a newline or tab inside one argument is data (a multi-line brief); other controls deny.
-    if any(not isinstance(t, str) or not t or len(t.encode()) > 65536
-           or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in t)
-           or t in {';', '&&', '||', '|', '&', '>', '>>', '<', '<<'} or '$(' in t or '`' in t or '://' in t
-           for t in argv):
-        return False
-    first = argv[0]
-    if '=' in first or first.startswith('-') or not re.fullmatch(r'[A-Za-z0-9_./+-]{1,240}', first):
-        return False
-    skip = dispatch_prefix(argv, hosts)
-    if skip == 1 and (any(REMOTE.match(t) for t in argv[1:])
-                      or not shape_decidable(program_name(first), first, argv[1:], context)):
-        return False
-    for token in argv[skip:]:
-        value = token.split('=', 1)[1] if '=' in token else token  # `--flag=value` and `VAR=value` alike
-        if not value:
-            continue
-        if value.startswith('~') or screened(value):
-            return False
-        if (os.path.isabs(value) or path_operand(value, context.cwd)) and not inside(value, context):
-            return False
-    return True
-
-
-def dispatch_prefix(argv, hosts):
-    """How many leading tokens are a delegated run's own launcher, else 1: this install's `delegate_env.py` with
-    isolated Python, `--family F --` for a family of the lease's Hosts, and that family's owner-approved executable
-    (the quota probe's record). The run's own arguments after it pass the usual screen (a review or task brief is
-    screened for secrets and machine paths). Used only for an `unknown` request: any other dispatch form stays parked."""
-    name, tail = own_script(argv, ('delegate_env.py',))
-    if (name is None or len(tail) < 4 or tail[0] != '--family' or tail[2] != '--' or tail[1] not in PROGRAMS
-            or tail[1] not in hosts):
-        return 1
-    size = approved_program(tail[1], tail[3:])
-    if not size:
-        return 1
-    return len(argv) - len(tail) + 3 + size
-
-
-def decidable_paths(paths, context):
-    """True when every path of an `unknown` change is a plain relative file path inside this checkout, outside its
-    protected paths, with no link on the way."""
-    if context.repository != 'found' or context.state not in {'user', 'project'} or not paths:
-        return False
-    for p in paths:
-        relative = repository_path(p, context)
-        if (relative is None or not inside(p, context) or not no_links(relative, context)
-                or (context.ident.checkout / relative).is_dir()):
-            return False
-    return True
-
-
-def request_subject(applied, cwd, argv, paths):
-    """The digest an approval binds: repository, working folder and the exact argv or set of paths; None when the
-    request is not decidable."""
-    context = context_of(applied)
-    if argv is not None:
-        hosts = {HOST_FAMILIES[h] for h in applied.get('Hosts', '').split(', ') if h in HOST_FAMILIES}
-        if not isinstance(argv, list) or not decidable_argv(argv, context, hosts):
-            return None
-        request = dict(argv=argv)
-    else:
-        if not isinstance(paths, list) or not decidable_paths(paths, context):
-            return None
-        request = dict(paths=sorted(paths))
-    return digest(dict(project=project_key(context), cwd=os.path.realpath(cwd), **request))
-
-
-def open_approvals(folder, lease, current):
-    """Subjects this lease's away decisions approved and no allowed check has used yet; empty on any doubt."""
-    try:
-        counts = {}
-        for line in (read_private(folder, 'log.jsonl', MAX_LOG) or b'').splitlines():
-            entry = json.loads(line)
-            if (not isinstance(entry, dict) or entry.get('kind') not in {'approval', 'approval-used'}
-                    or not isinstance(entry.get('subject'), str) or not SHA256.fullmatch(entry['subject'])
-                    or not finite(entry.get('time')) or not lease['start'] <= entry['time'] <= current):
-                continue
-            counts[entry['subject']] = counts.get(entry['subject'], 0) + (1 if entry['kind'] == 'approval' else -1)
-        return {subject for subject, count in counts.items() if count > 0}
-    except (OSError, ValueError, UnicodeError, TypeError, KeyError):
-        return set()
-
-
 def permit_subject(args):
-    """The request digest of `--approve-request`: a rule, advisor or host rung settled on option 1 (run it), with no
-    other approval flag. Only the afk permission hook consumes it, once, within 30 minutes and this lease
+    """The request digest of `--approve-request`: a rule, advisor or host rung settled on option 1 (run it). Only the afk permission hook consumes it, once, within 30 minutes and this lease
     (docs/specs/afk-decider.md B); `check` never does. Deciding whether the request reaches "Where it must stop" before
     approving it is advisory (agent judgment)."""
     if args.rung not in {'rule', 'advisor', 'host'} or args.settled != 'yes' or args.option != '1':
         raise Refusal('an approval needs a rule, advisor or host rung that settled on option 1, which runs the request')
-    if args.approve_argv_json is not None or args.approve_paths is not None:
-        raise Refusal('approve one request: --approve-request, --approve-argv-json or --approve-paths')
     if not SHA256.fullmatch(args.approve_request):
         raise Refusal('--approve-request is the 64-hex request digest the permission hook printed')
     return args.approve_request
 
-
-def approval_subject(folder, args, current):
-    """The subject of `--approve-argv-json` or `--approve-paths`, checked before the decision is recorded: the rung
-    decided option 1 (run it), and the request, judged now and here exactly as `check` would, is `unknown` and
-    decidable. Refuses anything else."""
-    if args.rung not in {'rule', 'advisor', 'host'} or args.settled != 'yes' or args.option != '1':
-        raise Refusal('an approval needs a rule, advisor or host rung that settled on option 1, which runs the request')
-    if args.approve_argv_json is not None and args.approve_paths is not None:
-        raise Refusal('approve one request: --approve-argv-json or --approve-paths')
-    code, lease, applied, key, entry, argv, cwd = classified(
-        folder, args.approve_argv_json, args.approve_paths, None, current)
-    if code != 'unknown' or entry is None:
-        # entry is None when `git -C` named a folder outside this repository or under a protected path
-        raise Refusal('only an unknown request in a checked folder may be approved')
-    subject = request_subject(applied, cwd, argv if args.approve_argv_json is not None else None, args.approve_paths)
-    if subject is None:
-        raise Refusal('this request is never decidable: park it')
-    return subject
 
 def _codes(values):
     return ', '.join(f'`{v}`' for v in sorted(values, key=lambda v: (v.casefold(), v)))
@@ -3239,18 +1511,19 @@ def rules():
            'Generated by `afk.py rules` from the data `check` reads; `tests/test_afk_rules.py` keeps this file equal '
            'to that output, so change the script, never this file. Every row is enforced by `afk.py check` (script) '
            'unless it says advisory.', '',
-           '## Modes and guards', '',
+           '## Guards', '',
            '| `## afk` line | Repository key | Values | Missing line |', '| --- | --- | --- | --- |']
-    defaults = {MODE: 'open', THIRD_PARTY: 'guard', DEFAULT_BRANCH: 'guard'}
     for name, values in CHOICES.items():
-        out.append(f'| `{name}` | `{keys[name]}` | {_codes(values)} | `{defaults[name]}` |')
-    out += ['', 'A repository\'s approved key wins in that repository only. `strict` keeps both guards on. In `open` '
-            'the `Merge` answer is ignored and the lists, categories and limits below do not apply; the lease hours '
-            'still end the lease.', '',
-            '## `open`', '',
+        out.append(f'| `{name}` | `{keys[name]}` | {_codes(values)} | `guard` |')
+    out += ['', 'A repository\'s approved key wins in that repository only. afk has one mode (`strict` was removed in '
+            f'0.3.3): no list, category, limit or Merge answer applies, and the lease hours ({NUMBERS["Lease hours"][0]} '
+            f'to {NUMBERS["Lease hours"][1]}, default {DEFAULTS["Lease hours"]}) end the lease. These `## afk` lines '
+            f'are no longer read: {_codes(RETIRED)}; nor are the repository keys other than {_codes(PROJECT_KEYS)}. '
+            'Anything else that must stay forbidden while you are away is a host deny rule.', '',
+            '## Answers', '',
             '| Answer | When |', '| --- | --- |',
             '| `floor` (Tier 3, never approvable through Decide) | the request changes a credential or reads, prints, '
-            'copies or sends a secret or key: the forms below, in both modes |',
+            'copies or sends a secret or key: the forms below |',
             '| `guarded` (Tier 3) | `Default branch: guard` and a form of "Default-branch guard" below |',
             '| Tier 1 | everything else |',
             '| advisory | `Third-party instructions: guard`: instructions in issues, other people\'s pull request text, '
@@ -3297,23 +1570,7 @@ def rules():
             '- A `-c`, `GIT_CONFIG_*` or `GIT_CONFIG_PARAMETERS` that sets `push.*`, `remote.*.push`, '
             f'`remote.*.mirror`, `branch.*.merge`, `branch.*.remote` or `alias.*`; a verb outside git\'s '
             f'{len(GIT_BUILTINS)} built-in commands (an alias). Server-side branch protection covers every other form.', '',
-            '## `strict`', '',
-            '| Setting | Values |', '| --- | --- |']
-    for name, (low, high) in NUMBERS.items():
-        out.append(f'| `{name}` | {low} to {high}, default {DEFAULTS[name]} |')
-    for name, fixed in CATEGORIES.items():
-        out.append(f'| Category `{name}` | {"`stop` (fixed)" if fixed else "`stop` or `decide`, default `stop`"} |')
-    out += ['', f'- Known paths: the roots {_codes(ROOTS)} with the extensions {_codes(EXTENSIONS)}, and the top-level '
-            f'{_codes(DOCUMENTS)}; a repository\'s approved `roots` and `top-level-files` add to them.',
-            f'- The account lists {_codes(LISTS)} are the default for every repository; a repository\'s approved '
-            f'{_codes(LISTS.values())} replaces the whole list there, and none applies in the strict or no-repository '
-            'state. A listed test command runs bare or as `heavy_run.py run [options] -- <command>`.',
-            f'- Protected everywhere (hard names): {_codes(HARD)}; also `AGENTS.afk.md*` and the constitution '
-            f'`{CONSTITUTION}`, so a lease cannot write the afk overlay or replace a constitution rule.',
-            f'- Protected outside the plugin\'s own source on a work branch (soft names): {_codes(SOFT)} and names '
-            f'starting with {_codes(SOFT_PREFIXES)}.',
-            f'- A repository\'s approved keys replacing the user values: {_codes(PROJECT_KEYS)}.',
-            f'- Enforcer scripts deny edits: {_codes(ENFORCERS)}.', '',
+            '## Rules and enforcers', '',
             '| Rule | Enforcer |', '| --- | --- |']
     doc = __doc__
     out += [line for line in doc[doc.index('| Rule | Enforcer |'):doc.index('\n\n', doc.index('| Rule | Enforcer |'))]
@@ -3321,7 +1578,6 @@ def rules():
     out += ['', '## Log kinds', '', '| Kind | Tier |', '| --- | --- |']
     out += [f'| `{kind}` | {tier} |' for kind, tier in KINDS.items()]
     print('\n'.join(out))
-
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0], allow_abbrev=False)
@@ -3335,13 +1591,10 @@ def main(argv=None):
     group = inspect.add_mutually_exclusive_group(required=True)
     group.add_argument('--argv-json')
     group.add_argument('--paths', nargs='+')
-    inspect.add_argument('--coordinator', choices=sorted(PROGRAMS), help="the coordinator's own family")
     record = sub.add_parser('log', allow_abbrev=False)
     record.add_argument('--kind', required=True, choices=sorted(KINDS))
     for key in ('task', 'pr', 'run', 'head', 'note', 'decision', 'rung', 'settled', 'precedents', 'topic', 'project', *FIELDS):
         record.add_argument('--' + key)
-    record.add_argument('--approve-argv-json')
-    record.add_argument('--approve-paths', nargs='+')
     record.add_argument('--approve-request')
     record.add_argument('--session')
     reviewed = sub.add_parser('review', allow_abbrev=False)

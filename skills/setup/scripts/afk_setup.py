@@ -17,65 +17,32 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 import compact_setup as cs
-import project_store as store
 import setup_features as sf
 
 # Kept local so setup remains independently installable. Round-trip tests
 # bind these choices and bounds to delegate's authoritative settings().
-DEFAULTS = {'Hosts': 'Claude Code', 'Task choice': 'choose', 'Push and pull requests': 'yes',
-            'Trusted authors': 'own', 'Lease hours': 8, 'Max runs': 20,
-            'Max runtime minutes': 480, 'Max actions per hour': 30, 'Quota floor percent': 15}
-NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
-           'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
-# Closed categories of "Where it must stop" in docs/specs/away-decisions.md: name -> fixed at stop.
-# Each is written explicitly; it is decide only when its own answer names it, and a fixed row never is.
-CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecoverable deletion': False,
-              'Messages outside the repository': False, 'Tags and releases': False, 'Publishing': False,
-              'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
-MOVABLE = tuple(name for name, fixed in CATEGORIES.items() if not fixed)
+# afk has one mode since 0.3.3 (docs/specs/afk-one-mode.md): setup never writes a Mode line, a limit other than
+# Lease hours, or any other line only `strict` read.
+DEFAULTS = {'Hosts': 'Claude Code', 'Lease hours': 8, 'Quota floor percent': 15}
+NUMBERS = {'Lease hours': (1, 24), 'Quota floor percent': (0, 100)}
 CONSENT = 'Excerpts leave the machine'
-# docs/specs/afk-autonomy.md A, C and E: the mode first, then the two guards of `open`; `strict` keeps Merge.
-CHOICES = {'Mode': ('open', 'strict'), 'Third-party instructions': ('guard', 'open'), 'Default branch': ('guard', 'open')}
-TARGETS = 'Non-production targets'
-MAX_TARGETS = 20
-# Account defaults of the command and file lists; a repository's own list replaces each (owner decision 15/11/2026).
-# They are checked with the repository grammar of `project_store.valid_autopilot`; an empty list writes no line.
-LISTS = {'Production targets': 'production-targets', 'Release targets': 'release-targets',
-         'Test commands': 'test-commands', 'Top-level files': 'top-level-files'}
+# docs/specs/afk-autonomy.md C: the two guards.
+CHOICES = {'Third-party instructions': ('guard', 'open'), 'Default branch': ('guard', 'open')}
 CAP = sf.CAP
 STATE = 'state/autopilot-setup'
 
 
 def validate(values):
-    required = {*DEFAULTS, *CHOICES, *CATEGORIES, CONSENT, TARGETS, *LISTS}
-    if not isinstance(values, dict) or not required <= set(values) or not set(values) <= required | {'Merge'}:
+    required = {*DEFAULTS, *CHOICES, CONSENT}
+    if not isinstance(values, dict) or set(values) != required:
         raise ValueError('all settings required')
-    if values['Mode'] == 'strict' and values.get('Merge') is None:
-        raise ValueError('explicit Merge answer required in strict')
     for key, value in values.items():
-        if key == 'Merge' and value is None:
-            continue
         if key in CHOICES:
             if value not in CHOICES[key]:
                 raise ValueError('invalid choice')
-            continue
-        if key in LISTS:
-            # The reader splits on '; ', so an entry holding it would read as two.
-            if not isinstance(value, list) or (value and (any(not isinstance(e, str) or ';' in e for e in value)
-                                                          or not store.valid_autopilot({LISTS[key]: value}))):
-                raise ValueError('invalid list')
-        elif key in CATEGORIES:
-            if value not in (('stop',) if CATEGORIES[key] else ('stop', 'decide')):
-                raise ValueError('invalid category choice')
         elif key == CONSENT:
             if value not in ('yes', 'no'):
                 raise ValueError('invalid consent')
-        elif key == TARGETS:
-            # The reader splits on '; ' and empties the whole list on any unreadable entry, so refuse those here.
-            if (not isinstance(value, list) or len(value) > MAX_TARGETS or len(value) != len(set(value))
-                    or not all(isinstance(e, str) and 0 < len(e) <= 200 and e == e.strip() and e.isprintable()
-                               and '; ' not in e for e in value)):
-                raise ValueError('invalid targets')
         elif key in NUMBERS:
             low, high = NUMBERS[key]
             if type(value) is not int or not low <= value <= high:
@@ -86,22 +53,12 @@ def validate(values):
             hosts = value.split(', ')
             if len(hosts) != len(set(hosts)) or not set(hosts) <= {'Claude Code', 'Codex', 'Antigravity'}:
                 raise ValueError('invalid hosts')
-        elif value not in {'Task choice': ('choose', 'listed'), 'Push and pull requests': ('yes', 'no'),
-                            'Merge': ('yes', 'no'), 'Trusted authors': ('own',)}[key]:
-            raise ValueError('invalid choice')
 
 
 def render(values):
     validate(values)
-    keys = ['Mode', 'Third-party instructions', 'Default branch', 'Hosts', 'Task choice', 'Push and pull requests',
-            'Merge', 'Trusted authors', *NUMBERS, *CATEGORIES, CONSENT]
-    lines = ''.join(f'- {key}: {values[key]}\n' for key in keys if values.get(key) is not None)
-    if values[TARGETS]:  # an empty list is no line: the reader's default is empty
-        lines += f'- {TARGETS}: ' + '; '.join(values[TARGETS]) + '\n'
-    for key in LISTS:
-        if values[key]:
-            lines += f'- {key}: ' + '; '.join(values[key]) + '\n'
-    return '## afk\n\n' + lines + '\n'
+    keys = ['Third-party instructions', 'Default branch', 'Hosts', *NUMBERS, CONSENT]
+    return '## afk\n\n' + ''.join(f'- {key}: {values[key]}\n' for key in keys) + '\n'
 
 
 def transform(raw, values):
@@ -205,19 +162,10 @@ def main(argv=None):
         commands = parser.add_subparsers(dest='action', required=True)
         pre = commands.add_parser('preview')
         pre.add_argument('--hosts', nargs='+', choices=('Claude Code', 'Codex', 'Antigravity'), default=['Claude Code'])
-        pre.add_argument('--task-choice', choices=('choose', 'listed'), default='choose')
-        pre.add_argument('--push-and-pull-requests', choices=('yes', 'no'), default='yes')
-        pre.add_argument('--mode', choices=CHOICES['Mode'], default='open')
         pre.add_argument('--third-party-instructions', choices=CHOICES['Third-party instructions'], default='guard')
         pre.add_argument('--default-branch', choices=CHOICES['Default branch'], default='guard')
-        pre.add_argument('--merge', choices=('yes', 'no'))  # required in strict; ignored and optional in open
-        pre.add_argument('--trusted-authors', choices=('own',), default='own')
         for key in NUMBERS:
             pre.add_argument('--' + key.lower().replace(' ', '-'), type=int, default=DEFAULTS[key])
-        pre.add_argument('--decide', action='append', choices=MOVABLE, default=[])
-        pre.add_argument('--non-production-target', action='append', default=[])
-        for key in LISTS:  # --production-target, --release-target, --test-command, --top-level-file
-            pre.add_argument('--' + LISTS[key][:-1], action='append', default=[])
         pre.add_argument('--excerpts-leave-the-machine', choices=('yes', 'no'), default='no')
         app = commands.add_parser('apply')
         app.add_argument('--yes', action='store_true')
@@ -225,12 +173,9 @@ def main(argv=None):
         args = parser.parse_args(argv)
         if args.action == 'preview':
             values = {key: getattr(args, key.lower().replace(' ', '_').replace('-', '_'))
-                      for key in (*DEFAULTS, 'Merge', *CHOICES)}
+                      for key in (*NUMBERS, *CHOICES)}
             values['Hosts'] = ', '.join(args.hosts)
-            values.update({c: 'decide' if c in args.decide else 'stop' for c in CATEGORIES})
             values[CONSENT] = args.excerpts_leave_the_machine
-            values[TARGETS] = args.non_production_target
-            values.update({key: getattr(args, LISTS[key][:-1].replace('-', '_')) for key in LISTS})
             preview(values)
         else:
             apply(args.digest, args.yes)

@@ -2,26 +2,17 @@
 
 While a lease is live, a decision you would otherwise ask the user goes up this ladder and stops at the first rung that settles it. That is every hand-off to the user or owner, whatever its form: a question tool or text question, a wrap-up question, an open decision in a plan, or a skill step that says the owner decides, such as `review-gate`'s stop at the recorded rework limit. Never end a turn waiting for an answer: settle it here, or park only what the checks below park and carry on with other work. Do not ask the user: on Claude Code the away question gate denies the question tool during a lease (hook); on Codex and Antigravity this is advisory (agent judgment). Following the ladder is advisory (agent judgment): `afk.py` runs nothing, so it cannot climb it for you. It enforces the record, the packet caps and the command forms below.
 
-`<script>` is `afk.py` from `delegate`, as in `SKILL.md`. `<judge.py>` is `judge.py` from the same `delegate` scripts folder: `check` allows only that copy and answers `protected` for any other, such as the one in `checks`.
+`<script>` is `afk.py` from `delegate`, as in `SKILL.md`. `<judge.py>` is `judge.py` from the same `delegate` scripts folder.
 
 ## Frame the question
 
-Write the question and two to six closed options, numbered from 1, each an action you may already take (advisory, agent judgment). A rung chooses among options; it grants no authority. Tier 3 work never enters the ladder: park it, except an `unknown` answer from `check`, which enters with the two fixed options of [lease-rules.md](lease-rules.md) (1 run it, 2 park it); a rung that settles on 1 records `--approve-argv-json` or `--approve-paths` on its attempt (script: the approval is refused unless the request is unknown and decidable, and it runs once). A host permission prompt the afk permission hook denied enters the same way, with the same two options; a rung that settles on 1 records `--approve-request <digest>` with the digest the denial printed (script: option 1 of a rule, advisor or host rung and a 64-hex digest; the hook uses it once within 30 minutes and the lease). Write down the anchor every rung decides on: the current spec's goal, or the project's stated goal.
+Write the question and two to six closed options, numbered from 1, each an action you may already take (advisory, agent judgment). A rung chooses among options; it grants no authority. Tier 3 work never enters the ladder: park it ([rules.md](rules.md)). A host permission prompt the afk permission hook denied enters the same way, with the same two options; a rung that settles on 1 records `--approve-request <digest>` with the digest the denial printed (script: option 1 of a rule, advisor or host rung and a 64-hex digest; the hook uses it once within 30 minutes and the lease). Write down the anchor every rung decides on: the current spec's goal, or the project's stated goal.
 
 ## Two checks against "Where it must stop"
 
-Check the question before it enters the ladder, and check the chosen action again before it runs. Park at either check whatever a rung answered. In `open` only credentials park (row 1 without the agent's own limits, which `open` allows); the other rows are `strict`'s. The first match wins:
+Check the question before it enters the ladder, and check the chosen action again before it runs. Park at either check whatever a rung answered when it touches credentials: changing one, or reading, printing, copying or sending a secret or key. Nothing else parks here: afk has one mode since 0.3.3, and anything else that must wait for the user is a host deny rule, which the host enforces.
 
-| # | Condition | Result |
-| --- | --- | --- |
-| 1 | Credentials, or the agent's own limits (hooks, permission rules, agent instructions, lease and setup files) | park |
-| 2 | Production, a live environment, real users or real customer data, or unsure whether it reaches them, except a deploy equal to a production target (this repository's `production-targets`, else the user's `Production targets`) in a repository whose own `decide` list holds `production` | park |
-| 3 | Any category that applies is `stop`, missing or invalid: this repository's `decide` list when it has one (every unlisted category stops), else `## afk` | park |
-| 4 | A deploy that equals no target exactly (this repository's `non-production-targets`, else the user's `Non-production targets`, or a production target under row 2), or a tag, release or publish command that equals no release target (this repository's `release-targets`, else the user's `Release targets`; reading tags and releases needs none) | park |
-| 5 | Every applicable category is `decide` (for a tag, release or publish, with the command equal to a listed release target), or the deploy equals a listed target | go on |
-| 6 | Local work no category names | classified as usual |
-
-Enforcer: `python3 -I <script> check` for the command forms [rules.md](rules.md) lists; rows 1 to 3 for anything a command does not show (real users, customer data, a message to a person) are advisory (agent judgment), and a doubt counts as `stop`. A listed non-production target relaxes only row 4; a listed production target, with `production` in this repository's `decide`, relaxes rows 2 and 4 for that exact command only; a listed release target relaxes only row 4. A repository's own list replaces the user's there. A decision is never permission: act only on Tier 1 from `check`.
+Enforcer: `python3 -I <script> check` answers `floor` for the command forms [rules.md](rules.md) lists (script); a credential a command does not show is advisory (agent judgment), and a doubt counts as a credential. A decision is never permission: act only on Tier 1 from `check`.
 
 When something parks, record it (see "Record each attempt", rung `park`), tell the user once, and go on with other work (advisory, agent judgment).
 
@@ -40,7 +31,7 @@ Build it before rung 2 or 3; the advisor never searches (advisory, agent judgmen
 2. **The evaluation table**, when the options are closed: the probability of each option, which never settles the choice by itself. Rung `table`.
    - With the assignment matrix's judge jev: `python3 -I <judge.py> ask --site away-evaluation --question '<question>' --option '<1>' --option '<2>' [...] --evidence-file <checked packet file> --judge jev`, after `check` returns Tier 1 for that exact argv. It prints `{"source": "jev", "of": <k>, "probabilities": [...]}`; the site's schema and caps are enforced by `judge.py`.
    - Without Jev, or when that call exits 3: one read-only run of the host's small fast model (a Haiku-class subagent on Claude Code) given the identical question, options and packet, asked for the probability of each option. Write its answer to `.finolabs/briefs/<name>.json` as `{"source": "host-small", "of": <k>, "probabilities": [...]}` and run `python3 -I <judge.py> check-table --file <that file> --of <k>` after `check` returns Tier 1 for it; the script checks the closed shape.
-3. **The deciders**: `advisor` in its choose mode, one read-only run, an `advise` dispatch that counts against the lease's run limit, given the question, the options, the goal anchor, the packet and the table, marked as data with its source. It returns one option with its reason, or `none`. Selection and the output contract are in that skill.
+3. **The deciders**: `advisor` in its choose mode, one read-only run, an `advise` dispatch, given the question, the options, the goal anchor, the packet and the table, marked as data with its source. It returns one option with its reason, or `none`. Selection and the output contract are in that skill.
 4. **The host.** No decider answered: choose the option that best serves the goal anchor yourself, with the table in view. Rung `host`.
 
 The answer of a rung is the decision, not advice: apply it, and do not re-ask, overrule or shop it to another rung (advisory, agent judgment; `log --by` shows who decided).
@@ -54,7 +45,7 @@ The answer of a rung is the decision, not advice: apply it, and do not re-ask, o
 | The small model's table fails `check-table`, or its run fails | go to the advisor without a table | `table`, `unavailable`, `--by host-small` |
 | The lease's Hosts hold no other family, or no other family has a strong model | the host chooses | `advisor`, `unavailable` (no `--by`), then `host` |
 | The advisor is out of quota, unreachable or its run fails | the host chooses | `advisor`, `unavailable`, then `host` |
-| `check` denies the advisor's argv because its program changed since setup recorded it (a Claude Code or Codex update) | the host chooses; tell the user to run `/setup add quota` again | `advisor`, `unavailable`, `--by <agent>`, then `host` |
+| The advisor's run refuses because its program changed since setup recorded it (a Claude Code or Codex update) | the host chooses; tell the user to run `/setup add quota` again | `advisor`, `unavailable`, `--by <agent>`, then `host` |
 | The advisor answers `none`, or names something outside the options | the host chooses | `advisor`, `no`, then `host` |
 | You find a fact the deciding rung lacked, and it changes which option fits | one new attempt at that rung with the fact, same decision id; if it does not hold, the host chooses | a further attempt, then `host` |
 | "Where it must stop" applies at either check | park | `park` |
@@ -69,6 +60,6 @@ Every attempt is one call; the first prints the decision id (`q<date>-<time>-<4 
 - `table yes`: `--by <jev|host-small> --of <k> --probability <the top probability>`; `table unavailable`: `--by <jev|host-small>`. A table never takes `--option`: it decides nothing.
 - `advisor yes`: `--by <agent> --option <n> --of <k> --dispatch <id> --model <model>`; `advisor no`: `--by <agent> --dispatch <id> --model <model>`; `advisor unavailable`: `--by <agent>` (and `--dispatch` if a run started), or nothing further when no candidate was found.
 - `host yes`: `--by <your family> --option <n> --of <k> --model <your model>`; `park yes`: `--by <your family>`.
-- An approval: a `rule`, `advisor` or `host` attempt with `--settled yes --option 1` adds `--approve-argv-json '<argv JSON>'` or `--approve-paths <paths...>`, run from the folder the request runs in, or `--approve-request <digest>` for a denied permission prompt; one approval flag per attempt, and any other row with one is refused (script).
+- An approval: a `rule`, `advisor` or `host` attempt with `--settled yes --option 1` adds `--approve-request <digest>` for a denied permission prompt; any other row with it is refused (script).
 
 Never put question or option text in the topic or note; the topic is a short label (advisory, agent judgment; the script screens labels). When the advisor's family wrote the work the decision concerns, say so in your report.

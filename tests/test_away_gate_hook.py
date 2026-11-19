@@ -43,8 +43,7 @@ class AwayGateHookTest(unittest.TestCase):
     def lease(self, start=None, expiry=None, **change):
         current = time.time()
         value = {"id": "a" * 32, "start": current - 60 if start is None else start,
-                 "expiry": current + 3600 if expiry is None else expiry, "settings_hash": "b" * 64,
-                 "counters": {}}
+                 "expiry": current + 3600 if expiry is None else expiry, "settings_hash": "b" * 64}
         value.update(change)
         path = self.state / "lease.json"
         path.write_text(json.dumps(value))

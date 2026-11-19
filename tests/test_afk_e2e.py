@@ -14,7 +14,7 @@ import sys
 
 from tests.test_afk import ROOT, SETUP, AfkBase
 
-OPEN = SETUP.replace('- Mode: strict\n', '')  # a missing Mode line is `open`; both guards default to `guard`
+OPEN = SETUP  # afk has one mode (docs/specs/afk-one-mode.md); both guards default to `guard`
 POST_REVIEW = str(ROOT / 'skills/review-gate/scripts/post_review.py')
 STUB = """#!{python}
 import json, os, sys
