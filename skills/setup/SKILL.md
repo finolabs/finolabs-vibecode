@@ -32,7 +32,7 @@ Yes: Ask only essentials; writes ask first.
 No: Choose Advanced or Quick; switch later.
 Undo: Switch paths; prior approvals stand.
 Choices: "Yes, start with essentials" / "No, choose another path".
-If yes: `references/plain-language.md`; run step 1's `onboard first` and steps that ask nothing; ask only `mode.md` (user), project steps 3, 2 and the menu's threshold; the rest waits for a later run or its own command (`add <feature>`, `scan`, `instructions`). User scope closes: "To adopt the review gate in a repository, run `/setup` there (project scope)." (advisory).
+If yes: `references/plain-language.md`; run step 1's `onboard first` and steps that ask nothing; ask only `mode.md` (user), project steps 3, 2 and the menu's threshold; rest: later run, `add`, `scan`, `instructions`. User scope closes: "To adopt the review gate in a repository, run `/setup` there (project scope)." (advisory).
 Otherwise **Advanced** asks each inert item; **Quick** confirms inert defaults once. Ask which.
 In every mode these keep their own question: moving the data root and its copy; arming `auto` and the auto gate; filling host config; each Antigravity test-command grant; roles and review posting; the Antigravity hook write; the compaction threshold; each instruction-file write. In Quick mode unknowns stay open.
 
