@@ -837,16 +837,69 @@ class ChecksRunTest(unittest.TestCase):
         self.assertIn('exit code 77', out)
         self.assertEqual(self.marked(), [])
 
-    def test_a_light_check_is_stopped_after_the_maximum_run_time(self):
-        self.store(('slow', self.mark('slow')), light=['slow'])
+    def test_a_pause_that_starts_during_the_pressure_wait_stops_the_light_check(self):
+        self.store(('unit', self.mark('unit')), light=['unit'])
         module = self.module()
+        module.LIGHT_POLL = 0
+        readings = iter(['critical', 'normal'])
+        with mock.patch.object(module.hr, 'memory_gates_available', return_value=True), \
+                mock.patch.object(module.hr, 'read_pressure', side_effect=lambda: next(readings)), \
+                mock.patch.object(module.hr, 'pause_active', side_effect=[False, True]):
+            code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 1)
+        self.assertIn('a pause is active', err)
+        self.assertIn('exit code 77', out)
+        self.assertEqual(self.marked(), [])
+
+    def worker_check(self, parent_seconds, worker_seconds):
+        """A light check whose program starts a worker in its own process group and exits after `parent_seconds`;
+        the worker records its pid, then its mark after `worker_seconds`."""
+        (self.repo / 'spawn.py').write_text(
+            "import subprocess, sys, time\n"
+            "subprocess.Popen([sys.executable, 'worker.py', *sys.argv[1:]])\n"
+            "time.sleep(float(sys.argv[3]))\n")
+        (self.repo / 'worker.py').write_text(
+            "import os, sys, time\n"
+            "open(sys.argv[2], 'w').write(str(os.getpid()))\n"
+            "time.sleep(float(sys.argv[4]))\n"
+            "open(sys.argv[1], 'a').write('worker\\n')\n")
+        self.git('add', 'spawn.py', 'worker.py')
+        self.commit('Add worker fixture')
+        pid_file = self.marks.parent / 'worker.pid'
+        self.store(('spawn', [sys.executable, 'spawn.py', str(self.marks), str(pid_file), str(parent_seconds),
+                              str(worker_seconds)]), light=['spawn'])
+        return pid_file
+
+    def test_a_light_run_waits_for_a_worker_its_check_left_behind(self):
+        self.worker_check(0, 0.5)
+        module = self.module()
+        with mock.patch.object(module.hr, 'memory_gates_available', return_value=False):
+            code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.marked(), ['worker'])  # the run did not return before the worker finished
+
+    def test_the_maximum_run_time_stops_the_whole_light_process_group(self):
+        pid_file = self.worker_check(30, 30)
+        module = self.module()
+        module.LIGHT_GRACE = 0.2
+        limits = dict(module.hr.DEFAULTS, max_minutes=0.02)
         with mock.patch.object(module.hr, 'memory_gates_available', return_value=False), \
-                mock.patch.object(module.subprocess, 'run',
-                                  side_effect=subprocess.TimeoutExpired('slow', 1)) as launched:
+                mock.patch.object(module.hr, 'limits', return_value=limits):
             code, out, err = self.run_cli(module, 'run')
         self.assertEqual(code, 1)
         self.assertIn('stopped after the maximum run time', err)
-        self.assertEqual(launched.call_args.kwargs['timeout'], module.hr.limits()['max_minutes'] * 60)
+        self.assertIn('exit code 124', out)
+        worker = int(pid_file.read_text())
+        import time
+        for _ in range(100):
+            try:
+                os.kill(worker, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+        else:
+            self.fail('the worker outlived the light check')
+        self.assertEqual(self.marked(), [])
 
     def test_every_launch_uses_the_allowlisted_environment(self):
         self.store(('a', self.mark('a')), ('b', self.mark('b')), light=['b'])

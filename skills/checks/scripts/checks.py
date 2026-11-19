@@ -13,7 +13,8 @@ Each check is an argument array from the repository's approved check file (writt
 check (the default) is launched through `heavy_run.py`'s canonical form and queues for the machine-wide lock. A check
 the approved file marks `"heavy": false` runs directly, outside the lock and the load gate: it refuses while a pause is
 active (exit 77), waits only while macOS memory pressure reads critical (up to the heavy-job wait cap, then exit 75)
-and is stopped after the maximum job time (exit 124). `--changed` keeps only the checks the change since the base touches: a
+runs in its own process group until every member is gone, and that group is stopped after the maximum job time (exit
+124). `--changed` keeps only the checks the change since the base touches: a
 `python -m unittest discover -s tests` check keeps its discovery and gets one `--pattern <file>` run per module
 `select_tests.py` names, only when the tests folder is flat (see `layout_covered`); every other check, unittest form
 and layout runs whole.
@@ -68,12 +69,14 @@ def run_one(name, argv, root):
 
 
 LIGHT_POLL = 15.0
+LIGHT_GRACE = 10.0  # seconds between SIGTERM and SIGKILL, and after SIGKILL, as heavy_run.py waits
 
 
 def light_wait():
     """None when a light check may start now, else (exit code, reason). It never takes the heavy-job lock or reads
-    the load: a light check refuses during a pause and waits only while memory pressure reads critical; an unreadable
-    reading does not wait (the heavy gate's stricter rule is for heavy jobs)."""
+    the load: a light check refuses during a pause, checked again at every poll and right before the start, and waits
+    only while memory pressure reads critical; an unreadable reading does not wait (the heavy gate's stricter rule is
+    for heavy jobs)."""
     if hr.pause_active():
         return 77, 'a pause is active'
     if not hr.memory_gates_available():
@@ -83,24 +86,62 @@ def light_wait():
         if time.monotonic() >= deadline:
             return 75, 'memory pressure stayed critical until the wait cap'
         time.sleep(LIGHT_POLL)
+        if hr.pause_active():
+            return 77, 'a pause is active'
     return None
 
 
 def run_light(argv, root):
+    """Run one light check in its own process group and wait until that whole group is gone, so a worker the check
+    left behind holds the run like the check itself; after `Max job minutes` the group gets SIGTERM, then SIGKILL."""
+    import signal
     blocked = light_wait()
     if blocked is not None:
         print(f'checks: light check not started: {blocked[1]}', file=sys.stderr, flush=True)
         return blocked[0]
+    max_seconds = hr.limits()['max_minutes'] * 60
     try:
-        done = subprocess.run(list(argv), cwd=root, env=run_env.environment(), check=False,
-                              timeout=hr.limits()['max_minutes'] * 60)
-    except subprocess.TimeoutExpired:
-        print('checks: light check stopped after the maximum run time', file=sys.stderr, flush=True)
-        return 124
+        child = subprocess.Popen(list(argv), cwd=root, env=run_env.environment(), start_new_session=True)
     except OSError:
         print('checks: could not start the light check', file=sys.stderr, flush=True)
         return 127
-    return done.returncode
+
+    def forward(number, _frame):
+        try:
+            os.killpg(child.pid, number)
+        except OSError:
+            pass
+
+    previous = {number: signal.signal(number, forward) for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
+    limit = time.monotonic() + max_seconds
+    timed_out, kill_at, status = False, None, None
+    try:
+        while True:
+            if status is None:
+                status = child.poll()
+            if status is not None and not hr.group_alive(child.pid):
+                break
+            now = time.monotonic()
+            if not timed_out and now >= limit:
+                timed_out, kill_at = True, now + LIGHT_GRACE
+                forward(signal.SIGTERM, None)
+            elif timed_out and now >= kill_at:
+                forward(signal.SIGKILL, None)
+                if now >= kill_at + LIGHT_GRACE:
+                    break
+            time.sleep(0.05)
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+        if status is None:
+            try:
+                child.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+    if timed_out:
+        print('checks: light check stopped after the maximum run time', file=sys.stderr, flush=True)
+        return 124
+    return status if status >= 0 else 128 - status
 
 
 def git(root, *args):
