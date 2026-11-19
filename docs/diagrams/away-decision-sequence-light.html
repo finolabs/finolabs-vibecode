@@ -14,15 +14,15 @@ svg{width:100%;min-width:900px;display:block}
 </style></head><body><div class="frame">
 <p class="eyebrow">Flow · finolabs-vibecode</p>
 <h1>Away from keyboard: what afk does while you are gone</h1>
-<p class="sub">Start afk once; every session on the machine checks each action against the lease and the repository&#x27;s own rules, does only what is allowed, parks the rest for you, settles questions on a ladder and asks you to review each decision when you are back. This page shows strict. In open, the default, every action runs except the credential floor (known forms of reading, printing, copying or sending a secret; see afk.py rules) and the default-branch guard, enforced by afk.py check (no commit or push on the default branch and no force, delete or mirror push; gh pr merge and gh api ref writes are not covered); a second guard, that third-party instructions grant nothing, is advisory. In open, afk enforces neither reviews nor merge_check.py: only server-side branch protection or a required merge_check.py --ci-context status gates a merge. The decision ladder, the merge-gate procedure and the kept-or-reversed review apply in both modes as advisory steps.</p>
+<p class="sub">Start afk once; every session on the machine checks each action against the lease, does what afk allows, parks the rest for you, settles questions on a ladder and asks you to review each decision when you are back. afk has one mode: every action runs except the credential floor (known forms of reading, printing, copying or sending a secret; see afk.py rules) and the default-branch guard, enforced by afk.py check (no commit or push on the default branch and no force, delete or mirror push; gh pr merge and gh api ref writes are not covered); a second guard, that third-party instructions grant nothing, is advisory. Anything else you want forbidden while away is a host deny rule (Claude Code permission rules and auto mode, the native deny rules setup offers, Codex&#x27;s sandbox and approval policy). afk enforces neither reviews nor merge_check.py: only server-side branch protection or a required merge_check.py --ci-context status gates a merge; the decision ladder, the merge-gate procedure and the kept-or-reversed review are advisory steps.</p>
 <svg viewBox="0 0 1280 1048" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="away-decision-sequence-light-title away-decision-sequence-light-desc">
 <title id="away-decision-sequence-light-title">Away from keyboard: what afk does while you are gone</title>
-<desc id="away-decision-sequence-light-desc">Flow of an afk lease in strict mode (in open, the default, every action runs except the credential floor, known forms of reading, printing, copying or sending a secret, see afk.py rules, and the default-branch guard, enforced by afk.py check, on git commit and git push only, not gh pr merge or gh api ref writes; the guard that third-party instructions grant nothing is advisory; afk enforces neither reviews nor merge_check.py there, so only server-side branch protection or a required merge_check.py --ci-context status gates a merge): you start it once and one lease covers every session on the machine; start prints a goal for /goal and may start a self-paced /loop; each repository applies its own rules, with the account&#x27;s lists as the default and a repository&#x27;s own list replacing them, and limits counted per repository; before each action every session runs afk.py check, acts and logs on Tier 1 and parks Tier 3 work, telling you once; an unknown request of an allowlisted shape goes up the decide ladder as &quot;run this exact request?&quot;, and when a recorded rule, an advisor or the host settles on running it, the approval is recorded with that decision and the next check of that exact request answers decided, Tier 1, once; reviews come from another model family, or from the same family, logged, when no other is reachable; credentials, the agent&#x27;s own hooks, permissions, lease and setup files, real users or customer data and any category set to stop always park, and production deploys, tags, releases, publishing and test commands run only when the exact command is listed; a question it would ask you goes up the decide ladder: a recorded rule, an evaluation table from Jev or the host&#x27;s small model that gives each option&#x27;s probability as data and decides nothing, an advisor of another family in choose mode using frontier or else strong models with its run counted against the lease, and the host&#x27;s own choice, checked again before the action; when you return you stop the lease and mark each decision kept or reversed, and reversals go to the knowledge base.</desc>
+<desc id="away-decision-sequence-light-desc">Flow of an afk lease. afk has one mode: every action runs except the credential floor (known forms of reading, printing, copying or sending a secret, see afk.py rules) and the default-branch guard, enforced by afk.py check, on git commit and git push only, not gh pr merge or gh api ref writes; the guard that third-party instructions grant nothing is advisory; afk enforces neither reviews nor merge_check.py, so only server-side branch protection or a required merge_check.py --ci-context status gates a merge; anything else you want forbidden while away is a host deny rule. You start it once and one lease covers every session on the machine, with the lease hours as its only limit; start prints a goal for /goal and may start a self-paced /loop; a repository may change only its two guards; before each action every session runs afk.py check, acts and logs on Tier 1 and parks floor and guarded work (Tier 3), telling you once; on Claude Code a host permission prompt the permission hook denied goes up the decide ladder as &quot;run this exact request?&quot;, and when a recorded rule, an advisor or the host settles on running it, the approval is recorded with --approve-request and the hook allows that exact request once; reviews come from another model family, or from the same family, logged, when no other is reachable; a question it would ask you goes up the decide ladder: a recorded rule, an evaluation table from Jev or the host&#x27;s small model that gives each option&#x27;s probability as data and decides nothing, an advisor of another family in choose mode using frontier or else strong models, and the host&#x27;s own choice, checked again before the action; when you return you stop the lease and mark each decision kept or reversed, and reversals go to the knowledge base.</desc>
 <defs><marker id="away-decision-sequence-light-default" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5B5B79"/></marker><marker id="away-decision-sequence-light-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4B1E73"/></marker><marker id="away-decision-sequence-light-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#14627A"/></marker></defs>
 <rect width="100%" height="100%" fill="#F7F7FB"/>
 <rect x="360" y="440" width="400" height="376" rx="12" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.14)" stroke-width="1"/>
 <text x="560" y="468" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">The decide ladder</text>
-<text x="560" y="488" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">a question, or: run an unknown request?</text>
+<text x="560" y="488" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">a question, or: run a denied prompt?</text>
 <path d="M280,88 H360" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#away-decision-sequence-light-default)"/>
 <path d="M760,104 H880" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#away-decision-sequence-light-default)"/>
 <path d="M560,168 V248" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#away-decision-sequence-light-default)"/>
@@ -36,16 +36,16 @@ svg{width:100%;min-width:900px;display:block}
 <rect class="lm" x="788" y="80" width="64" height="16" rx="2" fill="#F7F7FB"/><text x="820" y="92" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">APPLIES</text>
 <rect class="lm" x="792" y="272" width="56" height="16" rx="2" fill="#F7F7FB"/><text x="820" y="284" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">TIER 1</text>
 <rect class="lm" x="292" y="272" width="56" height="16" rx="2" fill="#F7F7FB"/><text x="320" y="284" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">TIER 3</text>
-<rect class="lm" x="356" y="384" width="72" height="16" rx="2" fill="#F7F7FB"/><text x="428" y="396" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end" letter-spacing="0.06em">UNKNOWN</text>
+<rect class="lm" x="356" y="384" width="76" height="16" rx="2" fill="#F7F7FB"/><text x="428" y="396" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end" letter-spacing="0.06em">A PROMPT</text>
 <rect class="lm" x="568" y="384" width="88" height="16" rx="2" fill="#F7F7FB"/><text x="572" y="396" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.06em">A QUESTION</text>
 <rect class="lm" x="824" y="504" width="112" height="16" rx="2" fill="#F7F7FB"/><text x="880" y="516" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">CHECKED AGAIN</text>
-<rect class="lm" x="784" y="536" width="192" height="16" rx="2" fill="#F7F7FB"/><text x="880" y="548" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">UNKNOWN: DECIDED ONCE</text>
+<rect class="lm" x="784" y="536" width="192" height="16" rx="2" fill="#F7F7FB"/><text x="880" y="548" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">PROMPT: ALLOWED ONCE</text>
 <rect class="lm" x="1128" y="632" width="104" height="16" rx="2" fill="#F7F7FB"/><text x="1132" y="644" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.06em">DECISION LOG</text>
 <g class="node">
 <rect x="40" y="40" width="240" height="96" rx="8" fill="#F7F7FB"/>
 <rect x="40" y="40" width="240" height="96" rx="8" fill="rgba(91,91,121,0.10)" stroke="#8B8BA6" stroke-width="1" stroke-dasharray="4,3"/>
 <text x="160" y="72" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">/afk start</text>
-<text x="160" y="96" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">once, limits from setup</text>
+<text x="160" y="96" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">once; lease hours from setup</text>
 <text x="160" y="116" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">prints /goal, starts /loop</text>
 </g>
 <g class="node">
@@ -53,33 +53,33 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="360" y="40" width="400" height="128" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
 <text x="560" y="68" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">One lease for the machine</text>
 <text x="560" y="92" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">every session works under it</text>
-<text x="560" y="112" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">approved project files can set</text>
-<text x="560" y="132" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">task choice, push and merge</text>
+<text x="560" y="112" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">lease hours: the only limit</text>
+<text x="560" y="132" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">more blocking: host deny rules</text>
 <text x="560" y="152" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Claude Code: question tool denied</text>
 </g>
 <g class="node">
 <rect x="880" y="40" width="360" height="128" rx="8" fill="#F7F7FB"/>
 <rect x="880" y="40" width="360" height="128" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
-<text x="1060" y="76" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Rules per repository</text>
-<text x="1060" y="100" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">account lists are the default</text>
-<text x="1060" y="120" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">a repository&#x27;s own list replaces one</text>
-<text x="1060" y="140" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">limits counted per repository</text>
+<text x="1060" y="76" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Guards per repository</text>
+<text x="1060" y="100" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">account guards are the default</text>
+<text x="1060" y="120" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">a repository may change its own</text>
+<text x="1060" y="140" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">default-branch, third-party</text>
 </g>
 <g class="node">
 <rect x="360" y="248" width="400" height="96" rx="8" fill="#F7F7FB"/>
 <rect x="360" y="248" width="400" height="96" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
 <text x="560" y="280" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Before each action: check</text>
 <text x="560" y="304" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">afk.py check, every session</text>
-<text x="560" y="324" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the command and every path</text>
+<text x="560" y="324" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">floor and guards, else Tier 1</text>
 </g>
 <g class="node">
 <rect x="880" y="248" width="360" height="136" rx="8" fill="#F7F7FB"/>
 <rect x="880" y="248" width="360" height="136" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
 <text x="1060" y="280" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Act and log</text>
-<text x="1060" y="304" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Tier 1 or decided once, afk.py log</text>
+<text x="1060" y="304" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Tier 1, afk.py log</text>
 <text x="1060" y="324" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">reviews: another family, else</text>
 <text x="1060" y="344" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the same family, logged;</text>
-<text x="1060" y="364" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">two models for enforcer files</text>
+<text x="1060" y="364" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">merge gate advisory</text>
 </g>
 <g class="node">
 <rect x="40" y="248" width="240" height="96" rx="8" fill="#F7F7FB"/>
@@ -92,20 +92,20 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="40" y="440" width="240" height="148" rx="8" fill="#F7F7FB"/>
 <rect x="40" y="440" width="240" height="148" rx="8" fill="rgba(75,30,115,0.05)" stroke="rgba(75,30,115,0.50)" stroke-width="1" stroke-dasharray="4,4"/>
 <text x="160" y="468" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Always parks</text>
-<text x="160" y="492" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">credentials, in both modes</text>
-<text x="160" y="512" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">its own hooks, permissions,</text>
-<text x="160" y="532" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">lease and setup files</text>
-<text x="160" y="552" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">real users, customer data</text>
-<text x="160" y="572" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">any category set to stop</text>
+<text x="160" y="492" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the credential floor:</text>
+<text x="160" y="512" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">changing a credential,</text>
+<text x="160" y="532" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">reading or sending a secret</text>
+<text x="160" y="552" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the default-branch guard,</text>
+<text x="160" y="572" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">when it is on</text>
 </g>
 <g class="node">
 <rect x="40" y="612" width="240" height="140" rx="8" fill="#F7F7FB"/>
 <rect x="40" y="612" width="240" height="140" rx="8" fill="rgba(75,30,115,0.05)" stroke="rgba(75,30,115,0.50)" stroke-width="1" stroke-dasharray="4,4"/>
-<text x="160" y="640" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Only when listed</text>
-<text x="160" y="664" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the exact command, for</text>
-<text x="160" y="684" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">production deploys,</text>
-<text x="160" y="704" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">tags, releases, publishing</text>
-<text x="160" y="724" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">and test commands</text>
+<text x="160" y="640" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">The rest: host rules</text>
+<text x="160" y="664" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">anything else to forbid</text>
+<text x="160" y="684" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">is a host deny rule:</text>
+<text x="160" y="704" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Claude Code permissions,</text>
+<text x="160" y="724" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Codex sandbox and approvals</text>
 </g>
 <g class="node">
 <rect x="376" y="504" width="368" height="56" rx="6" fill="#F7F7FB"/>
@@ -125,7 +125,7 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="376" y="660" width="368" height="76" rx="6" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
 <text x="560" y="684" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">3. An advisor, choose mode</text>
 <text x="560" y="708" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">another family, frontier else strong;</text>
-<text x="560" y="728" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the run counts against the lease</text>
+<text x="560" y="728" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">a read-only run</text>
 </g>
 <g class="node">
 <rect x="376" y="748" width="368" height="56" rx="6" fill="#F7F7FB"/>
