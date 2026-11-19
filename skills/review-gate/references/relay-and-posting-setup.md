@@ -8,6 +8,8 @@ Each reviewer posts its whole report as one comment through `post_review.py`. Th
 
 ## Cannot post
 
+A reviewer that cannot post returns its finished comment, marker included, plus exactly one line `cannot-post: <reason>`: `no-cli`, `no-network`, `no-auth`, `no-permission` or `other`. Relay at most once per review run, under the existing `CLAUDE.md` and repository relay approval (advisory, agent judgment). What counts as approval, attribution, posting setup and identity verification: the sections below.
+
 `post_review.py` emits those fixed reasons for posting failures; the reviewer uses them for missing host capabilities too (advisory, agent judgment). Explain the missing capability and direct the user to `setup`; do not make relay the steady state.
 
 ## Relay

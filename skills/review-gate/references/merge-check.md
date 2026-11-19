@@ -18,6 +18,8 @@ When the pull request's author lacks write access, the merge also needs the owne
 
 A security verdict marked ` lane=yes` counts only when the pull request qualifies for the lane at the head (rule 7). Every check on the head must have passed, and GitHub must report the pull request mergeable (`mergeStateStatus` `CLEAN`, `HAS_HOOKS` or `UNSTABLE`); `UNKNOWN` means wait and check again.
 
+`kind=ui` is the `ui-review-gate` result; the merge check requires it only where the base's `## Agent skills` section names `ui-review-gate` and the router marker says `ui=yes`.
+
 ## Batching
 
 Rule 5.

@@ -1,3 +1,6 @@
+# select-tests: reads skills/setup/
+# select-tests: reads skills/status/
+# select-tests: reads skills/update/
 import pathlib
 import unittest
 
