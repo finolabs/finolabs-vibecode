@@ -32,6 +32,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `select_tests.py` (the `checks` skill and the repository copy) also selects a test module that declares a folder it reads with a line `# select-tests: reads <folder>/`, for modules that build paths at run time; `test_setup_limits` declares `skills/setup/`, so a setup reference change now selects it (it missed the size caps in PR 349).
 - Docs that describe the product follow 0.3.3 (release drift review): the README skill and setup tables, the comparison page, the help map and `setup` page, `/setup check` (the merge notice starts the worktree cleanup), `PRIVACY.md` (the weekly floor line) and the delegation sequence diagram (the ledger removes a merged run's worktree).
+- `status`, `review-gate` and `coding-router` move branch-only detail into their own `references/` folders behind pointers (the dashboard page and data, stale runs; the same-family fallback, rework hand-off and cannot-post reasons; the architecture checkpoint, router marker and spec decisions), so each `SKILL.md` stays under 10,000 bytes; no rule or behavior changes.
 
 ### Fixed
 
