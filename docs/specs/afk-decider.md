@@ -1,6 +1,6 @@
 # afk decider: settle the stops, leave the blocking to the host
 
-Status: in progress; owner direction and decisions 18/11/2026; code for A to D and decisions 1 to 4 and 6 lands in 0.3.3, decision 5 (dropping the syntax allowlist and the general argv classification) is parked and left out of 0.3.3 (19/11/2026), because it redefines `strict` mode and the rules a live lease runs on. It changes [afk-autonomy.md](afk-autonomy.md), [afk-per-project.md](afk-per-project.md) and [away-decisions.md](away-decisions.md) where they say who blocks and when an agent may stop; where they disagree, this document wins from the release that ships its code.
+Status: in progress; owner direction and decisions 18/11/2026; code for A to D and decisions 1 to 6 lands in 0.3.3. Decision 5 (dropping the syntax allowlist and the general argv classification) was parked on 19/11/2026 and then taken into 0.3.3 the same day by the owner's direction ("làm luôn"), within the scope in "What `strict` answers" below; it redefines `strict` mode and the rules a live lease runs on, so a lease started before the update runs on the new rules after it. It changes [afk-autonomy.md](afk-autonomy.md), [afk-per-project.md](afk-per-project.md) and [away-decisions.md](away-decisions.md) where they say who blocks and when an agent may stop; where they disagree, this document wins from the release that ships its code.
 
 ## Why
 
@@ -62,6 +62,22 @@ afk no longer imitates the shell. `afk.py check` keeps what is not syntax:
 
 Its word-level syntax allowlist and its general classification of argv go away with the hook (decision 5); the guards above keep their own narrow reading. Blocking credential reads becomes the host's job: `setup` offers native deny rules for the credential floor (for example `Read(~/.netrc)` and `Bash(printenv:*)` on Claude Code), and `afk start` warns when the host has neither those rules nor an approval mode that asks.
 
+### What `strict` answers (decision 5, 0.3.3)
+
+Scope as the owner accepted it on 19/11/2026: `strict` keeps the lists and the categories and drops only the word-level syntax reading. `open` is unchanged.
+
+| Request | Answer |
+| --- | --- |
+| A listed test command, a deploy equal to a listed target, a tag, release or publish equal to a listed release target with its category at `decide`, a known path (roots, extensions, `top-level-files`), within the lease's limits | Tier 1 `allowed` |
+| A push, pull request or merge the lease's Push and Merge answers allow, in the narrow forms `rules.md` lists (a merge pinned to a head with a fresh `MERGE OK`), a commit on a work branch, this install's own scripts and the ladder's forms | Tier 1 `allowed` |
+| A category at `stop`, a deploy or release that equals no listed target, recursive deletion, a protected name | Tier 3, parks (`forbidden`, `protected`) |
+| The credential floor | `floor`, parks, never approvable |
+| A default-branch guard form, anywhere in the request (the `open` guard reading: a push or commit to the default branch, a force, delete or mirror push, a push config override, an alias) | `guarded`, parks |
+| A `git push`, `merge`, `tag` or `commit`, a `gh pr merge`, `create`, `edit` or `comment`, a `gh release`, a publish, a deploy word or a recursive `rm`, anywhere in the request, in a form its rule does not accept | `rule-form`, parks, never approvable, so an approval cannot replace the Push or Merge answer, a merge pin, a release or deploy list or the text screens |
+| Anything else, read-only queries such as `git status` and `gh pr view` included | `unknown`: Decide with the two fixed options (run it, park it); an approval binds that exact argv or set of paths once, with no shape allowlist, refused only for a secret, a control character or a request outside a found repository with user or project settings |
+
+Removed by decision 5: the closed verb and option tables for read-only `git` and `gh` queries (they were Tier 1), and the approval shape allowlist (`shape_decidable`, `dispatch_prefix`, the `make`, JavaScript, Python, `pip`, `cargo`, `go`, `uv`, `poetry`, `bundle`, `git` and `gh` shape tables, the URL, remote, shell-operator and path-inside screens of `decidable_argv`). The `rule-form` reading compares the words the `open` floor and guard reading already finds with fixed sets; it adds no grammar.
+
 ## Owner decisions
 
 Settled by the owner on 18/11/2026. Decisions 1, 2, 3, 5 and 6 took their recommendation; decision 4 took the alternative. The declined option stays recorded.
@@ -83,6 +99,7 @@ Settled by the owner on 18/11/2026. Decisions 1, 2, 3, 5 and 6 took their recomm
 - Stop hook: a turn that ends with a pending question under a lease is sent back once; a second stop in a row, an idle or parked record, a reached limit, no lease, `FNL_AFK_STOP=off` and every error let it through; the user's interrupt is never blocked.
 - Permission hook: with no Bash allow rule on the host, a denied request's message carries its digest, and recording that digest through the exempt `log` command lets the same request through once; the install's own lease commands with plain arguments are always allowed, and any other form of them is not; an exact recorded permission approval is allowed once; the same request a second time, a request differing by one byte, tool or working folder, an expired approval and every request without a lease are not allowed; a second denial without an approval ends in a parked record; `check` never consumes a permission approval; `FNL_AFK_PERMIT=off` and errors fall back to the host's prompt.
 - Guards: a direct push to the default branch and a force push stay refused under a lease in both modes when the user kept those guards.
+- `strict` after decision 5: a read-only query is `unknown` and approvable once; a guard form inside a shell string is `guarded`; a push, merge or pull request form its rule does not accept is `rule-form` and never approvable; every `open` answer is unchanged (`tests/test_afk.py`, `tests/test_afk_open.py`).
 - Merge: under each authority source, `MERGE OK` merges and anything else parks, a pull request that changes hooks or instruction files included.
 - The `PRIVACY.md` sections and `CLAUDE.md` exceptions match the code before release.
 

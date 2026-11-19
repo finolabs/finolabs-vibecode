@@ -505,6 +505,11 @@
           "text": "Claude Code: the afk check hook is gone and FNL_AFK_HOOK no longer does anything; under a lease the agent runs afk.py check itself and your host's permissions do the blocking."
         },
         {
+          "id": "0.3.3/afk-strict-no-syntax",
+          "kind": "info",
+          "text": "strict afk leases: git status, gh pr view and other commands no rule names now go through Decide and may be approved once; odd push, merge or PR forms park as rule-form."
+        },
+        {
           "id": "0.3.3/afk-decider-hooks",
           "kind": "hook",
           "text": "Claude Code: under an afk lease, a stop hook sends a turn without an idle or parked record back once, and a permission hook answers prompts from recorded approvals."

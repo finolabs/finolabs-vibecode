@@ -28,6 +28,7 @@ Status: implemented; release prepared, not yet tagged.
 | 365 | `/setup add quota --weekly-floor <family>/<label>=<percent>`: routing treats that install's weekly pools below the floor as out of quota. |
 | 366 | The UI review gate (`ui-review-gate`) skill, implementing docs/specs/ui-review-gate.md: four modes on WCAG 2.2 AA, read-only measurement snippets, report-only and advisory; seven Codex review rounds on the target-size inline exception. |
 | 367 | The inline target check skips hidden elements (last LOW finding of 366). |
+| this-d5 | afk decider decision 5: `strict` `check` drops the read-only `git` and `gh` query tables and the approval shape allowlist; an unknown request passes the floor, the guard reading and the kept rules (`rule-form`) before Decide; `open` is unchanged. |
 | this | This release: the drift review below, the Codex hook trust note, the README release section, changelog and manifests. |
 
 The changelog's 0.3.3 section holds the user-facing wording; `update` carries the 0.3.3 upgrade notes. Pull request 358 (the tokenizer implementation) closed unmerged and is not part of 0.3.3.
@@ -84,7 +85,7 @@ Checked against `main` at `b03334c` (after pull request 365), surface by surface
   2. the permission hook, allowing only exact recorded approvals under a lease (the twelfth);
   3. merge authority: the lease's Merge answer or `open` mode, plus an optional per-repository `merge: decide` record with its own consent question;
   4. self-protection: a pull request changing the lease, setup, hooks or instruction files merges like any other when `MERGE OK` holds (the alternative taken);
-  5. `check` keeps accounting, approvals and "Where it must stop" and drops its syntax allowlist and general argv classification. Parked on 19/11/2026 and left out of 0.3.3, because it redefines `strict` mode and the rules a live lease runs on;
+  5. `check` keeps accounting, approvals and "Where it must stop" and drops its syntax allowlist and general argv classification. Parked on 19/11/2026, then taken into 0.3.3 the same day by the owner's direction ("làm luôn"): `strict` keeps its lists and categories and drops only the word-level syntax reading;
   6. `setup` offers native deny rules for the credential floor; `afk start` warns when the host has none.
 - 18/11/2026: the UI review gate is advisory in 0.3.3 (no `merge_check.py` change), runs read-only measurement snippets, adds axe-core only when the repository declares it or the user agrees, blocks below 24 px target size, reports only by default, and targets 0.3.3 (spec decisions 4 to 7).
 - 19/11/2026: routing stops using an install below a weekly floor, starting with the `claudework` install at 85% of its week used (365).
@@ -97,11 +98,11 @@ Checked against `main` at `b03334c` (after pull request 365), surface by surface
 - `delegate` removes finished runs' merged worktrees in the background; runs started before 0.3.3 stay (`0.3.3/worktree-clean`).
 - `/setup instructions` flags lines that stop `afk` or `delegate` (`0.3.3/instructions-conflict-scan`).
 - `/setup add quota` can record a weekly floor per install (`0.3.3/quota-weekly-floor`).
+- `strict` afk leases: read-only queries and other commands no rule names go through "Decide" and may be approved once; a push, merge or pull request form its rule does not accept parks as `rule-form` (`0.3.3/afk-strict-no-syntax`).
 - Codex: trust the plugin's hooks again with `/hooks` after the refresh; the compaction nudge script changed (`0.3.3/codex-hook-trust`).
 
 ## Known follow-ups
 
-- afk decider decision 5 (drop `check`'s syntax allowlist and general argv classification) needs its own design and pull request, with what `strict` answers once it is gone.
 - Live delivery of the afk stop and permission hooks on a user's machine remains unverified; the `Stop` and `PermissionRequest` schemas were checked against Claude Code 2.1.327 only.
 - The new hooks load only in Claude Code sessions started after the update; a session open during the update keeps the old hook set.
 - Codex: `.codex-plugin/hooks.json` did not change since v0.3.2, but `scripts/compact_nudge.py` did, so Codex asks to trust the hooks again; Codex and Antigravity have no stop or permission hook, so "Decide" stays advisory there.
