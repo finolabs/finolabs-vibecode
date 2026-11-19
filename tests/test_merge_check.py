@@ -1366,7 +1366,7 @@ class IndependentMergeTest(unittest.TestCase):
             self.assertEqual(mc.independent_families(data), dict(author="claude", code="claude", security="claude"))
         from datetime import datetime, timedelta, timezone
         stamp = lambda delta: (datetime.now(timezone.utc) + delta).strftime("%Y-%m-%dT%H:%M:%SZ")
-        floored = (f"Quota codex/default: measured {stamp(timedelta(hours=-1))}; week 7d: 12% remaining, "
+        floored = (f"Quota codex/default: measured {stamp(timedelta(hours=-1))}; week weekly: 12% remaining, "
                    f"resets {stamp(timedelta(days=1))}; weekly floor 15%")
         with patch.object(review_route, "author_family", return_value="claude"), \
              patch.object(review_config, "host_text", return_value="synthetic"), \
