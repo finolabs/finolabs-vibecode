@@ -424,6 +424,22 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
         self.assertTrue(all('lit' not in m['cls'].split() for m in self.marks(out, 'quota-brick')[10:20]))
 
+    def test_a_pool_below_its_weekly_floor_shows_low_and_says_so(self):
+        data = self.sample()
+        pool = dict(name='week-all', remaining_fraction=.3, resets='2026-11-08T10:00:00Z',
+                    measured='2026-11-06T10:00:00Z', unverified=False, floor=40, below_floor=True)
+        data['running']['quota'] = [dict(agent='claude', pools=[pool]), dict(agent='codex', pools=[dict(pool, below_floor=False)])]
+        out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+        bricks = self.marks(out, 'quota-brick')
+        lit = lambda row: [m for m in bricks[row*10:(row+1)*10] if 'lit' in m['cls'].split()]
+        self.assertTrue(lit(0) and all('low' in m['cls'].split() for m in lit(0)))
+        self.assertTrue(lit(1) and all('done' in m['cls'].split() for m in lit(1)))
+        self.assertIn('below your weekly floor', json.dumps(out))
+        self.assertIn('below weekly floor 40%', json.dumps(out))
+        pool['unverified'] = True  # a stale reading is never marked
+        out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+        self.assertNotIn('below weekly floor', json.dumps(out))
+
     def test_lanes_have_two_flush_clipped_segments_and_thin_ticks(self):
         data = self.sample()
         run = data['running']['open'][0]

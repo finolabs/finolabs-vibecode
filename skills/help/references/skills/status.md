@@ -2,7 +2,7 @@
 
 Typed by the user only.
 
-**What it does.** Opens the usage dashboard, a local page built from the usage events and the dispatch ledger: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate (tab `overview`), and running lanes, quota and active repositories (tab `now`). It also lists this repository's delegated runs still open. `purge` deletes the recorded usage data.
+**What it does.** Opens the usage dashboard, a local page built from the usage events and the dispatch ledger: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate (tab `overview`), and running lanes, quota (a weekly pool under the floor you recorded for that install shows amber, as routing counts it out) and active repositories (tab `now`). It also lists this repository's delegated runs still open. `purge` deletes the recorded usage data.
 
 **When to use it.** You want to see how the practice is working for you, check open delegated runs, or delete what was recorded.
 

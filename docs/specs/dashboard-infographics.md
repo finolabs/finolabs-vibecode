@@ -59,7 +59,9 @@ No event field, hook, consent or process-snapshot rule changes.
 `running.quota` is three groups, in claude/codex/agy order, each `{agent, pools: [...]}`.
 Read at most four cache entries per family and retain at most eight pools across them, without
 collapsing to the limiting pool. A pool contains only `name`, `remaining_fraction`, `resets`,
-`measured`, `unverified`; copy only the group name and validated fraction/timestamps, never other
+`measured`, `unverified`, `floor` and `below_floor` (0.3.3: the weekly floor the user recorded for that install,
+an integer from 10 to 95 on a weekly pool `review_route.py` reads, else null; `below_floor` is true when a fresh
+reading's whole percent is under it and its reset lies ahead, as `review_route.py` counts it out of quota); copy only the group name and validated fraction/timestamps, never other
 cache text. For generic names (codex/model pools), append the validated `5h`/`weekly` window
 to `name` so the closed output schema can distinguish windows and select glyphs. Preserve duplicate
 group names from different entries. Each pool has a compact ten-brick meter: week pools use a calendar-week glyph, five-hour pools a clock, other names at most eight
