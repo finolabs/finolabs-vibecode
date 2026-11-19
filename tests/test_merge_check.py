@@ -1215,7 +1215,7 @@ class IndependentMergeTest(unittest.TestCase):
                                  (dict(author="codex", code="claude", security="claude"), 0)):
             output = io.StringIO()
             with patch.object(mc, "gh", return_value=json.dumps(pr())), \
-                 patch.object(mc, "adopted_at", return_value=False), \
+                 patch.object(mc, "adoption_at", return_value=(False, False)), \
                  patch.object(mc, "permission", return_value=True), \
                  patch.object(mc, "independent_families", return_value=families), \
                  patch.object(mc, "away_receipt", return_value=False) as receipt, \
@@ -1236,7 +1236,7 @@ class IndependentMergeTest(unittest.TestCase):
         for recorded in (True, False):
             output = io.StringIO()
             with patch.object(mc, "gh", return_value=json.dumps(pr())), \
-                 patch.object(mc, "adopted_at", return_value=False), \
+                 patch.object(mc, "adoption_at", return_value=(False, False)), \
                  patch.object(mc, "permission", return_value=True), \
                  patch.object(mc, "independent_families", return_value=families), \
                  patch.object(mc, "away_receipt", return_value=recorded), \
@@ -1598,7 +1598,7 @@ class LocalReceiptTest(unittest.TestCase):
             return False, "spied"
         data = dict(pr(checks=[]), baseRefOid=OLD)
         with patch.object(mc, "gh", return_value=json.dumps(data)), \
-                patch.object(mc, "adopted_at", return_value=False), \
+                patch.object(mc, "adoption_at", return_value=(False, False)), \
                 patch.object(mc, "permission", return_value=True), \
                 patch.object(mc, "local_receipt", spy), \
                 patch("sys.stdout", new_callable=__import__("io").StringIO):
@@ -1615,7 +1615,7 @@ class CiContextTest(unittest.TestCase):
         out = __import__("io").StringIO()
         receipts = []
         with patch.object(mc, "gh", return_value=json.dumps(data)), \
-                patch.object(mc, "adopted_at", return_value=False), \
+                patch.object(mc, "adoption_at", return_value=(False, False)), \
                 patch.object(mc, "permission", return_value=True), \
                 patch.object(mc, "local_receipt", lambda head, repo: receipts.append(head) or (True, "x")), \
                 patch("sys.stdout", out):

@@ -484,9 +484,8 @@
       "items": [
         {
           "id": "0.3.3/ui-review-marker",
-          "kind": "setup",
-          "text": "Optional: /setup can make UI pull requests wait for a posted ui review. The router line then says ui=yes or ui=no.",
-          "setup": "/setup"
+          "kind": "info",
+          "text": "Optional: run /setup in a repository to make UI pull requests wait for a posted ui review; the router line then says ui=yes or ui=no."
         },
         {
           "id": "0.3.3/coordinator-threshold",
