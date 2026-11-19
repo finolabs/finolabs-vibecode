@@ -507,7 +507,7 @@
         {
           "id": "0.3.3/afk-decider-hooks",
           "kind": "hook",
-          "text": "Claude Code: under an afk lease, a stop hook sends a turn without an idle or parked record back once, and a permission hook answers prompts from recorded approvals."
+          "text": "Claude Code: under an afk lease, a stop hook sends a turn without a current idle record back once, and a permission hook answers prompts from recorded approvals."
         },
         {
           "id": "0.3.3/afk-native-rules",
@@ -520,6 +520,11 @@
           "kind": "removed",
           "text": "afk strict mode and the Max runs, runtime and hourly limits are gone; old lines are ignored. Use host deny rules. An old lease: /afk stop, then /afk start.",
           "setup": "/setup add afk"
+        },
+        {
+          "id": "0.3.3/afk-goals",
+          "kind": "info",
+          "text": "afk keeps a queue per repository (afk.py goal); idle is refused while items are open, a park no longer ends a turn, and only /afk stop ends the lease. /afk start [hours] wakes coordinators."
         },
         {
           "id": "0.3.3/instructions-conflict-scan",
