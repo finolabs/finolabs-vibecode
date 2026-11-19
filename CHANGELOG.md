@@ -32,7 +32,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
-- The secret prefix patterns (`secret_patterns.py`, all copies) skip a prefix glued to a letter or digit before it when the token holds no digit: a word such as `ask-...` of 16 or more characters is no longer read as an `sk-` key, while a key after an escaped `\n` or `%20` still is.
 - `afk.py review --decision` and `log --kind decision --decision` accept a decision id typed in another case and record it as generated.
 - Headless Claude children also run with `FNL_PROOF_NUDGE=off`, so the proof nudge no longer replaces a delegated run's final report with its own answer.
 - `delegate` dispatch says a test step's variable (`CI_E2E=1`) reaches a heavy job only through `heavy_run.py run --pass-env NAME`.

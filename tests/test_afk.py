@@ -483,8 +483,10 @@ class AwayDecisionTest(AfkBase):
             with self.subTest(case=name):
                 before = len(self.ledger())
                 identifier, _ = self.recorded(*ROWS[rows[0]][0], precedents='0')
-                for row in rows[1:]:
-                    self.recorded(*ROWS[row][0], '--decision', identifier, precedents='0')
+                for number, row in enumerate(rows[1:]):
+                    # A later attempt may name the id in another case; it is recorded as generated (lowercase).
+                    typed = identifier.upper() if number % 2 else identifier
+                    self.recorded(*ROWS[row][0], '--decision', typed, precedents='0')
                 lines = self.ledger()[before:]
                 self.assertEqual({line['id'] for line in lines}, {identifier})
                 self.assertEqual([(line['rung'], line['settled']) for line in lines],

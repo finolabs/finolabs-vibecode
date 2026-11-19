@@ -10,11 +10,7 @@ NAME = re.compile(r'^[A-Z][A-Z0-9_]{0,63}$')
 SENSITIVE = re.compile(r'KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|SESSIONID|SESSID|(?:^|_)(?:PASS|PASSWD|PASSPHRASE|AUTH|COOKIE|COOKIES|SESSION|PRIVATE)(?:_|$)', re.I)
 ANSI = re.compile(r'\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))')
 TOKEN = r'[A-Za-z0-9+/_=.-]'
-_PREFIXES = r'(?:sk-ant-|sk-|sk_live_|sk_test_|ghp_|gho_|ghu_|ghs_|github_pat_|glpat-|xoxb-|xoxp-|npm_|AKIA|ASIA|AIza)'
-# A prefix at a word boundary always counts. Glued to a letter or digit before it (an escaped `\n` in raw JSON, `%20` in
-# a URL) it counts only when the token holds a digit, so a plain word such as `ask-protocol-no-question` is not a key.
-PREFIX = re.compile(r'(?:(?<![A-Za-z0-9])' + _PREFIXES + TOKEN + r'{16,}|' + _PREFIXES + r'(?=' + TOKEN + r'*[0-9])'
-                    + TOKEN + r'{16,})')
+PREFIX = re.compile(r'(?:sk-ant-|sk-|sk_live_|sk_test_|ghp_|gho_|ghu_|ghs_|github_pat_|glpat-|xoxb-|xoxp-|npm_|AKIA|ASIA|AIza)' + TOKEN + r'{16,}')
 BEARER = re.compile(r'Authorization[ \t]*:[ \t]*Bearer[ \t]+' + TOKEN + r'{16,}', re.I)
 SECRET_NAME = re.compile(r'(?:[A-F0-9]{20,}|[A-Z2-7]{20,})')
 MAX_MATCHES = 1000
