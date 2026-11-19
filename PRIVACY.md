@@ -46,11 +46,9 @@ The `delegate` worktree cleanup (`ledger.py clean-worktrees`, run in the backgro
 ## Project settings
 
 Since 0.2.5 a repository's settings (`ledger`, `tasks`, `parallel`, `parallel-caps`, the display
-`label` and the optional `autopilot` object: the repository's own away choices for task choice, push and pull
-requests, merge, trusted authors, extra top-level code folders, editable top-level files, exact test commands, `max-runs`, `max-runtime-minutes`,
-`max-actions-per-hour`, `decide`, `non-production-targets`, `production-targets`, `release-targets`, `skill-repository`, and the lease mode and its guards (`mode`, `third-party-instructions`, `default-branch`),
-which `afk.py check` reads in memory and never stores; the target lists are deploy, release and publish command text,
-stored in that settings file, and each list replaces the default the user may set for every repository in `## afk` of
+`label` and the optional `autopilot` object: the repository's own afk guards (`third-party-instructions`, `default-branch`),
+which `afk.py check` reads in memory and never stores; since 0.3.3 afk has one mode, and the keys an older object may
+still hold (choices, lists, targets, `mode` and the limits) are not read; a save replaces the object without them; a repository's guard replaces the one the user sets in `## afk` of
 the canonical host config) live in that repository's own folder: `settings.json` in `.finolabs/vibecode/` of the main
 checkout (a linked worktree shares it only in the canonical, reciprocal, owner-checked layout
 `<main>/.git/worktrees/<name>`). The file never leaves

@@ -426,7 +426,7 @@
         {
           "id": "0.3.2/afk-modes",
           "kind": "migration",
-          "text": "Breaking: afk runs in open mode by default: everything under a lease except credentials, with the default-branch guard on. Add - Mode: strict to ## afk to keep the earlier rules.",
+          "text": "Breaking: afk runs in open mode by default: all but credentials, default-branch guard on. 0.3.3 removes strict mode; forbid other things with a host deny rule.",
           "setup": "/setup add afk"
         },
         {
