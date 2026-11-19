@@ -51,7 +51,7 @@ AGENT_FLAGS = {"print-timeout", "timeout", "max-turns"}
 # Files whose inline `--flag` spans are ledger flags.
 LEDGER_PROSE = ["skills/delegate/SKILL.md", "skills/delegate/references/dispatch.md",
                 "skills/delegate/references/ledger.md", "skills/delegate/references/route-judgment.md",
-                "skills/status/SKILL.md", "skills/advisor/SKILL.md", "skills/advisor/references/committee.md"]
+                "skills/status/SKILL.md", "skills/status/references/open-runs.md", "skills/advisor/SKILL.md", "skills/advisor/references/committee.md"]
 
 NAME = re.compile(r"`(fnl-[a-z-]+)`")
 SECTION = re.compile(r"`((?:fnl-)?[a-z][a-z-]*)`(?:'s)? \(?\"([^\"]+)\"")

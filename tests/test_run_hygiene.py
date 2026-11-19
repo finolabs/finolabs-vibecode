@@ -221,7 +221,8 @@ class RunHygieneTest(unittest.TestCase):
                          'plugin-packaging/references/directory-anthropic.md', 'open-source-review/SKILL.md',
                          'open-source-review/references/repository-settings.md',
                          'open-source-review/references/plugin-packages.md',
-                         'open-source-review/references/community-files.md'):
+                         'open-source-review/references/community-files.md',
+                         'status/SKILL.md', 'review-gate/SKILL.md', 'coding-router/SKILL.md'):
             path = ROOT / 'skills' / relative
             text = path.read_text()
             self.assertLessEqual(len(text.encode()), 10000 if path.name == 'SKILL.md' else 8000)
