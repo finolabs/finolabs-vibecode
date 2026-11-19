@@ -1,6 +1,6 @@
 # Reviewers, packet and scope
 
-Detail behind `SKILL.md` "Instruments", "Who reviews", "The reviewer packet" and "Review scope". The enforcers and triggers named in `SKILL.md` apply here unchanged.
+Detail behind `SKILL.md` "Instruments", "Who reviews" (with "Same family" below), "The reviewer packet" and "Review scope". The enforcers and triggers named in `SKILL.md` apply here unchanged.
 
 ## Routing
 
@@ -23,6 +23,12 @@ Delegated runs follow `delegate` for ledger, brief and hard cap (advisory, agent
 - **Independent**: `review_route.py` chooses an assigned present family with quota before the capability fallback, among the families the assignment matrix lists when it is usable; posting `yes` breaks ties only after independence and a valid assignment. A role or a present CLI grants no permission, reachability or model access.
 - **Both kinds on one family**: one run, one packet, two comments, each with its own marker. The low-risk lane uses the code route for both after the lane check succeeds (rule 7). These are coordinator obligations, advisory (agent judgment).
 - **Tier and effort**: follow `delegate`; at least strong for code and frontier for a triggered security review. The Claude agent files keep `model: inherit`; select the allowed model through the host when supported (advisory, agent judgment).
+
+## Same family
+
+When the router prints `same-family`, pass `--security-trigger` when `security-review-gate` triggers: exit 1 means stop and ask the user before dispatch; no reviewer may silently waive it (advisory, agent judgment). Exception: when `## Reviews` of the host config records `- Same-family security fallback: yes (<date>)` (`/setup add roles`), dispatch the same-family reviews without asking, each marker's second line starting with the exact fallback reviewer line, and disclose it; they count only when `merge_check.py --independent --fallback-family <family>` passes, which outside a lease needs every other present family positively out of quota. When it blocks, ask the user (enforcer: `merge_check.py`).
+
+During an afk lease, `merge_check.py --independent` and `--fallback-family <family>` decide whether same-family reviews count: under a live lease the fallback needs only the lease, the author's family and, on each kind, the exact fallback reviewer line or a configured role of another family, with no quota evidence, router trigger or two-model condition (script; afk has one mode since 0.3.3). Follow the same-family fallback rule in the `afk` skill's `references/merge-gate.md`.
 
 ## The reviewer packet
 

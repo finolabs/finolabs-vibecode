@@ -8,7 +8,7 @@ Each reviewer posts its whole report as one comment through `post_review.py`. Th
 
 ## Cannot post
 
-`post_review.py` emits those fixed reasons for posting failures; the reviewer uses them for missing host capabilities too (advisory, agent judgment). Explain the missing capability and direct the user to `setup`; do not make relay the steady state.
+The reason is one of `no-cli`, `no-network`, `no-auth`, `no-permission` or `other`. `post_review.py` emits those fixed reasons for posting failures; the reviewer uses them for missing host capabilities too (advisory, agent judgment). Explain the missing capability and direct the user to `setup`; do not make relay the steady state.
 
 ## Relay
 
