@@ -761,6 +761,12 @@ class UiReviewMarkerTest(unittest.TestCase):
                               lambda who: who in WRITERS, adopted=True, ui_adopted=True)
         self.assertFalse(only_ui[0])
 
+    def test_a_ui_marker_never_breaks_the_fallback_reader(self):
+        comments = [comment(marker("code", "APPROVE")), comment(marker("security", "APPROVE")),
+                    comment(marker("ui", "APPROVE"))]
+        found = mc.head_markers(pr(comments=comments), lambda who: who in WRITERS)
+        self.assertEqual((len(found["code"]), len(found["security"]), len(found["ui"])), (1, 1, 1))
+
     def test_cli_reads_the_ui_opt_in_from_the_base(self):
         base = {"CLAUDE.md": "# Demo\n\n## Agent skills\n\nPull requests follow `review-gate`. UI changes follow `ui-review-gate`.\n"}
         result = run_cli(pr(body=ROUTED), base_files=base)

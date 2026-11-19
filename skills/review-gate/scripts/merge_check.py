@@ -154,7 +154,7 @@ def fallback_model(second, family):
 
 def head_markers(pr, can_write):
     """Every counted marker for the head, by kind: [(verdict, createdAt, second line)], read like `verdicts`."""
-    found = {"code": [], "security": []}
+    found = {"code": [], "security": [], "ui": []}  # ui markers are read but never count for the fallback
     for comment in pr["comments"]:
         first = (comment.get("body") or "").split("\n", 1)[0].strip()
         match = MARKER.fullmatch(first)
