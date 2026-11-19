@@ -34,7 +34,8 @@ USAGE = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens
 FOLDER = "state/compaction-nudge"
 MESSAGE = ("Context is at {}% of this session's compaction threshold. Before the host compacts, run "
            "tidy now: save the handover, write back decisions and lessons, note background runs "
-           "and open pull requests, then offer to compact or start a fresh session.\n")
+           "and open pull requests, then hand the user a ready /compact line that names the saved "
+           "handover, or offer a fresh session.\n")
 
 
 def config_dir(environ):
