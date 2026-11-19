@@ -25,6 +25,8 @@ ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
 
 
 # An ended or exhausted lease tells the caller, in one fixed line, to stop any loop it started for the lease.
+# A command a kept `strict` rule accepts (a known path added on a work branch): the stand-in Tier 1 request.
+TIER_ONE = ['git', 'add', '--', 'src/example.py']
 ENDED_CODES = {'no-lease', 'expired', 'stopped', 'setup-changed'}
 ENDED_LINE = 'The away lease has ended: stop any loop or wakeup you started for it, then report to the user.'
 
@@ -84,7 +86,7 @@ class AfkBase(unittest.TestCase):
     def change_counts(self, **values):
         """Set counters of the one project entry, creating it from a first reserved action when absent."""
         if not self.lease()['counters']:
-            self.check(['git', 'status'])
+            self.check(TIER_ONE)
         self.change_lease(lambda v: next(iter(v['counters'].values())).update(values))
 
     def change_lease(self, change):
@@ -204,57 +206,61 @@ class AfkTest(AfkBase):
         self.assertEqual(self.invoke('start')[0], 3)
 
     def test_lease_guards_synthetic_clock(self):
-        self.check(['git', 'status'], tier=3, code='no-lease')
+        self.check(TIER_ONE, tier=3, code='no-lease')
         self.start()
         self.clock += 8 * 3600
-        self.check(['git', 'status'], tier=3, code='expired')
+        self.check(TIER_ONE, tier=3, code='expired')
         self.clock -= 8 * 3600
         (self.state / 'stop').write_text('')
         (self.state / 'stop').chmod(0o600)
-        self.check(['git', 'status'], tier=3, code='stopped')
+        self.check(TIER_ONE, tier=3, code='stopped')
         (self.state / 'stop').unlink()
         self.setup_config(SETUP.replace('choose', 'listed'))
-        self.check(['git', 'status'], tier=3, code='setup-changed')
+        self.check(TIER_ONE, tier=3, code='setup-changed')
         self.setup_config()
         self.change_counts(runs=20)
-        self.check(['git', 'status'], tier=3, code='spent')
+        self.check(TIER_ONE, tier=3, code='spent')
         self.change_counts(runs=0, first=self.clock - 480 * 60)
-        self.check(['git', 'status'], tier=3, code='spent')
+        self.check(TIER_ONE, tier=3, code='spent')
         self.change_counts(runs=20, first=self.clock, hour_actions=[self.clock] * 30)
-        self.check(['git', 'status'], tier=3, code='spent')  # spent wins over the hourly cap: it never comes back
+        self.check(TIER_ONE, tier=3, code='spent')  # spent wins over the hourly cap: it never comes back
         self.change_counts(runs=0, first=self.clock, hour_actions=[self.clock] * 30)
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(TIER_ONE, tier=3, code='limit')
         self.clock += 3601
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
         self.assertEqual(self.counts()['actions'], 2)
 
     def test_runtime_limit_uses_elapsed_time_since_the_projects_first_action(self):
         self.start(SETUP + '- Max runtime minutes: 10\n')
         self.clock += 600
-        self.check(['git', 'status'])  # the project's clock starts at its first reserved action
+        self.check(TIER_ONE)  # the project's clock starts at its first reserved action
         self.clock += 600
-        self.check(['git', 'status'], tier=3, code='spent')
+        self.check(TIER_ONE, tier=3, code='spent')
 
     def test_tier_one_commands_and_paths(self):
         self.start(SETUP + '- Max actions per hour: 100\n')
+        # Decision 5 (19/11/2026): read-only queries have no rule of their own, so they are unknown (Decide).
         for argv in (['git', 'status', '--short'], ['git', 'log', '-5', '--oneline'],
                      ['git', 'diff', '--stat', 'origin/main...HEAD'], ['git', 'show', '--stat', 'HEAD'],
                      ['git', 'rev-parse', 'HEAD'], ['git', 'branch', '--show-current'],
-                     ['git', 'add', '--', 'src/example.py', 'tests/test_example.py'],
+                     ['gh', 'pr', 'view', '7', '--json', 'headRefOid'], ['gh', 'pr', 'checks', '7'], ['gh', 'issue', 'list']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='unknown')
+        for argv in (['git', 'add', '--', 'src/example.py', 'tests/test_example.py'],
                      ['git', 'commit', '-m', 'Fix example'], ['git', 'push', '-u', 'origin', 'HEAD:refs/heads/topic'],
-                     ['git', 'merge', 'origin/main'], ['gh', 'pr', 'view', '7', '--json', 'headRefOid'],
-                     ['gh', 'pr', 'checks', '7'],
+                     ['git', 'merge', 'origin/main'],
                      ['gh', 'pr', 'create', '--title', 'Example', '--body', 'Details', '--head', 'topic',
                       '--repo', 'github.com/example/demo'],
                      ['gh', 'pr', 'edit', '7', '--title', 'Example', '--repo', 'github.com/example/demo'],
-                     ['gh', 'issue', 'list'],
                      ['gh', 'pr', 'merge', '7', '--squash', '--match-head-commit', 'a' * 40,
                       '--repo', 'github.com/example/demo']):
             with self.subTest(argv=argv):
                 self.check(argv)
         for name in ('ledger.py', 'record.py'):
             self.check(['python3', '-I', str(SCRIPT.parent / name), 'start' if name == 'ledger.py' else 'run'])
-        self.check(['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'gh', 'pr', 'view', '7'])
+        self.check(['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'git', 'add', 'src/example.py'])
+        self.check(['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'gh', 'pr', 'view', '7'],
+                   tier=3, code='unknown')  # a nested command is judged like the bare one
         self.check(['python3', '-I', str(ROOT / 'skills/review-gate/scripts/merge_check.py'), '7', '--independent'])
         self.check(paths=['src/example.py', 'tests/test_example.py', 'docs/guide.md'])
         self.assertEqual(self.counts()['runs'], 1)
@@ -272,7 +278,7 @@ class AfkTest(AfkBase):
             self.start()
             own = install / 'delegate/scripts'
             self.check(['python3', '-I', str(own / 'ledger.py'), 'start'])
-            self.check(['python3', '-I', str(own / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'gh', 'pr', 'view', '7'])
+            self.check(['python3', '-I', str(own / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'git', 'add', 'src/example.py'])
             self.check(['python3', '-I', str(install / 'review-gate/scripts/merge_check.py'), '7', '--independent'])
             self.check(['python3', '-I', str(own / 'heavy_run.py'), 'run', '--', 'rm', '-rf', 'temp'], tier=3, code='forbidden')
             self.check(['python3', '-I', str(own / 'ledger.py'), 'start', '--note', '.claude'], tier=3, code='protected')
@@ -291,15 +297,15 @@ class AfkTest(AfkBase):
                            (['git', 'push', '--force-with-lease', 'origin', 'topic'], 'forbidden'),
                            (['git', 'push', 'origin', 'topic:main'], 'forbidden'),
                            (['git', 'push', 'origin', 'main'], 'forbidden'),
-                           (['git', 'push'], 'unknown'), (['git', '-c', 'alias.x=!bad', 'x'], 'unknown'),
+                           (['git', 'push'], 'rule-form'), (['git', '-c', 'alias.x=!bad', 'x'], 'guarded'),
                            (['git', 'branch', '-D', 'topic'], 'unknown'),
                            (['git', 'log', '--output=result'], 'unknown'),
-                           (['git', 'merge', 'other'], 'unknown'), (['gh', 'api', '-X', 'POST', 'anything'], 'unknown'),
-                           (['gh', 'pr', 'checkout', '7'], 'unknown'), (['git', 'commit', '--no-verify'], 'unknown'),
+                           (['git', 'merge', 'other'], 'rule-form'), (['gh', 'api', '-X', 'POST', 'anything'], 'unknown'),
+                           (['gh', 'pr', 'checkout', '7'], 'unknown'), (['git', 'commit', '--no-verify'], 'rule-form'),
                            (['git', 'diff', '--output', 'result.txt'], 'unknown'),
                            (['git', 'status', 'unknown/file.py'], 'unknown'),
                            (['git', 'show', 'API_KEY'], 'protected'),
-                           (['gh', 'pr', 'merge', '7', '--admin', '--match-head-commit', 'a' * 40], 'unknown'),
+                           (['gh', 'pr', 'merge', '7', '--admin', '--match-head-commit', 'a' * 40], 'rule-form'),
                            (['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--', 'rm', '-rf', 'temp'], 'forbidden'),
                            (['gh', 'pr', 'merge', '7'], 'unpinned'),
                            (['gh', 'pr', 'merge', '7', '--match-head-commit', 'bad'], 'unpinned'),
@@ -351,7 +357,7 @@ class AfkTest(AfkBase):
         self.start()
         # A bare or abbreviated destination can resolve to a tag, so only an explicit branch ref is known.
         for refspec in ('v-example', 'topic:v-example', 'topic', 'HEAD', 'v-example:v-example'):
-            self.check(['git', 'push', 'origin', refspec], tier=3, code='unknown')
+            self.check(['git', 'push', 'origin', refspec], tier=3, code='rule-form')
         self.check(['git', 'push', 'origin', 'v-example:refs/heads/topic'])
         # Every trusted wrapper and its dependencies are protected as paths and through git add on the default branch.
         (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
@@ -401,7 +407,7 @@ class AfkTest(AfkBase):
         self.check(['gh', 'pr', 'merge', '7', '--match-head-commit', 'a' * 40], tier=3, code='merge-disabled')
         for argv in (['git', 'push', 'origin', 'HEAD:refs/heads/topic'], ['gh', 'pr', 'create']):
             self.check(argv, tier=3, code='push-disabled')
-        self.check(['gh', 'pr', 'view', '7'])
+        self.check(['gh', 'pr', 'view', '7'], tier=3, code='unknown')  # a read-only query has no rule of its own
 
     def test_log_redaction_caps_retention_and_ids(self):
         self.start()
@@ -435,10 +441,10 @@ class AfkTest(AfkBase):
             self.assertEqual(status, 3, output)
             self.assertEqual(json.loads(output), dict(tier=3, code='unknown'))
         (self.state / 'lease.json').chmod(0o644)
-        self.check(['git', 'status'], tier=3, code='unsafe')
+        self.check(TIER_ONE, tier=3, code='unsafe')
         (self.state / 'lease.json').chmod(0o600)
         with patch('subprocess.run', side_effect=AssertionError('check must not execute')):
-            self.check(['git', 'status'])
+            self.check(TIER_ONE)
 
     def test_path_symlink_is_protected_without_reading_target(self):
         self.start()
@@ -460,9 +466,9 @@ class AfkTest(AfkBase):
         self.start()
         ap = self.load()
         with ap.private_folder():
-            self.check(['git', 'status'], tier=3, code='unsafe')
+            self.check(TIER_ONE, tier=3, code='unsafe')
         self.change_lease(lambda v: v.update(settings_hash='0' * 64))
-        self.check(['git', 'status'], tier=3, code='setup-changed')
+        self.check(TIER_ONE, tier=3, code='setup-changed')
 
 
 DISPATCH = 'd20261110-010203-abcd'
@@ -832,7 +838,7 @@ class AwayDecisionTest(AfkBase):
         # Row 1: credentials or the agent's own limits win over every listed target.
         self.check(['npx', 'wrangler', 'deploy', '--env', 'uat', '--var', 'API_TOKEN'], tier=3, code='protected')
         # Row 6: local work no category names is classified as today.
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
 
     def test_decide_categories_open_only_the_closed_tag_release_and_publish_forms(self):
         # Every form below is listed, so only the category and the closed grammar decide (the list is in addition).
@@ -866,10 +872,10 @@ class AwayDecisionTest(AfkBase):
                    'gh release create v1.2.0 --repo github.com/example/demo --repo github.com/example/demo\n')
         create = ['gh', 'release', 'create', 'v1.2.0']
         self.check(create + ['--repo', 'github.com/example/demo'])
-        self.check(create, tier=3, code='unknown')
-        self.check(create + ['-R', 'example/demo'], tier=3, code='unknown')
+        self.check(create, tier=3, code='rule-form')
+        self.check(create + ['-R', 'example/demo'], tier=3, code='rule-form')
         self.check(create + ['--repo', 'github.com/example/elsewhere'], tier=3, code='forbidden')
-        self.check(create + ['--repo', 'github.com/example/demo', '--repo', 'github.com/example/demo'], tier=3, code='unknown')
+        self.check(create + ['--repo', 'github.com/example/demo', '--repo', 'github.com/example/demo'], tier=3, code='rule-form')
 
     def test_categories_come_from_the_command_not_from_its_free_text(self):
         base = SETUP + '- Max actions per hour: 1000\n- Release targets: gh release create v1 --notes publish --repo ' \
@@ -977,12 +983,15 @@ class AwayDecisionTest(AfkBase):
         self.assertEqual(status, 0, output)
         self.check_as(argv, code='decided')
         self.check_as(argv, tier=3, code='unknown')
-        # A program other than the recorded executable, or a family outside Hosts, never enters the ladder.
-        for bad in (review, ENV + ['--family', 'zcode', '--', 'zcode', '-p', BRIEF]):
-            with self.subTest(bad=bad):
+        # Decision 5 (19/11/2026): no shape allowlist, so a program other than the recorded executable, or a family
+        # outside Hosts, enters the ladder too and runs once for that exact argv; "Where it must stop" is the ladder's.
+        for other in (review, ENV + ['--family', 'zcode', '--', 'zcode', '-p', BRIEF]):
+            with self.subTest(other=other):
+                self.check_as(other, tier=3, code='unknown', real=False)
                 status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'review run',
-                                             '--precedents', '0', *host, '--approve-argv-json', json.dumps(bad))
-                self.assertEqual(status, 3, output)
+                                             '--precedents', '0', *host, '--approve-argv-json', json.dumps(other))
+                self.assertEqual(status, 0, output)
+                self.check_as(other, code='decided', real=False)
 
     def test_the_advisor_model_is_frontier_else_strong(self):
         self.start_away(SETUP_ALL)
@@ -1305,7 +1314,7 @@ class ProjectScopeTest(AfkBase):
         # check re-reads the project values on each call; the user-only lease hash is unchanged.
         self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
         self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
 
     def other_repo(self, name):
         repo = self.home / name
@@ -1364,11 +1373,46 @@ class ProjectScopeTest(AfkBase):
         self.check(paths=['NOTES.md'], code='decided')
         self.check(paths=['NOTES.md'], tier=3, code='unknown')
 
-    def test_an_approval_is_refused_for_known_protected_or_unbounded_requests(self):
+    def test_strict_reads_no_syntax_beyond_its_lists_categories_answers_and_guards(self):
+        # Decision 5 (19/11/2026), afk-decider.md D: an unknown request passes the floor, the default-branch guard
+        # reading and the kept rules before it may enter Decide; anything a kept rule owns parks as `rule-form`.
+        self.start(NO + '- Max actions per hour: 1000\n- Test commands: make check\n')
+        self.check(['make', 'check'])  # a listed test command, exactly
+        self.check(['make', 'check', 'extra'], tier=3, code='unknown')
+        for argv, code in ((['git', 'status'], 'unknown'), (['gh', 'pr', 'view', '7'], 'unknown'),
+                           (['bash', '-c', 'make all'], 'unknown'), (['git', 'reset', '--hard'], 'unknown'),
+                           # The setup guards keep their narrow reading, in any position of the request.
+                           (['bash', '-c', 'git push origin main'], 'guarded'), (['sudo', 'git', 'push', '-f'], 'guarded'),
+                           (['git', '-c', 'push.default=matching', 'push'], 'guarded'),
+                           (['git', 'st'], 'guarded'),  # an alias may be a push
+                           # The kept rules: Push and Merge answers, pins, release and deploy lists, recursive deletion.
+                           (['git', 'push', 'origin', 'topic'], 'rule-form'),
+                           (['bash', '-c', 'git push origin HEAD:refs/heads/topic'], 'rule-form'),
+                           (['env', 'gh', 'pr', 'merge', '7'], 'rule-form'), (['bash', '-c', 'gh release create v1'], 'rule-form'),
+                           (['yarn', 'publish'], 'rule-form'), (['bash', '-c', 'npx wrangler deploy'], 'rule-form'),
+                           (['sudo', 'rm', '-rf', 'build'], 'rule-form'), (['bash', '-c', 'git tag v1'], 'rule-form'),
+                           (['bash', '-c', 'git commit -m x'], 'rule-form'),
+                           (['bash', '-c', 'printenv'], 'floor')):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code=code)
+                self.approve('--approve-argv-json', json.dumps(argv), status=0 if code == 'unknown' else 3)
+        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        self.assertEqual(self.counts()['actions'], 1)  # only the listed test command reserved an action
+
+    def test_an_approval_needs_an_unknown_answer_and_no_shape_allowlist(self):
+        # Decision 5 (19/11/2026): the shape allowlist is gone. The corpus below (review rounds of PR 295) is kept:
+        # what the floor, a guard or a kept rule answers still parks and is never approved; every other request is
+        # `unknown` and may be approved once for its exact argv, leaving "Where it must stop" to the ladder.
         self.start(SETUP + '- Max actions per hour: 1000\n')
         (self.repo / 'tests').mkdir(exist_ok=True)
         outside = self.home / 'outside.txt'
         outside.write_text('x\n')
+        parked = {('rm', '-rf', 'build'): 'forbidden', ('gh', 'secret', 'set', 'NAME'): 'protected',
+                  ('git', 'push', '--force'): 'forbidden', ('gh', 'pr', 'merge', '7'): 'unpinned',
+                  ('git', 'merge', 'topic'): 'rule-form', ('git', 'pull'): 'unknown', ('git', 'commit'): 'rule-form',
+                  ('gh', 'pr', '-R', 'example/demo', 'merge', '7'): 'rule-form'}
+        answers = {}
         for argv in (['curl', '-o', 'x', 'https://example.com'], ['bash', '-c', 'make'], ['sh', 'run.sh'],
                      ['python3', '-c', 'print(1)'], ['node', '-e', '1'], ['python3', '-m', 'pip', 'install', 'x'],
                      ['npm', 'install', 'left-pad'], ['go', 'install', 'x'], ['npm', 'ci', '--registry', 'http://x'],
@@ -1404,10 +1448,19 @@ class ProjectScopeTest(AfkBase):
                      ['make', 'SHELL=sh'], ['python3', '-m', 'pylint', '--init-hook=x'], ['python3', '-m', 'coverage', 'run', '-m', 'pip'],
                      ['git', 'fetch', 'example.com:repo.git'], ['git', 'fetch', 'origin', 'a:b']):
             with self.subTest(argv=argv):
-                self.approve('--approve-argv-json', json.dumps(argv), status=3)
-                self.check(argv, tier=3, code=json.loads(self.invoke('check', '--argv-json', json.dumps(argv))[1])['code'])
-        self.check(['git', 'status'])
-        self.approve('--approve-argv-json', json.dumps(['git', 'status']), status=3)  # already allowed: no approval
+                code = json.loads(self.invoke('check', '--argv-json', json.dumps(argv))[1])['code']
+                answers[tuple(argv)] = code
+                if code == 'unknown':
+                    self.approve('--approve-argv-json', json.dumps(argv))
+                    self.check(argv, code='decided')
+                else:
+                    self.approve('--approve-argv-json', json.dumps(argv), status=3)
+                    self.check(argv, tier=3, code=code)
+        self.assertEqual({k: answers[k] for k in parked}, parked)
+        self.assertEqual(answers[('make', 'TOKEN=ghp_' + 'a' * 36)], 'protected')  # a secret never enters the ladder
+        self.assertEqual(answers[('bash', '-c', 'make')], 'unknown')  # no shape allowlist: the ladder judges it
+        self.check(TIER_ONE)
+        self.approve('--approve-argv-json', json.dumps(TIER_ONE), status=3)  # already allowed: no approval
         self.approve('--approve-paths', '.github/workflows/x.yml', status=3)  # protected never enters the ladder
         (self.repo / '.git/hooks').mkdir(parents=True, exist_ok=True)
         (self.repo / 'notes-link').symlink_to(self.repo / '.git/hooks')
@@ -1693,18 +1746,18 @@ class ProjectScopeTest(AfkBase):
     def test_limits_are_counted_per_project(self):
         self.start(SETUP + '- Max actions per hour: 2\n')
         first, second = self.repo, self.other_repo('second')
-        self.check(['git', 'status'])
-        self.check(['git', 'status'])
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(TIER_ONE)
+        self.check(TIER_ONE)
+        self.check(TIER_ONE, tier=3, code='limit')
         self.cwd = second
-        self.check(['git', 'status'])
-        self.check(['git', 'status'])
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(TIER_ONE)
+        self.check(TIER_ONE)
+        self.check(TIER_ONE, tier=3, code='limit')
         self.cwd = first
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(TIER_ONE, tier=3, code='limit')
         self.assertEqual(sorted(e['actions'] for e in self.lease()['counters'].values()), [2, 2])
         self.clock += 3601
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
 
     def test_repositories_without_limits_each_get_the_account_limits(self):
         # Owner decision 15/11/2026: no repository limit means the account's limits (here the default 30 actions an
@@ -1715,15 +1768,15 @@ class ProjectScopeTest(AfkBase):
         for cwd in (self.repo, plain):
             self.cwd = cwd
             for _ in range(30):
-                self.check(['git', 'status'])
-            self.check(['git', 'status'], tier=3, code='limit')
+                self.check(TIER_ONE)
+            self.check(TIER_ONE, tier=3, code='limit')
         self.assertEqual(sorted(e['actions'] for e in self.lease()['counters'].values()), [30, 30])
 
     def test_spent_runs_in_one_project_leave_the_others_working(self):
         self.start(SETUP + '- Max runs: 1\n')
         ledger = ['python3', '-I', str(SCRIPT.parent / 'ledger.py'), 'start']
         self.check(ledger)
-        self.check(['git', 'status'], tier=3, code='spent')
+        self.check(TIER_ONE, tier=3, code='spent')
         self.cwd = self.other_repo('second')
         self.check(ledger)
 
@@ -1731,14 +1784,14 @@ class ProjectScopeTest(AfkBase):
         self.start(SETUP + '- Max actions per hour: 2\n')
         self.project({'max-actions-per-hour': 3})
         for _ in range(3):
-            self.check(['git', 'status'])
-        self.check(['git', 'status'], tier=3, code='limit')
+            self.check(TIER_ONE)
+        self.check(TIER_ONE, tier=3, code='limit')
         narrow = self.other_repo('narrow')
         found, ident = self.store.identity(narrow)
         self.store.write_setting(narrow, 'autopilot', {'max-actions-per-hour': 1}, ident=ident)
         self.cwd = narrow
-        self.check(['git', 'status'])
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(TIER_ONE)
+        self.check(TIER_ONE, tier=3, code='limit')
 
     def test_unidentified_checks_share_one_unknown_entry(self):
         self.start(SETUP + '- Max actions per hour: 2\n')
@@ -1757,17 +1810,17 @@ class ProjectScopeTest(AfkBase):
 
     def test_a_full_project_table_answers_limit_and_keeps_its_entries(self):
         self.start(SETUP + '- Max actions per hour: 100\n')
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
         own = next(iter(self.lease()['counters']))
         fill = {('%064x' % n): dict(runs=0, actions=1, hour_actions=[self.clock], first=self.clock) for n in range(63)}
         self.change_lease(lambda v: v['counters'].update(fill))
         self.cwd = self.other_repo('sixty-fifth')
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(TIER_ONE, tier=3, code='limit')
         table = self.lease()['counters']
         self.assertEqual(len(table), 64)
         self.assertIn(own, table)
         self.cwd = self.repo
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
 
     def test_limit_values_outside_their_range_are_refused(self):
         for value in ({'max-runs': 0}, {'max-runtime-minutes': 1441}, {'max-actions-per-hour': '5'},
@@ -1842,10 +1895,10 @@ class ProjectScopeTest(AfkBase):
         self.start()
         before = self.lease()['settings_hash']
         self.project({'merge': 'no', 'roots': ['packages']})
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
         self.assertEqual(self.lease()['settings_hash'], before)
         self.setup_config(SETUP + '- Max runs: 5\n')
-        self.check(['git', 'status'], tier=3, code='setup-changed')
+        self.check(TIER_ONE, tier=3, code='setup-changed')
 
     def test_an_unapproved_or_branch_supplied_file_sets_nothing(self):
         self.start(NO)
@@ -1871,7 +1924,7 @@ class ProjectScopeTest(AfkBase):
                 self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
                 self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
                 self.check(paths=['packages/app.py'], tier=3, code='unknown')
-                self.check(['git', 'status'])
+                self.check(TIER_ONE)
         # An unreadable project state (an error while resolving it) is off too.
         self.store.reset_settings(self.repo)
         ap = self.load()
@@ -1885,7 +1938,7 @@ class ProjectScopeTest(AfkBase):
         self.project({'roots': ['packages', 'services']})
         self.check(paths=['packages/app/main.ts', 'services/api.py', 'src/example.py'])
         self.check(['git', 'add', '--', 'packages/app/main.ts'])
-        self.check(['git', 'diff', '--stat', 'services/api.py'])
+        self.check(['git', 'diff', '--stat', 'services/api.py'], tier=3, code='unknown')
         for path, code in (('packages/app/main.exe', 'unknown'), ('packages/../src/example.py', 'unknown'),
                            ('/packages/app/main.ts', 'unknown'), ('packages', 'unknown'), ('packages/app', 'unknown'),
                            ('packages/.env', 'protected'), ('packages/app/settings.json', 'protected'),
@@ -1938,18 +1991,18 @@ class ProjectScopeTest(AfkBase):
                      ['git', 'merge', '-X', 'theirs', 'feature/one'], ['git', 'merge', '--no-ff=x', 'feature/one'],
                      ['git', 'merge', 'feature/one~1'], ['git', 'merge', '--abort']):
             with self.subTest(argv=argv):
-                self.check(argv, tier=3, code='unknown')
+                self.check(argv, tier=3, code='rule-form')
         # A bare name that is also a tag (or another ref) is ambiguous: git would pick the tag first.
         (self.repo / '.git/refs/tags').mkdir(parents=True)
         (self.repo / '.git/refs/tags/shared').write_text('b' * 40 + '\n')
         self.branch('shared')
-        self.check(['git', 'merge', 'shared'], tier=3, code='unknown')
+        self.check(['git', 'merge', 'shared'], tier=3, code='rule-form')
         self.check(['git', 'merge', 'refs/heads/shared'])
         with open(self.repo / '.git/packed-refs', 'a') as stream:
             stream.write('c' * 40 + ' refs/tags/packed\n')
-        self.check(['git', 'merge', 'packed'], tier=3, code='unknown')
+        self.check(['git', 'merge', 'packed'], tier=3, code='rule-form')
         self.branch('abcdef1')
-        self.check(['git', 'merge', 'abcdef1'], tier=3, code='unknown')  # could also read as a commit id
+        self.check(['git', 'merge', 'abcdef1'], tier=3, code='rule-form')  # could also read as a commit id
         self.check(['git', 'merge', 'refs/heads/abcdef1'])
 
     def test_a_local_merge_needs_merge_yes_and_never_targets_the_default_branch(self):
@@ -1967,7 +2020,7 @@ class ProjectScopeTest(AfkBase):
         self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='forbidden')
         (self.repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
         (self.repo / '.git/refs/remotes/origin/HEAD').unlink()
-        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='unknown')
+        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='rule-form')
 
     def test_delegated_runs_outside_the_wrapper_or_in_write_modes_stay_tier_three(self):
         self.start(SETUP.replace('Claude Code', 'Claude Code, Codex') + '- Max actions per hour: 1000\n')
@@ -2072,20 +2125,20 @@ class SecurityRoundOneTest(AfkBase):
                      '[remote "origin"\n\turl = https://github.com/example/demo.git\n'):
             with self.subTest(text=text):
                 config.write_text(text)
-                self.check(merge, tier=3, code='unknown')
+                self.check(merge, tier=3, code='rule-form')
                 self.check(['gh', 'pr', 'create', '--head', 'topic', '--repo', 'github.com/example/demo'],
-                           tier=3, code='unknown')
+                           tier=3, code='rule-form')
         # An explicit --repo equal to origin binds the target even beside another remote.
         config.write_text(ORIGIN_CONFIG + '[remote "upstream"]\n\turl = https://github.com/other/restricted.git\n')
         self.check(merge)
         config.unlink()
-        self.check(merge, tier=3, code='unknown')
+        self.check(merge, tier=3, code='rule-form')
         for url in ('git' '@github.com:example/demo.git', 'ssh://git' '@github.com/example/demo', 'https://github.com/example/demo'):
             with self.subTest(url=url):
                 config.write_text('[remote "origin"]\n\turl = ' + url + '\n')
                 self.check(merge)
         (self.repo / '.git/config.worktree').write_text('[remote "origin"]\n\turl = https://github.com/other/restricted\n')
-        self.check(merge, tier=3, code='unknown')
+        self.check(merge, tier=3, code='rule-form')
 
     def test_a_symbolic_current_branch_to_the_default_branch_is_forbidden(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
@@ -2189,12 +2242,12 @@ class SecurityRoundOneTest(AfkBase):
                     # Git itself reads the bare name as the first commit, not the branch the classifier validated.
                     self.assertEqual(git('rev-parse', name), first)
                     self.assertEqual(git('rev-parse', 'refs/heads/' + name), second)
-                self.check(['git', 'merge', name], tier=3, code='unknown')
+                self.check(['git', 'merge', name], tier=3, code='rule-form')
                 self.check(['git', 'merge', 'refs/heads/' + name])
                 git('branch', '-q', '-D', name)
         git('branch', 'shared')
         git('tag', 'shared')
-        self.check(['git', 'merge', 'shared'], tier=3, code='unknown')
+        self.check(['git', 'merge', 'shared'], tier=3, code='rule-form')
         self.check(['git', 'merge', 'feature'])
 
 
@@ -2354,7 +2407,7 @@ class PolicyContextTest(AfkBase):
                 view = self.effective()
                 self.assertEqual((view['repository'], view['values']), ('unknown', STRICT))
                 self.assertEqual(self.check_code(MERGE), 'merge-disabled')
-                self.assertEqual(self.check_code(['git', 'merge', 'origin/main']), 'unknown')
+                self.assertEqual(self.check_code(['git', 'merge', 'origin/main']), 'rule-form')
 
     def test_no_repository_lets_no_repository_mutation_qualify(self):
         self.start(SETUP + MANY)
@@ -2395,7 +2448,7 @@ class PolicyContextTest(AfkBase):
                 self.assertEqual((view['repository'], view['values']), ('unknown', STRICT))
                 # With no identity the push has no branch context to read, so it is unknown before its permission.
                 self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
-                                                'edit': 'push-disabled', 'push': 'unknown'})
+                                                'edit': 'push-disabled', 'push': 'rule-form'})
                 for argv in (['git', 'merge', 'refs/heads/feature'], ['git', 'merge', 'origin/main']):
                     self.assertNotEqual(self.check_code(argv), 'allowed')
         back.write_text(good)
@@ -2415,7 +2468,7 @@ class PolicyContextTest(AfkBase):
         self.cwd = nested
         view = self.effective()
         self.assertEqual((view['repository'], view['values']['Merge']), ('found', 'yes'))
-        self.assertEqual(self.check_code(MERGE), 'unknown')  # the outer repository's target is not this one's
+        self.assertEqual(self.check_code(MERGE), 'rule-form')  # the outer repository's target is not this one's
 
     # Part 3: target agreement
 
@@ -2425,12 +2478,12 @@ class PolicyContextTest(AfkBase):
             with self.subTest(argv=argv):
                 self.check(argv)
         bases = (['gh', 'pr', 'merge', '7'] + PIN, ['gh', 'pr', 'create', '--head', 'topic'], ['gh', 'pr', 'edit', '7'])
-        for selector, code in (([], 'unknown'), (['--repo', 'example/demo'], 'unknown'),
-                               (['-R', 'github.com/example/demo'], 'unknown'),
-                               (['--repo', 'https://github.com/example/demo'], 'unknown'),
-                               (['--repo', 'github.com/example/demo.git'], 'unknown'),
-                               (['--repo', 'other.example/example/demo'], 'unknown'),
-                               (REPO + REPO, 'unknown'), (REPO + ['--repo', 'github.com/other/restricted'], 'unknown'),
+        for selector, code in (([], 'rule-form'), (['--repo', 'example/demo'], 'rule-form'),
+                               (['-R', 'github.com/example/demo'], 'rule-form'),
+                               (['--repo', 'https://github.com/example/demo'], 'rule-form'),
+                               (['--repo', 'github.com/example/demo.git'], 'rule-form'),
+                               (['--repo', 'other.example/example/demo'], 'rule-form'),
+                               (REPO + REPO, 'rule-form'), (REPO + ['--repo', 'github.com/other/restricted'], 'rule-form'),
                                (['--repo', 'github.com/other/restricted'], 'forbidden')):
             for base in bases:
                 with self.subTest(selector=selector, argv=base[:3]):
@@ -2439,21 +2492,21 @@ class PolicyContextTest(AfkBase):
         config = self.repo / '.git/config'
         config.write_text(ORIGIN_CONFIG + '\tgh-resolved = other/restricted\n')
         self.check(MERGE)
-        self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7']), 'unknown')
+        self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7']), 'rule-form')
         config.write_text(ORIGIN_CONFIG)
         with patch.dict(os.environ, {'GH_REPO': 'other/restricted'}):
             self.check(EDIT)
-            self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7']), 'unknown')
+            self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7']), 'rule-form')
 
     def test_pull_request_creation_needs_an_explicit_validated_head(self):
         self.start(SETUP + MANY)
         create = ['gh', 'pr', 'create', '--title', 'Example']
         self.check(create + ['--head', 'topic'] + REPO)
         self.check(create + ['--head=feature/one'] + REPO)
-        for head, code in (([], 'unknown'), (['--head', 'main'], 'forbidden'), (['--head', 'MAIN'], 'forbidden'),
-                           (['--head', 'HEAD'], 'unknown'), (['--head', 'other:topic'], 'unknown'),
-                           (['--head', 'refs/heads/topic'], 'unknown'), (['-H', 'topic'], 'unknown'),
-                           (['--head', 'topic', '--head', 'side'], 'unknown'), (['--head', 'a/../b'], 'unknown')):
+        for head, code in (([], 'rule-form'), (['--head', 'main'], 'forbidden'), (['--head', 'MAIN'], 'forbidden'),
+                           (['--head', 'HEAD'], 'rule-form'), (['--head', 'other:topic'], 'rule-form'),
+                           (['--head', 'refs/heads/topic'], 'rule-form'), (['-H', 'topic'], 'rule-form'),
+                           (['--head', 'topic', '--head', 'side'], 'rule-form'), (['--head', 'a/../b'], 'rule-form')):
             with self.subTest(head=head):
                 self.assertEqual(self.check_code(create + head + REPO), code)
 
@@ -2462,11 +2515,11 @@ class PolicyContextTest(AfkBase):
         config = self.repo / '.git/config'
         same, other = 'https://github.com/example/demo.git', 'https://github.com/other/restricted.git'
         for extra, code in (('', 'allowed'), ('\tpushurl = ' + same + '\n', 'allowed'),
-                            ('\tpushurl = ' + other + '\n', 'unknown'),
-                            ('\tpushurl = ' + same + '\n\tpushurl = ' + other + '\n', 'unknown'),
-                            ('\tmirror = true\n', 'unknown'), ('\treceivepack = other\n', 'unknown'),
+                            ('\tpushurl = ' + other + '\n', 'rule-form'),
+                            ('\tpushurl = ' + same + '\n\tpushurl = ' + other + '\n', 'rule-form'),
+                            ('\tmirror = true\n', 'rule-form'), ('\treceivepack = other\n', 'rule-form'),
                             ('[url "https://github.com/other/"]\n\tpushInsteadOf = https://github.com/example/\n',
-                             'unknown')):
+                             'rule-form')):
             with self.subTest(extra=extra):
                 config.write_text(ORIGIN_CONFIG + extra)
                 self.assertEqual(self.check_code(PUSH), code)
@@ -2662,7 +2715,6 @@ class PolicyContextTest(AfkBase):
                 self.cwd = self.repo / cwd
                 self.check(paths=[operand], tier=1 if code == 'allowed' else 3, code=code)
                 self.assertEqual(self.check_code(['git', 'add', '--', operand]), code)
-                self.assertEqual(self.check_code(['git', 'diff', '--stat', operand]) == 'allowed', code == 'allowed')
 
     def test_an_away_evidence_file_is_judged_from_the_repository_root(self):
         self.start(SETUP_AWAY)
@@ -2732,9 +2784,9 @@ class AwayFlowTest(AfkBase):
         self.check(argv)
         # The repository's commit rules pass the merge commit's author email (UAT 17/11/2026).
         self.check(argv + ['--author-email', 'synthetic@example.com'])
-        self.check(argv + ['--author-email', '--admin'], tier=3, code='unknown')
-        for value, code in (('not-an-email', 'unknown'), ('a@b', 'unknown'), ('x y@example.com', 'unknown'),
-                            ('a@example.com;rm', 'unknown'), ('$GITHUB_TOKEN', 'protected'), ('${GH_TOKEN}', 'floor'),
+        self.check(argv + ['--author-email', '--admin'], tier=3, code='rule-form')
+        for value, code in (('not-an-email', 'rule-form'), ('a@b', 'rule-form'), ('x y@example.com', 'rule-form'),
+                            ('a@example.com;rm', 'rule-form'), ('$GITHUB_TOKEN', 'protected'), ('${GH_TOKEN}', 'floor'),
                             ('ghp_' + 'a' * 36, 'protected')):  # code and security reviews of PR 332
             with self.subTest(value=value):
                 self.check(argv + ['--author-email', value], tier=3, code=code)
@@ -2763,7 +2815,7 @@ class AwayFlowTest(AfkBase):
         self.start(SETUP + '- Max actions per hour: 1000\n')
         self.cwd, _ = self.git_repo('fulllog')
         argv = ['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', 'c' * 40, '--repo', 'github.com/example/demo']
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
         before = self.counts()['actions']
         log = self.state / 'log.jsonl'
         line = json.dumps(dict(time=self.clock, tier=1, kind='action', note='x' * 400)) + '\n'
@@ -2800,7 +2852,7 @@ class AwayFlowTest(AfkBase):
         for number in ('\u0667', '07', '0'):  # an Arabic-Indic seven, a leading zero, zero
             with self.subTest(number=number):
                 self.check(['gh', 'pr', 'merge', number, '--match-head-commit', head, '--repo', 'github.com/example/demo'],
-                           tier=3, code='unknown')
+                           tier=3, code='rule-form')
         self.check(['gh', 'pr', 'merge', '7', '--match-head-commit', other, '--repo', 'github.com/example/elsewhere'],
                    tier=3, code='forbidden')  # a denied check pins nothing
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', other)[0], 3)
@@ -2892,11 +2944,11 @@ class AwayFlowTest(AfkBase):
         self.cwd = repo
         self.check(ledger + [str(tree)])
         self.check(ledger + ['.claude/worktrees/wt'])
-        self.check(['git', '-C', str(tree), 'status'])
-        self.check(['git', '-C', '.claude/worktrees/wt', 'status', '--short'])
+        self.check(['git', '-C', str(tree), 'status'], tier=3, code='unknown')  # judged in the worktree, no rule
+        self.check(['git', '-C', '.claude/worktrees/wt', 'status', '--short'], tier=3, code='unknown')
         self.check(['git', '-C', str(tree), 'add', '--', 'src/example.py'])
         self.cwd = tree  # the same commands from inside the worktree
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
         self.check(['git', 'add', '--', 'src/example.py'])
         # Inside the worktree its own live paths stay protected, through -C as from inside.
         self.check(['git', 'add', '--', '.claude/settings.json'], tier=3, code='protected')
@@ -2918,7 +2970,7 @@ class AwayFlowTest(AfkBase):
         git('worktree', 'add', '-q', str(foreign), '-b', 'x')
         self.check(ledger + [str(foreign)], tier=3, code='protected')
         self.check(['git', '-C', str(foreign), 'status'], tier=3, code='unknown')
-        self.assertEqual(self.counts()['actions'], 7)
+        self.assertEqual(self.counts()['actions'], 5)  # the two `status` reads above are unknown now
 
     def test_an_own_worktree_is_added_under_the_main_checkouts_claude_worktrees(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
@@ -3024,13 +3076,13 @@ class AwayFlowTest(AfkBase):
                      ['gh', 'pr', 'edit', '7', '--body', body, *repo]):
             with self.subTest(argv=argv):
                 self.check(argv)
-        for argv, code in ((create + ['--body', 'Run $(id) first'], 'unknown'),
-                           (create + ['--body', 'bell\x07'], 'unknown'),
+        for argv, code in ((create + ['--body', 'Run $(id) first'], 'rule-form'),
+                           (create + ['--body', 'bell\x07'], 'rule-form'),
                            (create + ['--body', 'Token ghp_' + 'x' * 30], 'unsafe'),
                            (create + ['--body', 'See /Us' + 'ers/synthetic/notes'], 'unsafe'),
-                           (create + ['--body', 'x', '--body-file', 'body.md'], 'unknown'),
-                           (['gh', 'pr', 'create', '--head', 'topic', '--body', '--repo=github.com/example/demo'], 'unknown'),
-                           (['git', 'commit', '-m', 'Fix $(x)'], 'unknown'),
+                           (create + ['--body', 'x', '--body-file', 'body.md'], 'rule-form'),
+                           (['gh', 'pr', 'create', '--head', 'topic', '--body', '--repo=github.com/example/demo'], 'rule-form'),
+                           (['git', 'commit', '-m', 'Fix $(x)'], 'rule-form'),
                            (['git', 'commit', '-m', 'Key ghp_' + 'x' * 30], 'unsafe')):
             with self.subTest(argv=argv):
                 self.check(argv, tier=3, code=code)
@@ -3053,9 +3105,9 @@ class AwayFlowTest(AfkBase):
         for name in (secret, link, large, folder / 'missing.md', folder, self.home):
             with self.subTest(name=name):
                 self.check(create + ['--body-file', str(name)], tier=3, code='unsafe')
-        self.check(create + ['--body-file', '-'], tier=3, code='unknown')
-        self.check(['gh', 'pr', 'comment', '7', '--body-file', str(good)], tier=3, code='unknown')
-        self.check(['gh', 'pr', 'comment', '7', *repo], tier=3, code='unknown')
+        self.check(create + ['--body-file', '-'], tier=3, code='rule-form')
+        self.check(['gh', 'pr', 'comment', '7', '--body-file', str(good)], tier=3, code='rule-form')
+        self.check(['gh', 'pr', 'comment', '7', *repo], tier=3, code='rule-form')
         self.invoke('stop')  # without the category's decide answer a comment is Tier 3
         self.start(SETUP + '- Max actions per hour: 1000\n')
         self.check(['gh', 'pr', 'comment', '7', '--body-file', str(good), *repo], tier=3, code='forbidden')
@@ -3068,9 +3120,9 @@ class AwayFlowTest(AfkBase):
             self.check(['git', 'push', 'origin', 'main'], tier=3, code='forbidden')
         self.assertEqual(self.lease()['counters'], {})
         self.check(ledger)
-        self.check(['git', 'status'])
+        self.check(TIER_ONE)
         self.assertEqual((self.counts()['runs'], self.counts()['actions']), (1, 2))
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(TIER_ONE, tier=3, code='limit')
 
     def test_a_commit_message_is_data(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
@@ -3129,7 +3181,7 @@ class AwayFlowTest(AfkBase):
             file.write_text(text + '\n')
             for argv in (create + ['--body', text], create + ['--title', text], ['git', 'commit', '-m', text]):
                 with self.subTest(argv=argv[-2:]):
-                    self.check(argv, tier=3, code='unknown')
+                    self.check(argv, tier=3, code='rule-form')
             for argv in (create + ['--body-file', str(file)], ['git', 'commit', '-F', str(file)],
                          ['git', 'commit', '-q', '-F', '.finolabs/body.md']):
                 with self.subTest(argv=argv[-2:], text=text):
@@ -3138,7 +3190,7 @@ class AwayFlowTest(AfkBase):
         for argv in (['git', 'commit', '-F', str(file), '-m', 'Extra'], ['git', 'commit', '-F', str(file), '-F', str(file)],
                      ['git', 'commit', '-F=' + str(file)], ['git', 'commit', '-F' + str(file)], ['git', 'commit', '-F', '-']):
             with self.subTest(argv=argv[2:]):
-                self.check(argv, tier=3, code='unknown')
+                self.check(argv, tier=3, code='rule-form')
 
     def test_a_body_file_must_lie_inside_the_checks_own_checkout(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
@@ -3164,7 +3216,7 @@ class AwayFlowTest(AfkBase):
 
     def test_check_exits_three_on_tier_three_and_zero_on_tier_one(self):
         self.start()
-        for argv, status, tier in ((['git', 'status'], 0, 1), (['git', 'push', 'origin', 'main'], 3, 3),
+        for argv, status, tier in ((TIER_ONE, 0, 1), (['git', 'push', 'origin', 'main'], 3, 3),
                                    (['git', 'show', 'HEAD:.env'], 3, 3), (['echo', 'safe'], 3, 3)):
             with self.subTest(argv=argv):
                 result = self.invoke('check', '--argv-json', json.dumps(argv))
@@ -3397,9 +3449,9 @@ class DeciderTest(AfkBase):
         # The stop hook asks `limit_reached` itself (afk-decider.md A), so `check` keeps no limit record.
         self.start()
         self.change_counts(runs=20)
-        self.check(['git', 'status'], tier=3, code='spent')
+        self.check(TIER_ONE, tier=3, code='spent')
         self.change_counts(runs=0, first=self.clock, hour_actions=[self.clock] * 30)
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(TIER_ONE, tier=3, code='limit')
         log = self.state / 'log.jsonl'
         entries = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
         self.assertEqual([e for e in entries if e['kind'] == 'limit'], [])

@@ -19,7 +19,7 @@ request, row `decided` below):
 | An argv path operand inside a checkout of this repository (its own, the main checkout or a linked worktree `project_store.identity` validates; never a lexical .claude/worktrees allow) is judged by its path relative to that checkout's root; `git -C <folder>` is judged as the same command run in that folder | token_protected, checkout_of, check |
 | Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper), and so is every path, read from the check's folder, in this install's own checkout on every branch (the checkout `project_store.identity` validates for it is the plugin root, so its linked worktrees stay editable); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3; a git verb that changes a work tree, index or HEAD (not `worktree add` of a new own worktree or `worktree remove` of another worktree) is protected when it would run in that checkout, by its folder or `git -C` | classify_paths, token_protected, install_owned, WORK_TREE_VERBS |
 | On a non-default work branch with Push and pull requests or Merge yes, a source path (skills/**, scripts/**, top-level CLAUDE.md and AGENTS.md, .<host>-plugin/*.json) of this check's own checkout is a known path, enforcer scripts included; the default branch, this install's own checkout and the hard names stay Tier 3 | source_mode, source_path, classify_paths |
-| Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
+| `strict` reads no command syntax beyond the lists, categories, lease answers, merge pins and guards in these rows (decision 5 of `docs/specs/afk-decider.md`, 19/11/2026): read-only queries such as `git status` or `gh pr view`, and every other command no row names, are `unknown`; before that answer the request passes the `open` floor (`floor`), the default-branch guard reading (`guarded`) and the kept rules: a `git push`, `merge`, `tag` or `commit`, a `gh pr merge`, `create`, `edit` or `comment`, a `gh release`, a publish, a deploy word or a recursive `rm`, anywhere in the request, that its row does not accept answers `rule-form` and parks | classify_argv, strict_unknown, open_commands, rule_form, guard_hit, floored |
 | Git add of allowed paths, commit on a work branch (a commit on the default branch, a detached head or an unreadable branch is protected or unknown), origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
 | A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
 | One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
@@ -35,7 +35,7 @@ request, row `decided` below):
 | PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA (other options: a long method flag, --delete-branch, --repo, and one plain email address for --author-email or -A) and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`); its pin names the repository and is written before the action is reserved (a full log answers `log-unwritable`) | classify_argv, check |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run`, `run --changed [--base <branch or commit>]` (no relative revision) or `run --dispatch <dispatch id>` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
-| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
+| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings; an argv of at most 256 non-empty tokens of at most 64 KiB each, no control character but a newline or tab, and no secret or sensitive assignment, with no shape allowlist; a set of plain relative file paths inside the checkout, outside its protected paths, with no link) is Tier 1 `decided` once, for that exact argv or set of paths, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, decidable_paths, request_subject, open_approvals |
 | `--approve-request <digest>` on a rule, advisor or host attempt settled on option 1 stores a permission approval for the afk permission hook (away_lease.record_permit: 64-hex digest, live lease, used once within 30 minutes); `check` never reads or consumes it | log, permit_subject |
 | `log --kind idle` needs a live lease; `--session` belongs to idle and parked and is stored as the first 16 hex of its SHA-256 | log, check |
 | A repository's approved `merge: decide` applies as Merge yes there under any lease; `effective` shows `merge_authority` | effective, show_effective |
@@ -1734,35 +1734,9 @@ def classify_argv(argv, applied, coordinator=None):
             except (OSError, ValueError, UnicodeError):
                 return 'unknown'
             return 'allowed' if current and default and current not in {default, 'main', 'master', 'trunk'} else 'protected'
-        query = {
-            'status': ({'--short', '-s', '--porcelain', '--branch', '-b'}, set()),
-            'log': ({'--oneline', '--stat', '--all', '--decorate', '--graph', '--no-decorate', '-N'}, {'-n', '--max-count', '--format', '--pretty'}),
-            'diff': ({'--stat', '--name-only', '--name-status', '--cached', '--staged', '--check', '--no-ext-diff', '--no-textconv'}, set()),
-            'show': ({'--stat', '--name-only', '--format=fuller', '--no-patch', '--no-ext-diff', '--no-textconv'}, {'--format'}),
-            'rev-parse': ({'--show-toplevel', '--show-prefix', '--abbrev-ref', '--verify'}, set()),
-            'ls-files': ({'--stage', '--cached', '--modified', '--others', '--exclude-standard'}, set()),
-            'ls-tree': ({'-r', '--name-only'}, set()),
-            'branch': ({'--show-current', '--list', '-a', '--all', '-r', '--remotes', '-v', '-vv'}, set()),
-            'remote': ({'-v', '--verbose'}, set()),
-        }
-        if verb in query:
-            operands = options(tail, query[verb][0] | {'--'}, query[verb][1])
-            if operands is not None and (verb not in {'branch', 'remote'} or not operands):
-                for operand in operands:
-                    if operand == '--':
-                        continue
-                    # Revisions are an explicit grammar; path operands use the same path gate.
-                    revision = r'(?:HEAD(?:[~^][0-9]*)?|[0-9a-f]{7,40}|origin/[A-Za-z0-9_./-]+)'
-                    if re.fullmatch(revision + r'(?:\.\.\.?' + revision + r')?', operand):
-                        continue
-                    if classify_paths([operand], applied.get('Roots', ()), context_of(applied),
-                                      source_mode(applied), applied.get(FILES, ())) != 'allowed':
-                        return 'unknown'
-                return 'allowed'
         return 'unknown'
     if command == 'gh' and len(argv) >= 3:
         group, verb, tail = argv[1], argv[2], argv[3:]
-        common = {'--repo', '-R', '--json', '--jq', '-q', '--template', '-t'}
         if group == 'pr' and verb == 'merge':
             if applied['Merge'] != 'yes':
                 return 'merge-disabled'
@@ -1810,12 +1784,6 @@ def classify_argv(argv, applied, coordinator=None):
             context = context_of(applied)
             text = pr_text(tail, context)
             return text if text != 'allowed' else target_check(tail, context)
-        queries = {'pr': {'view', 'checks', 'list', 'status', 'diff'}, 'issue': {'view', 'list', 'status'},
-                   'repo': {'view'}, 'run': {'view', 'list'}}
-        if verb in queries.get(group, set()):
-            operands = options(tail, {'--watch', '--required', '--summary', '--comments', '--patch', '--stat'},
-                               common | {'--state', '--limit', '-L', '--base', '--head', '--author', '--label', '--search', '--branch', '--status'})
-            return 'allowed' if operands is not None else 'unknown'
     return 'unknown'
 
 
@@ -2509,15 +2477,59 @@ def open_verdict(argv, paths, applied):
         return 'unknown'
     if floored(argv, None, cwd):
         return 'floor'
-    stripped, texts = open_texts(argv)
     if applied.get(DEFAULT_BRANCH) != 'open':
-        bodies = [next(g for g in m.groups() if g is not None) for value in texts for m in SUBSTITUTION.finditer(value)]
-        commands = ([c for reading in READINGS for c in commands_of(stripped, full=True, split_patterns=reading)]
-                    + [c for body in bodies for c in commands_of(body.split(), True)])
-        for program, words, env, *_ in commands:
+        for program, words, env, *_ in open_commands(argv):
             if program != '#inline' and guard_hit(program, words, env, context):
                 return 'guarded'
     return 'allowed'
+
+
+def open_commands(argv):
+    """Every command the floor and guard reading finds in argv: each reading of the text-stripped argv, and the
+    substitutions inside its text values."""
+    stripped, texts = open_texts(argv)
+    bodies = [next(g for g in m.groups() if g is not None) for value in texts for m in SUBSTITUTION.finditer(value)]
+    return ([c for reading in READINGS for c in commands_of(stripped, full=True, split_patterns=reading)]
+            + [c for body in bodies for c in commands_of(body.split(), True)])
+
+
+# The commands a kept `strict` rule reads (afk-decider.md D, decision 5): the lease's Push and Merge answers, the merge
+# pins, the commit and pull request text screens, the release and deploy lists and the recursive-deletion category. A
+# form of one of them that its rule does not accept parks as `rule-form`; it never reaches Decide as `unknown`, so an
+# approval cannot replace the rule.
+RULE_GIT_VERBS = frozenset({'push', 'merge', 'tag', 'commit'})
+RULE_GH_PR_VERBS = frozenset({'merge', 'create', 'edit', 'comment'})
+PUBLISHERS = frozenset({'npm', 'pnpm', 'yarn', 'bun'})
+
+
+def rule_form(program, words):
+    """True when one command, as the floor and guard reading found it, belongs to a kept `strict` rule. Set membership
+    on its words only, never a grammar: a doubt parks."""
+    if program == 'git':
+        return git_parts(words)[0] in RULE_GIT_VERBS
+    if program == 'gh':
+        plain = {w for w in words if not w.startswith('-')}
+        return 'release' in plain or 'pr' in plain and bool(plain & RULE_GH_PR_VERBS)
+    if program in PUBLISHERS and 'publish' in words:
+        return True
+    if program == 'rm' and any(t.startswith('-') and ('r' in t[1:] or 'R' in t[1:] or t == '--recursive') for t in words):
+        return True
+    return program is not None and any(DEPLOY.fullmatch(t) for t in words)
+
+
+def strict_unknown(argv, paths, applied, cwd):
+    """The answer for a `strict` request no rule accepted: `floor` when it touches the credential floor, `guarded`
+    when a default-branch guard form matches, `rule-form` when it belongs to a kept rule, else `unknown` (Decide)."""
+    if argv is None:
+        return 'floor' if floored(None, paths, cwd) else 'unknown'
+    if floored(argv, None, cwd):
+        return 'floor'
+    commands = [c for c in open_commands(argv) if c[0] != '#inline']
+    if any(guard_hit(program, words, env, context_of(applied)) for program, words, env, *_ in commands):
+        return 'guarded'
+    if any(rule_form(program, words) for program, words, *_ in commands):
+        return 'rule-form'
+    return 'unknown'
 
 
 def classified(folder, argv_json, paths, coordinator, current):
@@ -2565,11 +2577,12 @@ def classified(folder, argv_json, paths, coordinator, current):
                 code = classify_paths(paths, applied['Roots'], context_of(applied), source_mode(applied),
                                       applied.get(FILES, ()))
             if code == 'unknown':
-                # The floor applies in `strict` too (A, B): an unknown request that touches it is never decidable.
+                # The floor and the guards apply in `strict` too, and a form of a kept rule parks (afk-decider.md D):
+                # what is left is unknown and decidable. Any parser error answers Tier 3, never Tier 1.
                 try:
                     valid = argv_json is None or isinstance(argv, list) and all(isinstance(t, str) for t in argv)
-                    if valid and floored(argv if argv_json is not None else None, paths, cwd):
-                        code = 'floor'
+                    if valid:
+                        code = strict_unknown(argv if argv_json is not None else None, paths, applied, cwd)
                 except Exception:
                     code = 'unsafe'
     return code, lease, applied, key, entry, argv, cwd
@@ -2947,146 +2960,6 @@ def merge_pins(folder, current):
 
 
 
-# Decidable commands are an allowlist of fixed shapes (owner decision, 15/11/2026, after two review rounds showed a
-# deny list cannot be complete): a script of this checkout, the repository's own test, run, build and lint entry
-# points, installs of what the repository declares, listed git and gh verbs, and this install's delegated runs.
-# Every other program, form, option or verb stays parked.
-PY_OPTIONS = frozenset({'-I', '-B', '-u', '-O', '-OO', '-s', '-E', '-S', '-q', '-v', '-b', '-bb'})
-# Modules that run this checkout's tests and linters; never one that runs another module or code from an option
-# (`coverage run -m`, `pylint --init-hook`) or installs from the network (`build`, `tox`, `nox`).
-PY_MODULES = frozenset({'unittest', 'pytest', 'doctest', 'py_compile', 'compileall', 'mypy', 'ruff', 'black', 'flake8',
-                        'pyflakes'})
-WORD = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,120}')
-# `make VAR=value`: a plain value without a slash, and never a variable that names a program, flags or a path.
-MAKE_VAR = re.compile(r'([A-Z][A-Z0-9_]{0,40})=[A-Za-z0-9_.,-]{0,120}')
-MAKE_TOOL_VAR = re.compile(r'SHELL|MAKE|MAKEFLAGS|MFLAGS|CC|CXX|CPP|LD|AR|AS|FC|RM|INSTALL|SUDO|DESTDIR|PREFIX|'
-                           r'[A-Z0-9_]*(?:FLAGS|CMD|COMMAND|BIN|PATH|DIR|EXEC|PROGRAM|TOOL|RUNNER)')
-JS_TOOLS = frozenset({'npm', 'pnpm', 'yarn', 'bun'})
-JS_INSTALL_FLAGS = frozenset({'--frozen-lockfile', '--immutable', '--no-audit', '--no-fund', '--prefer-offline',
-                              '--ignore-scripts', '--silent', '-s'})
-CARGO_VERBS = frozenset({'test', 'build', 'check', 'clippy', 'fmt', 'bench', 'fetch', 'run', 'doc'})
-GO_VERBS = frozenset({'test', 'build', 'vet', 'fmt', 'run'})
-# go flags from a closed list, written with `=` (Go accepts one or two dashes); package operands are local paths.
-GO_FLAG = re.compile(r'-{1,2}(?:v|race|short|cover|failfast|json|count=[0-9]{1,4}|run=[A-Za-z0-9_.|^$()/*-]{1,120}|'
-                     r'timeout=[0-9]{1,4}[smh]|tags=[A-Za-z0-9_,]{1,120}|p=[0-9]{1,2})')
-# git: verbs that change only this checkout's commits and index in ways the owner allows, or read; options from a
-# closed list, so no option runs a program (`--ext-diff`, `-x` of difftool, `--exec`) or writes a file (`--output`).
-GIT_VERBS = frozenset({'fetch', 'cherry-pick', 'revert', 'add', 'mv', 'log', 'show', 'diff', 'status', 'blame',
-                       'grep', 'ls-files', 'shortlog', 'describe', 'rev-parse', 'merge-base'})
-GIT_FLAGS = frozenset({'--no-edit', '-x', '--continue', '--abort', '--skip', '--quiet', '-q', '--prune', '--oneline',
-                       '--stat', '--name-only', '--name-status', '--cached', '--staged', '-p', '--no-color',
-                       '--porcelain', '-s', '--short', '-b', '-n', '--all', '-A', '-u', '--update', '--', '-i', '-l',
-                       '--no-ext-diff', '--no-textconv', '--abbrev-ref', '--show-toplevel', '-v'})
-GIT_NUMBER = re.compile(r'-n?[0-9]{1,4}|--max-count=[0-9]{1,4}')
-# gh: (group, verb) pairs at fixed positions, then data; another repository than the verified one denies.
-GH_VERBS = {'pr': {'view', 'list', 'checks', 'diff', 'status'},
-            'issue': {'create', 'view', 'list', 'comment', 'edit', 'close', 'reopen'},
-            'run': {'view', 'list', 'watch', 'rerun'}, 'workflow': {'run', 'view', 'list'},
-            'repo': {'view'}, 'release': {'view', 'list'}, 'label': {'list', 'create'}}
-
-
-def script_inside(token, context):
-    """A script operand: an existing regular file inside this checkout, not an option."""
-    if token.startswith('-') or not inside(token, context):
-        return False
-    return os.path.isfile(os.path.join(context.cwd or os.getcwd(), token))
-
-
-def pip_declared(args, context):
-    """`pip install` of declared requirements only: every operand follows `-r`, `-c` or `-e` and is an existing path
-    inside this checkout; at least one such pair; no other option."""
-    pairs, i = 0, 0
-    while i < len(args):
-        if args[i] not in {'-r', '--requirement', '-e', '--editable', '-c', '--constraint'} or i + 1 >= len(args):
-            return False
-        operand = args[i + 1]
-        if (operand.startswith('-') or any(c in operand for c in '@+:')
-                or not os.path.lexists(os.path.join(context.cwd or os.getcwd(), operand)) or not inside(operand, context)):
-            return False
-        pairs, i = pairs + 1, i + 2
-    return pairs > 0
-
-
-def shape_decidable(name, first, args, context):
-    """True when the command has one of the allowlisted shapes."""
-    if '/' in first or first.startswith('.'):
-        return script_inside(first, context)  # a script of this checkout, with data arguments
-    if name == 'make':
-        return all((WORD.fullmatch(t) and '=' not in t) or t in {'-k', '-s', '-n'} or re.fullmatch(r'-j[0-9]{0,2}', t)
-                   or (MAKE_VAR.fullmatch(t) and not MAKE_TOOL_VAR.fullmatch(MAKE_VAR.fullmatch(t).group(1)))
-                   for t in args)
-    if name in JS_TOOLS:
-        if not args:
-            return name == 'yarn'
-        verb, rest = args[0], args[1:]
-        if verb in {'test', 't'}:
-            return True
-        if verb in {'run', 'run-script'}:
-            return bool(rest) and WORD.fullmatch(rest[0]) is not None
-        if verb in {'install', 'i', 'ci'}:
-            return all(t in JS_INSTALL_FLAGS for t in rest)  # no package named: install what the lockfile declares
-        return False
-    if name == 'python':
-        i = 0
-        while i < len(args) and args[i] in PY_OPTIONS:
-            i += 1
-        if args[i:i + 1] == ['-m']:
-            module = args[i + 1] if i + 2 <= len(args) else ''
-            if module == 'pip':
-                return args[i + 2:i + 3] == ['install'] and pip_declared(args[i + 3:], context)
-            return module in PY_MODULES
-        return i < len(args) and script_inside(args[i], context)
-    if name == 'pip':
-        return args[:1] == ['install'] and pip_declared(args[1:], context)
-    if name == 'node':
-        if args[:1] == ['--test']:
-            return all(not t.startswith('-') and inside(t, context) for t in args[1:])
-        return bool(args) and script_inside(args[0], context)
-    if name == 'cargo':
-        return bool(args) and args[0] in CARGO_VERBS and not any(t.startswith(('--config', '-Z')) for t in args)
-    if name == 'go':
-        if args[:1] == ['mod']:
-            return args[1:2] in (['download'], ['tidy'], ['verify']) and all(GO_FLAG.fullmatch(t) for t in args[2:])
-        return bool(args) and args[0] in GO_VERBS and all(
-            GO_FLAG.fullmatch(t) or (t.startswith('.') and '@' not in t and inside(t.rstrip('.').rstrip('/') or '.', context))
-            for t in args[1:])
-    if name in {'uv', 'poetry', 'bundle'}:
-        verb = {'uv': 'sync', 'poetry': 'install', 'bundle': 'install'}[name]
-        return args[:1] == [verb] and all(t in {'--frozen', '--locked', '--no-root', '--quiet'} for t in args[1:])
-    if name == 'git':
-        if not args or args[0] not in GIT_VERBS:
-            return False
-        if args[0] == 'fetch':
-            # Only from origin, by branch name: no other host, URL, scp-like remote or refspec.
-            operands = [t for t in args[1:] if not t.startswith('-')]
-            if operands[:1] not in ([], ['origin']) or any(':' in t or not BRANCH.fullmatch(t) for t in operands):
-                return False
-        return all(not t.startswith('-') or t in GIT_FLAGS or GIT_NUMBER.fullmatch(t) for t in args[1:])
-    if name == 'gh':
-        if len(args) < 2 or args[1] not in GH_VERBS.get(args[0], ()):
-            return False
-        for i, t in enumerate(args):
-            if t.startswith(('-R', '--repo')):
-                # pflag reads `-R x`, `-R=x`, `-Rx`, `--repo x` and `--repo=x` alike.
-                if t in {'-R', '--repo'}:
-                    value = args[i + 1] if i + 1 < len(args) else ''
-                elif t.startswith('--repo='):
-                    value = t[len('--repo='):]
-                elif t.startswith('-R'):
-                    value = t[2:].removeprefix('=')
-                else:
-                    return False  # another long option starting with --repo
-                if context.target is None or value.removeprefix('github.com/').lower() != context.target.removeprefix('github.com/'):
-                    return False
-        return True
-    return False
-
-
-def program_name(token):
-    """The base program name with a trailing version stripped (`python3.12` reads as `python`)."""
-    return re.sub(r'[0-9][0-9.]*$', '', Path(token).name) or Path(token).name
-
-
 def inside(token, context):
     """True when a path token resolves, through every link, inside the checkout the request runs in and outside its
     protected paths (`.git/`, `.github/`, `.claude/`, credential and key names), so a link cannot lead there."""
@@ -3101,53 +2974,26 @@ def inside(token, context):
     return not protected(os.path.relpath(full, root))
 
 
-REMOTE = re.compile(r'(?:[^\s/]*@)?[A-Za-z0-9_.-]+\.[A-Za-z]{2,}:|[^\s/]*@[^\s/]+:')  # an scp-like remote, `[user@]host:path`
-
-
-def decidable_argv(argv, context, hosts=frozenset()):
-    """True when an `unknown` command may enter the away ladder for approval: a found repository with user or project
-    settings, one of the allowlisted shapes (shape_decidable) or this install's delegated run (dispatch_prefix), no
-    shell syntax, URL, remote, secret or machine path, and every path operand inside this checkout, outside its
-    protected paths. Everything else stays parked."""
-    if context.repository != 'found' or context.state not in {'user', 'project'} or not argv:
+def decidable_argv(argv, context):
+    """True when an `unknown` command may enter the away ladder for approval of that exact argv (afk-decider.md D,
+    decision 5: no shape allowlist): a found repository with user or project settings, every token a non-empty string
+    of at most 64 KiB with no control character but a newline or tab, and no token holding a secret or a sensitive
+    assignment. The floor, the guards and the kept rules were applied before (`strict_unknown`)."""
+    if context.repository != 'found' or context.state not in {'user', 'project'} or not argv or len(argv) > 256:
         return False
-    # Without a shell, a newline or tab inside one argument is data (a multi-line brief); other controls deny.
-    if any(not isinstance(t, str) or not t or len(t.encode()) > 65536
-           or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in t)
-           or t in {';', '&&', '||', '|', '&', '>', '>>', '<', '<<'} or '$(' in t or '`' in t or '://' in t
-           for t in argv):
-        return False
-    first = argv[0]
-    if '=' in first or first.startswith('-') or not re.fullmatch(r'[A-Za-z0-9_./+-]{1,240}', first):
-        return False
-    skip = dispatch_prefix(argv, hosts)
-    if skip == 1 and (any(REMOTE.match(t) for t in argv[1:])
-                      or not shape_decidable(program_name(first), first, argv[1:], context)):
-        return False
-    for token in argv[skip:]:
-        value = token.split('=', 1)[1] if '=' in token else token  # `--flag=value` and `VAR=value` alike
-        if not value:
-            continue
-        if value.startswith('~') or screened(value):
+    for token in argv:
+        if (not isinstance(token, str) or not token or len(token.encode()) > 65536
+                or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in token)):
             return False
-        if (os.path.isabs(value) or path_operand(value, context.cwd)) and not inside(value, context):
+        try:
+            if secret_patterns.findings(token):
+                return False
+        except ValueError:
+            return False
+        import judge
+        if judge.assigns_sensitive(token):
             return False
     return True
-
-
-def dispatch_prefix(argv, hosts):
-    """How many leading tokens are a delegated run's own launcher, else 1: this install's `delegate_env.py` with
-    isolated Python, `--family F --` for a family of the lease's Hosts, and that family's owner-approved executable
-    (the quota probe's record). The run's own arguments after it pass the usual screen (a review or task brief is
-    screened for secrets and machine paths). Used only for an `unknown` request: any other dispatch form stays parked."""
-    name, tail = own_script(argv, ('delegate_env.py',))
-    if (name is None or len(tail) < 4 or tail[0] != '--family' or tail[2] != '--' or tail[1] not in PROGRAMS
-            or tail[1] not in hosts):
-        return 1
-    size = approved_program(tail[1], tail[3:])
-    if not size:
-        return 1
-    return len(argv) - len(tail) + 3 + size
 
 
 def decidable_paths(paths, context):
@@ -3168,8 +3014,7 @@ def request_subject(applied, cwd, argv, paths):
     request is not decidable."""
     context = context_of(applied)
     if argv is not None:
-        hosts = {HOST_FAMILIES[h] for h in applied.get('Hosts', '').split(', ') if h in HOST_FAMILIES}
-        if not isinstance(argv, list) or not decidable_argv(argv, context, hosts):
+        if not isinstance(argv, list) or not decidable_argv(argv, context):
             return None
         request = dict(argv=argv)
     else:
