@@ -44,10 +44,10 @@ Choices: "Yes, hide these files" / "No, keep the list".
 ```markdown
 ## Agent skills
 
-This repository uses the finolabs-vibecode skills. Routing on: use `coding-router`. <Spec Kit line, when present: use Spec Kit.> <Work-record line, when adopted: use work records.> Pull requests follow `review-gate` "Pull requests"; reviewers may post code/security reviews. <Single-owner option: Pull requests may take the low-risk lane of `review-gate`.> <UI option: UI changes need a `ui-review-gate` review.> Help: `/finolabs-vibecode:help` (Codex `$help`).
+This repository uses the finolabs-vibecode skills. Routing on: use `coding-router`. <Spec Kit line, when present: use Spec Kit.> <Work-record line, when adopted: use work records.> Pull requests follow `review-gate` "Pull requests"; reviewers may post code/security reviews. <Single-owner option: Pull requests may take the low-risk lane of `review-gate`.> <UI option: User-facing UI changes follow `ui-review-gate`.> Help: `/finolabs-vibecode:help` (Codex `$help`).
 ```
 
-   Include only confirmed lines. `python3 -I <this skill folder>/scripts/instructions_write.py preview --target <file> --content-file <draft> --block "Agent skills"`; show diff/full digest. Ask: "Save these plugin rules for AI sessions in this repository?"
+   Include only the confirmed workflow line, neither when none. `python3 -I <this skill folder>/scripts/instructions_write.py preview --target <file> --content-file <draft> --block "Agent skills"`; show diff/full digest. Ask: "Save these plugin rules for AI sessions in this repository?"
 Yes: Save only Agent skills in the shown file with backup; future sessions use their AI provider.
 No: Keep the file; ask later.
 Undo: Restore the backup.
