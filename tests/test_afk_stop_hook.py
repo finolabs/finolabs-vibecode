@@ -53,6 +53,28 @@ class StopHookTest(unittest.TestCase):
         self.state.mkdir(parents=True, mode=0o700)
         (self.root / "state").chmod(0o700)
         self.env = {"PATH": os.defpath}
+        self.repo = self.checkout("checkout")
+
+    def checkout(self, name):
+        """A synthetic repository under the home; the afk queue is keyed by its identity."""
+        repo = self.home / name
+        (repo / ".git/refs/heads").mkdir(parents=True)
+        (repo / ".git/HEAD").write_text("ref: refs/heads/topic\n")
+        (repo / ".git/config").write_text("[core]\n\trepositoryformatversion = 0\n\tbare = false\n")
+        return repo
+
+    def goal(self, items, repo=None):
+        folder = (repo or self.repo) / ".finolabs/briefs"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "items.json").write_text(json.dumps(items))
+        done = self.afk("goal", "--items-file", str(folder / "items.json"), cwd=repo)
+        self.assertEqual(done.returncode, 0, done.stdout)
+        return done.stdout
+
+    def idle(self, repo=None):
+        time.sleep(0.01)
+        logged = self.afk("log", "--kind", "idle", "--session", SESSION, cwd=repo)
+        self.assertEqual(logged.returncode, 0, logged.stdout)
 
     def lease(self, start=None, expiry=None, setup=OPEN):
         """A lease started by afk.py itself, so `check`'s view of setup holds; `start`/`expiry` then move its window."""
@@ -80,9 +102,9 @@ class StopHookTest(unittest.TestCase):
             stream.write(json.dumps(entry) + "\n")
         path.chmod(0o600)
 
-    def run_hook(self, active=False, env=None, raw=None, session=SESSION):
+    def run_hook(self, active=False, env=None, raw=None, session=SESSION, cwd=None):
         payload = raw if raw is not None else json.dumps(
-            {"session_id": session, "hook_event_name": "Stop", "stop_hook_active": active, "cwd": str(self.home),
+            {"session_id": session, "hook_event_name": "Stop", "stop_hook_active": active, "cwd": str(cwd or self.repo),
              "transcript_path": str(self.home / "t.jsonl")})
         result = subprocess.run([sys.executable, "-I", "-c", BOOT, str(self.home), str(HOOK)], input=payload,
                                 env=env or self.env, capture_output=True, text=True, timeout=10)
@@ -95,6 +117,7 @@ class StopHookTest(unittest.TestCase):
         self.assertEqual(answer["decision"], "block")
         self.assertIn('afk "Decide"', answer["reason"])
         self.assertIn("--kind idle", answer["reason"])
+        self.assertNotIn("--kind parked", answer["reason"])  # a park closes an item, not the turn
 
     def test_a_pending_turn_is_sent_back_once_then_the_next_stop_passes(self):
         self.lease()
@@ -106,17 +129,50 @@ class StopHookTest(unittest.TestCase):
         self.assertEqual(mark.name, hashlib.sha256(SESSION.encode()).hexdigest()[:16])
         self.assertNotIn(SESSION, mark.read_text())
 
-    def test_an_idle_or_parked_record_of_this_session_since_its_last_stop_lets_it_through(self):
+    def test_a_current_idle_record_of_this_session_since_its_last_stop_lets_it_through(self):
         self.lease()
-        for kind in ("idle", "parked"):
-            with self.subTest(kind=kind):
-                self.assert_blocks(self.run_hook())
-                time.sleep(0.01)
-                self.record(kind)
-                self.assertIsNone(self.run_hook())
-                # The record served its turn: the next turn needs one of its own.
-                self.assert_blocks(self.run_hook())
-                self.assertIsNone(self.run_hook(active=True))
+        self.goal([])
+        self.assert_blocks(self.run_hook())
+        self.idle()
+        self.assertIsNone(self.run_hook())
+        # The record served its turn: the next turn needs one of its own.
+        self.assert_blocks(self.run_hook())
+        self.assertIsNone(self.run_hook(active=True))
+
+    def test_a_parked_record_alone_no_longer_ends_the_turn(self):
+        self.lease()
+        self.goal([{"label": "fix login", "kind": "fix", "minutes": 30}])
+        self.assert_blocks(self.run_hook())
+        time.sleep(0.01)
+        parked = self.afk("log", "--kind", "parked", "--item", "1", "--session", SESSION)
+        self.assertEqual(parked.returncode, 0, parked.stdout)
+        self.record("parked")
+        self.assert_blocks(self.run_hook())
+
+    def test_an_idle_record_made_stale_by_a_later_goal_append_does_not_count(self):
+        self.lease()
+        self.goal([])
+        self.assert_blocks(self.run_hook())
+        self.idle()
+        self.goal([{"label": "review pr 12", "kind": "review", "minutes": 20}])  # another session adds an item
+        self.assert_blocks(self.run_hook())
+
+    def test_an_idle_record_of_another_repository_with_the_same_revision_does_not_count(self):
+        other = self.checkout("other")
+        self.lease()
+        self.goal([])
+        self.goal([], repo=other)  # both queues are at revision 1
+        self.assert_blocks(self.run_hook())
+        self.idle(repo=other)
+        self.assert_blocks(self.run_hook())
+        self.assertIsNone(self.run_hook(cwd=other, active=True))
+        self.idle(repo=other)
+        self.assertIsNone(self.run_hook(cwd=other))
+
+    def test_a_session_outside_a_repository_is_sent_back_once(self):
+        self.lease()
+        self.assert_blocks(self.run_hook(cwd=self.home))
+        self.assertIsNone(self.run_hook(cwd=self.home, active=True))
 
     def test_another_sessions_record_or_one_before_the_last_stop_does_not_count(self):
         self.lease()
@@ -171,9 +227,9 @@ class StopHookTest(unittest.TestCase):
             if path.is_file() and path.stat().st_mode & 0o400:
                 self.assertNotIn("SECRET", path.read_text(errors="replace"))
 
-    def afk(self, *argv):
+    def afk(self, *argv, cwd=None):
         return subprocess.run([sys.executable, "-I", "-c", BOOT, str(self.home), str(AFK), *argv],
-                              env=self.env, capture_output=True, text=True, timeout=30, cwd=self.home)
+                              env=self.env, capture_output=True, text=True, timeout=30, cwd=cwd or self.repo)
 
     def test_afk_log_records_idle_with_this_sessions_hash_and_the_stop_passes(self):
         (self.root / "host.md").write_text(OPEN)
@@ -181,9 +237,9 @@ class StopHookTest(unittest.TestCase):
         self.assertEqual(self.afk("log", "--kind", "idle", "--session", SESSION).returncode, 3)  # no lease yet
         self.lease()
         self.assert_blocks(self.run_hook())
-        time.sleep(0.01)
-        logged = self.afk("log", "--kind", "idle", "--session", SESSION)
-        self.assertEqual(logged.returncode, 0, logged.stdout)
+        self.assertEqual(self.afk("log", "--kind", "idle", "--session", SESSION).returncode, 3)  # no queue yet
+        self.goal([])
+        self.idle()
         self.assertIsNone(self.run_hook())
         text = (self.state / "log.jsonl").read_text()
         self.assertNotIn(SESSION, text)
