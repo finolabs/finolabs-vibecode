@@ -534,7 +534,7 @@ class StateBlockTest(SyntheticStateTest):
                 "claude": {"configs": {"default": None, "work": None}}}):
             self.write("state/quota/backoff.json", json.dumps({"claude": {"default": {
                 "error": "no-limits", "retry_after": self.qp.stamp(current + self.qp.timedelta(days=7))}}}))
-            for fraction, expected in ((.02, "unverified"),):
+            for fraction, expected in ((.02, "unverified"), (.64, "ok 64%"), (None, "unverified")):
                 cache = {} if fraction is None else {"claude": {"work": {
                     "measured": self.qp.stamp(current), "source": "claude-usage", "groups": [
                         self.qp.group("week-all", "weekly", fraction,

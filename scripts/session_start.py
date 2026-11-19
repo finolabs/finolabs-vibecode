@@ -163,10 +163,9 @@ def quota_words(families=ALL_FAMILIES):
             no_plan = agent == "claude" and bool(unlimited)
             if QUOTA_FAMILY[agent] not in families or (not labels and agent not in limits and not no_plan):
                 continue
-            if no_plan and (agent not in limits or not probe.limited_until(agent, limits[agent], cache, current)):
+            word, percent = family_quota(probe, agent, labels or {}, limits.get(agent), current)
+            if no_plan and word == "out":
                 word, percent = "unverified", None
-            else:
-                word, percent = family_quota(probe, agent, labels or {}, limits.get(agent), current)
             parts.append(f"{name} {word}" + (f" {percent}%" if percent is not None else ""))
         return ", ".join(parts) or "no reading"
     except FileNotFoundError:
