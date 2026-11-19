@@ -23,7 +23,11 @@ Rule table (each row names its enforcer; unknown input fails closed):
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | `--approve-request <digest>` on a rule, advisor or host attempt settled on option 1 stores a permission approval for the afk permission hook (away_lease.record_permit: 64-hex digest, live lease, used once within 30 minutes); `check` never reads or consumes it | log, permit_subject |
-| `log --kind idle` needs a live lease; `--session` belongs to idle and parked and is stored as the first 16 hex of its SHA-256 | log |
+| `goal --items-file <file under .finolabs/briefs/>` needs a live lease and a repository; it appends at most 30 items (`label`, `kind`, `minutes` 1..480) to that repository's private queue, keyed by its identity digest, numbered from 1, with a `revision` every change increments; a queue holds at most 30 open and 120 items in all and is removed with the lease | goal, read_queue, write_queue, clear_queues, start, stop |
+| `log --item <n>` belongs to action, merge and parked and names an item of this repository's queue; `--done` (action, merge) marks it done, a parked record marks it parked | log |
+| `log --kind idle` is refused with no lease, with no queue for this repository and while its queue has an open item; once the lease has ended it is accepted; an accepted idle record under a live lease keeps the queue `revision` and the first 16 hex of the repository identity digest; `--session` belongs to idle and parked and is stored as the first 16 hex of its SHA-256 | log |
+| `stop` without `--all` is refused (an agent whose work is done logs idle); `stop --all` ends the machine lease | main, stop |
+| `effective` adds `Project settings: recorded` when the repository's own approved afk object exists, else `none` | effective, show_effective |
 | `start` prints the native allow rules for the lease commands and warns when Claude Code's default config folder and this folder's project settings hold no floor deny rule and no asking approval mode (reads only `permissions.deny` and `permissions.defaultMode`) | native_notice, claude_permissions |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | The third-party instructions guard, trusted authors, the merge gate, quota readings and actually calling check before execution remain caller obligations | agent judgment, advisory |
@@ -111,6 +115,16 @@ BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
 PROJECT_KEYS = {'third-party-instructions': THIRD_PARTY, 'default-branch': DEFAULT_BRANCH}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 MAX_LOG = 8 * 1024 * 1024
+# The afk queue of one repository (docs/specs/afk-goals.md A): fixed kind words, short labels, estimates and states.
+GOAL_LINE = 'Every item in the afk queue of this repository is done or parked, or the away lease has ended.'
+QUEUE_KINDS = ('pr', 'review', 'merge', 'task', 'fix', 'release-step', 'other')
+ITEM_LABEL = re.compile(r'[A-Za-z0-9](?:[A-Za-z0-9_ -]{0,58}[A-Za-z0-9_-])?')
+ITEM_STATES = ('open', 'done', 'parked')
+MAX_ITEMS = 30  # per goal call, and open items in one queue
+MAX_QUEUE = 120  # items of every state in one queue
+QUEUE = re.compile(r'queue-[0-9a-f]{64}\.json')
+STOP_REFUSED = ('afk.py stop needs --all and is the user\'s: an agent whose work is done logs '
+                '`afk.py log --kind idle`; only the user\'s /afk stop ends the lease.')
 
 def now():
     return time.time()
@@ -215,6 +229,7 @@ def start(folder, args):
         print(afk_overlay.lines(os.getcwd()), end='')
         return
     lease = dict(id=uuid.uuid4().hex, start=current, expiry=current + hours * 3600, settings_hash=digest(applied))
+    clear_queues(folder)  # an ended lease's queues never carry into a new one
     save_lease(folder, lease)
     try:
         os.unlink('stop', dir_fd=folder)
@@ -244,7 +259,7 @@ FLOOR_RULES = ('Read(~/.netrc)', 'Read(~/.git-credentials)', 'Read(~/.npmrc)', '
                'Read(~/.docker/config.json)', 'Read(~/.config/gh/**)', 'Read(**/.env)', 'Read(**/.env.local)',
                'Read(**/.dev.vars)', 'Bash(printenv:*)', 'Bash(env)', 'Bash(security:*)', 'Bash(gh auth token:*)',
                'Bash(op:*)', 'Bash(pass:*)', 'Bash(vault:*)')
-LEASE_COMMANDS = ('log', 'stop', 'review', 'effective', 'rules', 'check', 'packet-check')
+LEASE_COMMANDS = ('log', 'goal', 'stop', 'review', 'effective', 'rules', 'check', 'packet-check')
 ASKING_MODES = {'default', 'plan'}  # Claude Code approval modes that ask before a command runs
 
 
@@ -306,10 +321,184 @@ def stop(folder):
         write_private(folder, 'stop', b'')
         if removed:
             os.unlink('lease.json', dir_fd=folder)
-            os.fsync(folder)
+        clear_queues(folder)  # the queues go with the lease
+        os.fsync(folder)
     print('afk stopped: stop marker written; lease ' + ('removed' if removed else 'already absent'))
     if afk_overlay.present(os.getcwd()):
         print(afk_overlay.STOPPED)
+
+
+def clear_queues(folder):
+    """Remove every repository queue; they live only as long as the lease."""
+    for name in os.listdir(folder):
+        if QUEUE.fullmatch(name):
+            private_info(folder, name)
+            os.unlink(name, dir_fd=folder)
+
+
+def repository_digest(cwd):
+    """The full identity digest of the repository holding `cwd` (project_store.identity), or None."""
+    found, ident = store.identity(str(cwd))
+    return store.identity_digest(ident.main) if found == 'found' else None
+
+
+def read_queue(folder, key, lease):
+    """The queue of one repository under this lease, or None when it has none; an unsafe or invalid file raises."""
+    raw = read_private(folder, f'queue-{key}.json')
+    if raw is None:
+        return None
+    queue = json.loads(raw)
+    if (not isinstance(queue, dict) or set(queue) != {'lease', 'revision', 'items'}
+            or not isinstance(queue['lease'], str) or type(queue['revision']) is not int or queue['revision'] < 1
+            or not isinstance(queue['items'], list) or len(queue['items']) > MAX_QUEUE):
+        raise ValueError('afk queue is invalid')
+    for number, item in enumerate(queue['items'], 1):
+        if (not isinstance(item, dict) or set(item) != {'n', 'label', 'kind', 'minutes', 'state'} or item['n'] != number
+                or item['kind'] not in QUEUE_KINDS or item['state'] not in ITEM_STATES
+                or not isinstance(item['label'], str) or not ITEM_LABEL.fullmatch(item['label'])
+                or type(item['minutes']) is not int or not 1 <= item['minutes'] <= 480):
+            raise ValueError('afk queue is invalid')
+    return queue if queue['lease'] == lease['id'] else None
+
+
+def queue_revision(folder, key):
+    """Only the integer `revision` of one repository's queue, or None (read by the afk stop hook)."""
+    raw = read_private(folder, f'queue-{key}.json')
+    if raw is None:
+        return None
+    revision = json.loads(raw).get('revision')
+    return revision if type(revision) is int else None
+
+
+def write_queue(folder, key, queue):
+    write_private(folder, f'queue-{key}.json', json.dumps(queue, separators=(',', ':')).encode())
+
+
+def live_repository(folder, current, command):
+    """(lease, repository digest) for a queue change: a live lease and a repository, else a refusal."""
+    code, lease, _ = lease_guard(folder, current)
+    if code is not None:
+        raise Refusal(f'{command} needs a live lease (the lease is {code})')
+    key = repository_digest(os.getcwd())
+    if key is None:
+        raise Refusal(f'{command} needs a repository: run it in the repository the queue belongs to')
+    return lease, key
+
+
+def items_file(path):
+    """The items of a `goal --items-file`: a regular file directly under `.finolabs/briefs/`, at most 64 KiB."""
+    path = Path(os.getcwd(), path)
+    parent = Path(os.path.realpath(path.parent))
+    if parent.parts[-2:] != ('.finolabs', 'briefs'):
+        raise Refusal('--items-file names a file under .finolabs/briefs/')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 65536:
+            raise Refusal('--items-file is not a regular file of at most 64 KiB')
+        raw = os.read(fd, 65537)
+    finally:
+        os.close(fd)
+    try:
+        items = json.loads(raw.decode('utf-8'))
+    except (ValueError, UnicodeError):
+        raise Refusal('--items-file holds no JSON list') from None
+    if not isinstance(items, list):
+        raise Refusal('--items-file holds no JSON list')
+    if len(items) > MAX_ITEMS:
+        raise Refusal(f'--items-file holds more than {MAX_ITEMS} items')
+    for number, item in enumerate(items, 1):
+        if not isinstance(item, dict) or set(item) != {'label', 'kind', 'minutes'}:
+            raise Refusal(f'item {number} is not {{"label", "kind", "minutes"}}')
+        if (not isinstance(item['label'], str) or not ITEM_LABEL.fullmatch(item['label'])
+                or secret_patterns.findings(item['label'])):
+            raise Refusal(f'item {number}: label is a short task label (letters, digits, space, dash, underscore; '
+                          '1 to 60) without a path or secret')
+        if item['kind'] not in QUEUE_KINDS:
+            raise Refusal(f'item {number}: kind is one of ' + ', '.join(QUEUE_KINDS))
+        if type(item['minutes']) is not int or not 1 <= item['minutes'] <= 480:
+            raise Refusal(f'item {number}: minutes is a whole number from 1 to 480')
+    return items
+
+
+def goal(folder, args):
+    """Append items to this repository's queue and print the goal line, the queue, the minutes left and warnings."""
+    current = now()
+    items = items_file(args.items_file)
+    lease, key = live_repository(folder, current, 'goal')
+    queue = read_queue(folder, key, lease)
+    if queue is None:
+        queue = dict(lease=lease['id'], revision=0, items=[])
+        changed = True
+    else:
+        changed = bool(items)
+    entries = queue['items']
+    if (sum(item['state'] == 'open' for item in entries) + len(items) > MAX_ITEMS
+            or len(entries) + len(items) > MAX_QUEUE):
+        raise Refusal(f'the queue holds at most {MAX_ITEMS} open items and {MAX_QUEUE} in all: finish or park some first')
+    for item in items:
+        entries.append(dict(n=len(entries) + 1, label=item['label'], kind=item['kind'], minutes=item['minutes'],
+                            state='open'))
+    if changed:
+        queue['revision'] += 1
+        write_queue(folder, key, queue)
+    left = max(0, int((lease['expiry'] - current) // 60))
+    print(GOAL_LINE)
+    print(f'Queue (revision {queue["revision"]}; {left} minutes left on the lease):')
+    for item in entries:
+        print(f'{item["n"]}. [{item["state"]}] {item["label"]} ({item["kind"]}, {item["minutes"]} min)')
+    if not entries:
+        print('(empty)')
+    total, beyond = 0, None
+    for item in entries:
+        if item['state'] == 'open':
+            total += item['minutes']
+            if beyond is None and total > left:
+                beyond = item['n']
+    if total < left / 2:
+        print('Warning: the queue is short: add the next work')
+    if beyond is not None:
+        print(f'Warning: the estimates exceed the minutes left on the lease from item {beyond} on')
+
+
+def mark_item(folder, args, current):
+    """Apply `log --item` to this repository's queue; returns the item number."""
+    if not re.fullmatch(r'[1-9][0-9]{0,2}', args.item):
+        raise Refusal('--item is an item number of this repository\'s queue')
+    lease, key = live_repository(folder, current, '--item')
+    queue = read_queue(folder, key, lease)
+    number = int(args.item)
+    if queue is None or number > len(queue['items']):
+        raise Refusal('--item names no item of this repository\'s queue (run goal first)')
+    item = queue['items'][number - 1]
+    state = 'parked' if args.kind == 'parked' else 'done' if args.done else None
+    if state is not None:
+        if item['state'] != 'open':
+            raise Refusal(f'item {number} is already {item["state"]}')
+        item['state'] = state
+        queue['revision'] += 1
+        write_queue(folder, key, queue)
+    return number
+
+
+def idle_fields(folder, current):
+    """The fields of an accepted idle record; refuses with no lease, no queue or open items."""
+    code, lease, _ = lease_guard(folder, current)
+    if code in ('no-lease', 'limit'):
+        raise Refusal('--kind idle needs a lease')
+    if code is not None:
+        return {}  # the lease has ended: nothing is left to wait for
+    key = repository_digest(os.getcwd())
+    if key is None:
+        raise Refusal('--kind idle needs a repository: run it in the repository whose queue is empty')
+    queue = read_queue(folder, key, lease)
+    if queue is None:
+        raise Refusal('--kind idle needs this repository\'s queue: run goal first, with an empty list when there is no work')
+    remaining = [str(item['n']) for item in queue['items'] if item['state'] == 'open']
+    if remaining:
+        raise Refusal('--kind idle is refused while items are open: ' + ', '.join(remaining)
+                      + '; finish each (log --item <n> --done) or park it (log --kind parked --item <n>)')
+    return dict(repository=key[:16], revision=queue['revision'])
 
 
 ENDED = {'no-lease', 'expired', 'stopped', 'setup-changed'}
@@ -374,6 +563,8 @@ def effective(applied, cwd):
         target = store.origin_target(ident)
         result[CONTEXT] = Context('found', ident, 'user', target, cwd)
         project = values.get('autopilot') if state == 'approved' else None
+        # Set up for afk (docs/specs/afk-goals.md C): the repository's own approved afk object exists.
+        result['Project settings'] = 'recorded' if project is not None and store.valid_autopilot(project) else 'none'
         if (project is None or not store.valid_autopilot(project) or 'target' not in record
                 or record['target'] != target or not store.bound(record, ident)):
             return result
@@ -1219,6 +1410,7 @@ def show_effective(folder):
     print(json.dumps({'lease': code or 'live', 'repository': context.repository, 'state': context.state,
                       'target': context.target, 'guards': repository_rules(result), 'retired': result['Retired']},
                      separators=(',', ':')))
+    print('Project settings: ' + result.get('Project settings', 'none'))
 
 
 class Refusal(ValueError):
@@ -1412,10 +1604,12 @@ def log(folder, args):
         if args.kind not in ('idle', 'parked') or not SESSION.fullmatch(args.session):
             raise Refusal('--session belongs to --kind idle or parked and is the Session id the session start printed')
         fields['session'] = hashlib.sha256(args.session.encode()).hexdigest()[:16]
+    if args.item is not None and args.kind not in ('action', 'merge', 'parked'):
+        raise Refusal('--item belongs to --kind action, merge or parked')
+    if args.done and (args.item is None or args.kind not in ('action', 'merge')):
+        raise Refusal('--done belongs to --kind action or merge with its --item')
     if args.kind == 'idle':
-        lease = None if read_private(folder, 'stop') is not None else read_lease(folder)
-        if lease is None or not lease['start'] <= current < lease['expiry']:
-            raise Refusal('--kind idle needs a live lease')
+        fields.update(idle_fields(folder, current))
     if args.kind == 'merge' and args.head is not None:
         repos = {repo for pr, head, repo in merge_pins(folder, current) if (pr, head) == (fields['pr'], args.head)}
         if len(repos) != 1:
@@ -1426,6 +1620,8 @@ def log(folder, args):
     if args.kind == 'decision' and args.approve_request is not None:
         attempt(args)  # the row itself must be valid before the approval is stored
         permit = permit_subject(args)
+    if args.item is not None:
+        fields['item'] = mark_item(folder, args, current)  # the last refusal before anything is written
     # Every other check passes before the decision line reaches the ledger.
     identifier = decide(folder, args, current) if args.kind == 'decision' else None
     if identifier:
@@ -1590,7 +1786,10 @@ def main(argv=None):
     sub = parser.add_subparsers(dest='command', required=True)
     begin = sub.add_parser('start', allow_abbrev=False)
     begin.add_argument('--hours')
-    sub.add_parser('stop', allow_abbrev=False)
+    ending = sub.add_parser('stop', allow_abbrev=False)
+    ending.add_argument('--all', action='store_true')
+    queued = sub.add_parser('goal', allow_abbrev=False)
+    queued.add_argument('--items-file', required=True)
     sub.add_parser('effective', allow_abbrev=False)
     sub.add_parser('rules', allow_abbrev=False)
     inspect = sub.add_parser('check', allow_abbrev=False)
@@ -1603,6 +1802,8 @@ def main(argv=None):
         record.add_argument('--' + key)
     record.add_argument('--approve-request')
     record.add_argument('--session')
+    record.add_argument('--item')
+    record.add_argument('--done', action='store_true')
     reviewed = sub.add_parser('review', allow_abbrev=False)
     reviewed.add_argument('--decision', required=True)
     reviewed.add_argument('verdict', choices=('kept', 'reversed'))
@@ -1612,6 +1813,9 @@ def main(argv=None):
     if args.command == 'rules':
         rules()  # pure: reads no setup, lease or file
         return 0
+    if args.command == 'stop' and not args.all:
+        print('afk refused: ' + STOP_REFUSED)  # docs/specs/afk-goals.md E: the lease stays
+        return 3
     try:
         with private_folder() as folder:
             if args.command == 'start':
@@ -1621,6 +1825,8 @@ def main(argv=None):
             elif args.command == 'check':
                 # Exit 0 only on Tier 1, so `check ... && command` never runs a denied command.
                 return 0 if check(folder, args) == 1 else 3
+            elif args.command == 'goal':
+                goal(folder, args)
             elif args.command == 'effective':
                 show_effective(folder)
             elif args.command == 'review':

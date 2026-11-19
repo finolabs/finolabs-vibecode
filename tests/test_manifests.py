@@ -95,7 +95,7 @@ class ManifestTest(unittest.TestCase):
         fields = dict(line.split(": ", 1) for line in frontmatter.strip().splitlines())
         self.assertEqual(fields["name"], path.parent.name)
         self.assertEqual(fields["disable-model-invocation"], "true")
-        self.assertEqual(fields["argument-hint"], '"[start|stop]"')
+        self.assertEqual(fields["argument-hint"], '"[start [hours]|stop]"')
         self.assertIsNone(alias_target("afk"))
         self.assertIn("scripts/afk.py", body)
         # The old name is dropped, with no alias; brb loads afk.

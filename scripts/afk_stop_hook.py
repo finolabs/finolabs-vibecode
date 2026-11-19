@@ -4,11 +4,13 @@ so the turn ends as usual.
 
 Only while a valid, unexpired away lease exists and FNL_AFK_STOP is not off, it sends the agent back once with one
 fixed reason when its turn ends. It lets the stop through when the host says a stop hook already continued this turn
-(`stop_hook_active`), when the lease log holds an `idle` or `parked` record for this session written since its
-previous stop, when the lease lets no action run any more (judged as `afk.py check` judges it: a setup change after
-the lease started counts; Lease hours is the only limit), and on any error. It reads only the lease, the lease log,
-the setup that `check` reads and the hook's `session_id`, `hook_event_name` and `stop_hook_active`; it keeps one mark
-per session (a hash of its id and the time of its last stop, no content) and sends nothing anywhere.
+(`stop_hook_active`), when the lease log holds an `idle` record of this session written since its previous stop whose
+repository digest is the hook input `cwd`'s repository and whose queue revision is that repository's current one
+(docs/specs/afk-goals.md B: a `parked` record closes an item, not the turn), when the lease lets no action run any
+more (judged as `afk.py check` judges it: a setup change after the lease started counts; Lease hours is the only
+limit), and on any error. It reads only the lease, the lease log, the integer `revision` of that repository's queue,
+the setup that `check` reads and the hook's `session_id`, `hook_event_name`, `stop_hook_active` and `cwd`; it keeps
+one mark per session (a hash of its id and the time of its last stop, no content) and sends nothing anywhere.
 """
 
 import os
@@ -21,9 +23,9 @@ MAX_MARKS = 200
 MARK_LIMIT = 32
 LOG_LIMIT = 8 * 1024 * 1024
 REASON = ('The user is away under an afk lease: do not end the turn waiting for them. Settle any pending question or '
-          'approval through afk "Decide" and continue with the work the lease allows. To end the turn, first record why '
-          'with afk.py log --kind idle --session <this Session id> (nothing left that the lease allows) or --kind parked '
-          '--session <this Session id>.')
+          'approval through afk "Decide" and continue with the next open item of this repository\'s afk queue. A park '
+          'closes an item, not the turn. To end the turn, first record afk.py log --kind idle --session <this Session '
+          'id>, which is accepted only when every item is done or parked.')
 
 
 def session_hash(session):
@@ -65,32 +67,43 @@ def write_mark(name, current):
         dr.atomic_write(folder, name, ('%.3f' % current).encode('ascii'))
 
 
-def recorded_since(name, since, current):
-    """True when the lease log holds an `idle` or `parked` record of this session after `since`."""
+def recorded_since(name, since, current, cwd):
+    """True when the lease log holds an `idle` record of this session after `since` for the repository of `cwd` at that
+    repository's current queue revision (afk.py records both on an accepted idle)."""
     import json
     import away_lease
     import data_root as dr
+    afk = afk_module()
     with dr.data_folder(away_lease.STATE, private=True) as folder:
         raw = away_lease.read_private(folder, 'log.jsonl', LOG_LIMIT) or b''
-    for line in reversed(raw.splitlines()):
-        entry = json.loads(line)
+        entries = [json.loads(line) for line in raw.splitlines()]  # an unreadable log is an error, which lets it through
+        key = None if cwd is None else afk.repository_digest(cwd)
+        revision = None if key is None else afk.queue_revision(folder, key)
+    if revision is None:
+        return False
+    for entry in reversed(entries):
         if not isinstance(entry, dict) or not away_lease.finite(entry.get('time')):
             continue
         if not since < entry['time'] <= current:
             continue
-        kind = entry.get('kind')
-        if kind in ('idle', 'parked') and entry.get('session') == name:
+        if (entry.get('kind') == 'idle' and entry.get('session') == name and entry.get('repository') == key[:16]
+                and type(entry.get('revision')) is int and entry['revision'] == revision):
             return True
     return False
 
 
-def lease_over(current):
-    """True when the lease lets no action run any more (afk.py `lease_over`)."""
+def afk_module():
     from pathlib import Path
-    import away_lease
-    import data_root as dr
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'skills/delegate/scripts'))
     import afk
+    return afk
+
+
+def lease_over(current):
+    """True when the lease lets no action run any more (afk.py `lease_over`)."""
+    import away_lease
+    import data_root as dr
+    afk = afk_module()
     with dr.data_folder(away_lease.STATE, private=True) as folder:
         return afk.lease_over(folder, current)
 
@@ -112,7 +125,7 @@ def main():
         event = json.loads(raw)
         if not isinstance(event, dict) or event.get('hook_event_name', 'Stop') != 'Stop':
             return 0
-        session = event.get('session_id')
+        session, cwd = event.get('session_id'), event.get('cwd')
         if not isinstance(session, str) or not 0 < len(session) <= 128:
             return 0
 
@@ -131,7 +144,7 @@ def main():
         if event.get('stop_hook_active') is True:
             return 0
         since = lease['start'] if previous is None or previous < lease['start'] else previous
-        if recorded_since(name, since, current):
+        if recorded_since(name, since, current, cwd if isinstance(cwd, str) and os.path.isabs(cwd) else None):
             return 0
         if lease_over(current):
             return 0
