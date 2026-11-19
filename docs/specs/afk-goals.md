@@ -2,6 +2,8 @@
 
 Status: accepted; owner decisions 19/11/2026; code lands in 0.3.3 after the decision 5 change of [afk-decider.md](afk-decider.md) merges, because both edit `afk.py` (the owner moved decision 5 back into 0.3.3 on 19/11/2026: "làm luôn"; its pull request updates that spec's status). It changes [afk-per-project.md](afk-per-project.md) and [afk-decider.md](afk-decider.md) where they say how a turn ends and what `stop` ends; where they disagree, this document wins from the release that ships its code.
 
+Since 0.3.3 afk has one mode: [afk-one-mode.md](afk-one-mode.md) (owner decisions, 19/11/2026) removes `strict` and wins where this document disagrees: the stop hook's limit escape below now means only that the lease has ended or its setup changed, and decision 5 of the afk decider, which the status above waits for, is superseded (pull request 370 closed unmerged).
+
 ## Why
 
 The afk run of 18/11/2026 (five repositories, an 8-hour lease) did useful work for about 9 of roughly 40 session-hours:
@@ -32,7 +34,7 @@ Review of this spec (Codex, 19/11/2026) narrowed two points: a repository with n
   - `kind` is one of `pr`, `review`, `merge`, `task`, `fix`, `release-step`, `other`.
   - `minutes` is the agent's estimate, an integer from 1 to 480.
 - The agent gathers the items before it runs the command, from the repository's open pull requests, the open tasks of the current spec, open review findings and the steps after a merge. It leaves out work the lease does not allow and work that waits on the owner.
-- The command refuses when no lease is live (no lease, expired, stopped or setup changed). It writes the project's queue to the lease's private state, keyed by the repository identity digest as the limit counters are (afk-per-project A), with each item numbered from 1 and `open`, and an integer `revision` that every change to the queue increments. A second `goal` call adds items to the queue and never removes one.
+- The command refuses when no lease is live (no lease, expired, stopped or setup changed). It writes the project's queue to the lease's private state, keyed by the repository identity digest (afk-per-project A), with each item numbered from 1 and `open`, and an integer `revision` that every change to the queue increments. A second `goal` call adds items to the queue and never removes one.
 - It prints:
   - the goal line for the host's goal command: `Every item in the afk queue of this repository is done or parked, or the away lease has ended.`;
   - the queue, numbered, with the minutes left on the lease;
@@ -44,7 +46,7 @@ Review of this spec (Codex, 19/11/2026) narrowed two points: a repository with n
 ### B. How a turn ends
 
 - The afk stop hook lets a stop through on an `idle` record of this session written since its previous stop whose repository digest equals the hook input's repository and whose `revision` equals the current revision of that repository's queue, and no longer on a `parked` record: a park closes an item, not the turn (decision 3). A stale `idle` record (the queue changed after it) does not count. Its fixed reason names `afk.py log --kind idle` alone. To compare, the hook reads one more value: the integer `revision` of that repository's queue file, nothing else from it.
-- Every other escape stays: `stop_hook_active`, the lease's limits for the repository reached, and no lease, an expired, stopped or unreadable lease, or any error.
+- Every other escape stays: `stop_hook_active`, the lease no longer letting any action run (it ended or its setup changed; Lease hours is the only limit since [afk-one-mode.md](afk-one-mode.md)), and no lease, an expired, stopped or unreadable lease, or any error.
 - What this guarantees, and what it does not: the hook sends the agent back once at each stop (`stop_hook_active` lets the next stop through, so it never loops). An agent that stops again right away can still end its turn with items open. What brings it back is the self-paced loop the goal step starts (`/loop` on Claude Code) and the host's goal command, which are agent judgment and host behaviour, not this hook.
 - This changes the eleventh scoped exception in [CLAUDE.md](../../CLAUDE.md): its words naming `afk.py log --kind idle` and `--kind parked` as the way to end the turn, and the list of what the hook reads, which gains the queue's `revision`. The pull request that ships this code changes that text and the "afk stop hook" section of [PRIVACY.md](../../PRIVACY.md) in the same commit.
 - Enforcer: the stop hook (hook) on Claude Code. On Codex and Antigravity it is advisory (agent judgment).

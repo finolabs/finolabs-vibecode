@@ -2,6 +2,8 @@
 
 Status: implemented; owner decisions 16/11/2026; code in pull requests 322, 323 and 325, not yet released.
 
+Since 0.3.3 afk has one mode, and [afk-one-mode.md](afk-one-mode.md) (owner decisions, 19/11/2026) wins where this document disagrees: it removes `strict`, its lists, categories, limits and Merge answer; what this document calls `open` is the only mode.
+
 This document changes [afk-per-project.md](afk-per-project.md), [autopilot.md](autopilot.md) and [away-decisions.md](away-decisions.md) where they set path, command, category, limit and fallback rules. Where they disagree, this document wins from the release that ships its code; each of the three carries a pointer here.
 
 ## Why

@@ -2,6 +2,8 @@
 
 Status: implemented; in 0.3.0 (PRs 277, 278, 280, 281, 282, 283, 286, 287, 288, 289, 290; README diagram 284); live-host behaviour remains unverified.
 
+Since 0.3.3 afk has one mode, and [afk-one-mode.md](afk-one-mode.md) (owner decisions, 19/11/2026) wins where this document disagrees: it removes `strict`, the per-repository limits and counters, the categories, the command and file lists and every repository key but `third-party-instructions` and `default-branch`.
+
 Sections B, D, E, F and G are changed by [afk-autonomy.md](afk-autonomy.md) (owner decision 16/11/2026), which wins where they disagree once its code ships.
 
 This document changes [autopilot.md](autopilot.md) ("Project scope", "Lease, state and what enforces what") and [away-decisions.md](away-decisions.md) ("The ladder", "Where it must stop"). Where they disagree, this document wins from 0.3.0 and the older text points here.
