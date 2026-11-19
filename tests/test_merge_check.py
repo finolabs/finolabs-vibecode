@@ -798,6 +798,7 @@ class SameFamilyFallbackTest(unittest.TestCase):
         self.lease = patch.object(away_lease, "live_lease", return_value=None)
         self.present = patch.object(review_config, "present_families", return_value={"claude", "codex", "antigravity"})
         self.host = patch.object(review_config, "host_text", return_value=RECORDED_FALLBACK)
+        self.real_status_lines = quota_probe.status_lines
         self.status = patch.object(quota_probe, "status_lines", side_effect=lambda: self.out)
         self.installs = {agent: {"configs": {"default": None}} for agent in ("agy", "claude", "codex")}
         self.config = patch.object(quota_probe, "canonical_config", side_effect=lambda: self.installs)
@@ -905,6 +906,35 @@ class SameFamilyFallbackTest(unittest.TestCase):
                     f"session 5h: 2% remaining, resets {(current + timedelta(hours=reset)).isoformat()}; "
                     f"week weekly: 2% remaining, resets {(current + timedelta(days=1)).isoformat()}")
             self.assertEqual(mc.out_families([line], current, {"codex": {"default"}}), expected)
+
+    def test_real_status_forms_are_not_out_evidence(self):
+        import quota_probe as qp
+        from contextlib import nullcontext
+        current = qp.timestamp("2026-11-19T08:00:00Z")
+        def entry(measured, reset):
+            return {"measured": qp.stamp(measured), "source": "claude-usage", "groups": [
+                qp.group("week-all", "weekly", .02, qp.stamp(reset))]}
+        for kind in ("passed", "future", "no-limits"):
+            cache = {"claude": {"work": entry(current, current + qp.timedelta(days=1))}}
+            if kind != "no-limits":
+                cache["claude"]["default"] = entry(
+                    current + qp.timedelta(hours=1) if kind == "future" else current - qp.timedelta(hours=1),
+                    current - qp.timedelta(minutes=1) if kind == "passed" else current + qp.timedelta(days=1))
+            with self.subTest(kind=kind), patch.object(qp, "now", return_value=current), \
+                    patch.object(qp, "state_folder", return_value=nullcontext(None)), \
+                    patch.object(qp, "read_cache", return_value=cache), \
+                    patch.object(qp, "limit_markers", return_value={}), \
+                    patch.object(qp, "weekly_floors", return_value={}), \
+                    patch.object(qp, "no_limits", return_value={"default"} if kind == "no-limits" else set()):
+                lines = self.real_status_lines()
+                joined = "\n".join(lines)
+                if kind == "passed":
+                    self.assertIn("reset passed at ", joined)
+                elif kind == "future":
+                    self.assertTrue(any(line.endswith(" (unverified: reset passed or future measurement)") for line in lines))
+                else:
+                    self.assertIn("Quota claude/default: no plan limits (no reading)", lines)
+                self.assertEqual(mc.out_families(lines, current, {"claude": {"default", "work"}}), set())
 
     def test_far_future_resets_are_not_out_evidence(self):
         from datetime import datetime, timedelta, timezone
