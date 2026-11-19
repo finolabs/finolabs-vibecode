@@ -16,6 +16,6 @@ Typed by the user, or loaded by the agent when the task matches. `session-hygien
 - About 60% context is a point to consider a boundary, not the host's compaction threshold.
 - Open a coordinator session on Claude Code with its own threshold: `CLAUDE_CODE_AUTO_COMPACT_WINDOW=500000 claude`. The reminder to save a handover before compaction sees this variable but not the `--autocompact` flag.
 - `/autocompact <tokens>` saves the threshold for the current model, and since 0.3.3 the reminder follows the session's model too.
-- Before the agent archives a session in the Claude Code desktop app, it turns that session's Remote Control off, so an archived session never comes back still linked to claude.ai.
+- Before the agent archives a session in the Claude Code desktop app, it turns that session's Remote Control off first, as a precaution: whether a switch left on reconnects after an unarchive has not been verified.
 - A wholly new task starts in a fresh, correctly named session with a short handover.
 - Notes, briefs and logs go in `.finolabs/` at the main checkout's root, kept out of git; temporary folders are wiped on restart.
