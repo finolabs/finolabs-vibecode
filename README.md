@@ -533,7 +533,7 @@ Claude Code and Codex, on by default: the compaction nudge, a `UserPromptSubmit`
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/skills-architecture-dark.png">
-    <img src="assets/skills-architecture-light.png" alt="Skills architecture: the coding router connects delegation, verification and review gates with session and delivery skills; user commands refresh the local host config, dispatch ledger and usage dashboard." width="920">
+    <img src="assets/skills-architecture-light.png" alt="Skills architecture: the coding router sends an open idea to shape and connects delegation, verification and review gates with session and delivery skills; user commands refresh the local host config, dispatch ledger and usage dashboard." width="920">
   </picture>
 </p>
 
@@ -553,7 +553,7 @@ Two sequence diagrams follow the agents step by step. [One delegated task, dispa
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/delegation-sequence-dark.png">
-    <img src="assets/delegation-sequence-light.png" alt="Sequence diagram of one delegated task: the coordinator grades and routes, records the dispatch and its run label in the ledger, starts the implementer in the background, verifies and, by default, accepts against a receipt, opens the pull request, routes a code and a security reviewer, of another family when one is available, who post markers, and merges only when merge_check passes at the reviewed head." width="900">
+    <img src="assets/delegation-sequence-light.png" alt="Sequence diagram of one delegated task: the coordinator grades and routes, records the dispatch and its run label in the ledger, starts the implementer in the background in its own worktree while the main checkout stays on the default branch, verifies and, by default, accepts against a receipt, opens the pull request, routes a code and a security reviewer, of another family when one is available, who post markers, and merges only when merge_check passes at the reviewed head." width="900">
   </picture>
 </p>
 
