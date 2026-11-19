@@ -162,7 +162,7 @@ class RunEnvironmentTest(unittest.TestCase):
             config.mkdir(mode=0o700)
             def build(path, family='claude'):
                 return delegate_env.environment(family, {}, '', str(path))
-            self.assertEqual(set(build(config)), {'CLAUDE_CONFIG_DIR'})
+            self.assertEqual(set(build(config)), {'CLAUDE_CONFIG_DIR', 'FNL_AFK_STOP', 'FNL_AFK_PERMIT'})
             for path in ('', 'relative' + '/config', str(config / '..' / 'config')):
                 with self.assertRaises(ValueError):
                     build(path)
@@ -222,3 +222,11 @@ class RunEnvironmentTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class HookSwitchTest(unittest.TestCase):
+    def test_a_hook_switch_may_only_be_turned_off(self):
+        self.assertEqual(run_env.environment({}, (), {'FNL_AFK_STOP': 'off'}), {'FNL_AFK_STOP': 'off'})
+        for value in ('on', '', '1'):
+            with self.assertRaises(ValueError):
+                run_env.environment({}, (), {'FNL_AFK_PERMIT': value})

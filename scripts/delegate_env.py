@@ -86,12 +86,12 @@ def environment(family, source=None, host_text=None, config_dir=None):
     names = names_from_host(host_text, family)
     if config_dir is not None and family != 'claude':
         raise ValueError('refused config directory')
-    env = run_env.environment(source, names, {'CLAUDE_CONFIG_DIR': config_dir} if config_dir is not None else None)
+    explicit = {'CLAUDE_CONFIG_DIR': config_dir} if config_dir is not None else {}
     if family == 'claude':
         # A headless child is not a lease session: its coordinator keeps the lease, so the afk stop and permission
         # hooks stay off in it (owner decision, 19/11/2026); otherwise each run spends an extra model turn.
-        env.update(FNL_AFK_STOP='off', FNL_AFK_PERMIT='off')
-    return env
+        explicit.update(FNL_AFK_STOP='off', FNL_AFK_PERMIT='off')
+    return run_env.environment(source, names, explicit)
 
 
 def prepare_logs():
