@@ -64,16 +64,62 @@ class ParsersTest(unittest.TestCase):
         data = self.fixture("claude")
         data["result"] = "\n".join((
             "You are currently using your subscription to power your Claude Code usage", "",
-            "Current session: 37% used \u00b7 resets Nov 5 at 1:59pm (Asia/Saigon)",
-            "Current week (all models): 5% used \u00b7 resets Nov 15 at 5:59pm (Asia/Saigon)",
-            "Current week (Fable): 0% used \u00b7 resets Nov 15 at 6pm (Asia/Saigon)"))
+            "Current session: 37% used \u00b7 resets Nov 5 at 5:59pm (Asia/Saigon)",
+            "Current week (all models): 5% used \u00b7 resets Nov 9 at 5:59pm (Asia/Saigon)",
+            "Current week (Fable): 0% used \u00b7 resets Nov 9 at 6pm (Asia/Saigon)"))
         groups = qp.parse("claude", json.dumps(data), MEASURED)
         self.assertEqual([item["name"] for item in groups], ["session", "week-all", "week-model"])
-        self.assertEqual(groups[2]["reset_time"], "2026-11-15T11:00:00Z")
+        self.assertEqual(groups[2]["reset_time"], "2026-11-09T11:00:00Z")
         self.assertAlmostEqual(groups[2]["remaining_fraction"], 1.0)
         data["result"] = data["result"].replace("at 6pm", "at 6:5pm")
         with self.assertRaises(qp.ShapeError):
             qp.parse("claude", json.dumps(data), MEASURED)
+
+    def test_provider_resets_are_bounded_by_window_with_slack(self):
+        for window, minutes, hours in (("5h", 300, 5), ("weekly", 10080, 168), ("unknown", 90, 168)):
+            for extra, accepted in ((15, True), (16, False)):
+                reset = MEASURED + qp.timedelta(hours=hours, minutes=extra)
+                codex = self.fixture("codex")
+                codex["result"]["rateLimits"]["primary"].update(
+                    windowDurationMins=minutes, resetsAt=reset.timestamp())
+                payloads = [(qp.parse_codex, codex)]
+                if window != "unknown":
+                    agy = {"status": "SUCCESS", "command": {"data": {"groups": [{
+                        "name": "Gemini Models", "buckets": [{"window": window,
+                        "remaining_fraction": .02, "reset_time": qp.stamp(reset)}]}]}}}
+                    payloads.append((qp.parse_agy, agy))
+                for parser, payload in payloads:
+                    with self.subTest(parser=parser.__name__, window=window, extra=extra):
+                        if accepted:
+                            self.assertTrue(parser(payload, MEASURED))
+                        else:
+                            with self.assertRaises(qp.ShapeError):
+                                parser(payload, MEASURED)
+        codex["result"]["rateLimits"]["primary"]["resetsAt"] = 253402300799
+        with self.assertRaises(qp.ShapeError):
+            qp.parse_codex(codex, MEASURED)
+
+    def test_claude_rejects_resets_beyond_window(self):
+        self.require_claude_zone()
+        for old, new in (("Nov 5 at 5:49pm", "Nov 6 at 5:49pm"),
+                         ("Nov 9 at 3:59pm", "Nov 15 at 3:59pm")):
+            data = self.fixture("claude")
+            data["result"] = data["result"].replace(old, new)
+            with self.subTest(reset=new), self.assertRaises(qp.ShapeError):
+                qp.parse_claude(data, MEASURED)
+
+    def test_fresh_rejects_far_future_and_window_overflow(self):
+        current = MEASURED
+        entry = dict(measured=qp.stamp(current - qp.timedelta(days=3)), groups=[
+            qp.group("codex", "5h", .02, qp.stamp(current + qp.timedelta(days=30))),
+            qp.group("codex", "weekly", .02, qp.stamp(current + qp.timedelta(days=300)))])
+        self.assertFalse(qp.fresh(entry, current))
+        for window, hours in (("5h", 5), ("weekly", 168), ("unknown", 168)):
+            for minutes, expected in ((15, True), (16, False)):
+                entry = dict(measured=qp.stamp(current), groups=[qp.group(
+                    "codex", window, .02, qp.stamp(current + qp.timedelta(hours=hours, minutes=minutes)))])
+                with self.subTest(window=window, minutes=minutes):
+                    self.assertEqual(qp.fresh(entry, current), expected)
 
     def test_strict_shapes_and_prompt(self):
         bad = self.fixture("claude")
@@ -89,6 +135,13 @@ class ParsersTest(unittest.TestCase):
         del bad["result"]["rateLimits"]["primary"]
         with self.assertRaises(qp.ShapeError):
             qp.parse("codex", json.dumps(bad), MEASURED)
+
+    def test_claude_partial_current_line_is_unverified(self):
+        data = self.fixture("claude")
+        data["result"] = "Current unknown limits"
+        with self.assertRaises(qp.ShapeError) as caught:
+            qp.parse("claude", json.dumps(data), MEASURED)
+        self.assertNotIsInstance(caught.exception, qp.NoLimitsError)
 
     def test_fraction_and_unknown_names(self):
         for value in (True, False, float("nan"), float("inf"), -.1, 1.1, "0.2"):
@@ -112,8 +165,10 @@ class ParsersTest(unittest.TestCase):
 
     def test_zone_and_year_rollover(self):
         self.require_claude_zone()
-        groups = qp.parse_claude(self.fixture("claude"), qp.timestamp("2026-12-31T00:00:00Z"))
-        self.assertTrue(groups[0]["reset_time"].startswith("2027-11-05"))
+        data = self.fixture("claude")
+        data["result"] = data["result"].replace("Nov 5 at 5:49pm", "Jan 1 at 1am").replace("Nov 9", "Jan 4").replace("Asia/Saigon", "UTC")
+        groups = qp.parse_claude(data, qp.timestamp("2026-12-31T23:00:00Z"))
+        self.assertTrue(groups[0]["reset_time"].startswith("2027-01-01"))
 
     def test_codex_windows_and_discarded_account_data(self):
         data = self.fixture("codex")
@@ -368,7 +423,7 @@ class QuotaTest(unittest.TestCase):
         entry = self.fake("claude")
         self.configure({"claude": entry})
         self.ready()
-        for failure, error, seconds in ((qp.ShapeError(), "unverified", 86400),
+        for failure, error, seconds in ((qp.ShapeError(), "unverified", 5 * 3600),
                                         (qp.PromptError(), "prompt", 7 * 86400),
                                         (TimeoutError(), "timeout", 1800), (OSError(), "execution", 1800)):
             self.ready()
@@ -589,7 +644,7 @@ class QuotaTest(unittest.TestCase):
         path = self.root / "state/quota/quota.json"
         path.write_bytes(b" " * (qp.LIMIT + 1))
         path.chmod(0o600)
-        with mock.patch.object(qp, "command", wraps=qp.command) as command:
+        with mock.patch.object(qp, "command", wraps=qp.command) as command, mock.patch.object(qp, "now", return_value=MEASURED):
             self.assertIn(": read;", qp.read_family("agy")[0])
             self.assertIn(": fresh;", qp.read_family("agy")[0])
             self.assertEqual(command.call_count, 1)
@@ -1184,6 +1239,71 @@ class QuotaTest(unittest.TestCase):
         time.sleep(.7)
         self.assertFalse(sentinel.exists())
 
+    def test_reset_freshness_and_passed_pool_display(self):
+        self.ready()
+        for hours, reset_hours, fresh in ((2, -1, False), (2, 0, False), (3, 1, True), (4, 1, True), (-1, 1, False)):
+            entry = dict(measured=qp.stamp(MEASURED - qp.timedelta(hours=hours)), source="agy-usage",
+                         groups=[qp.group("gemini", "5h", .02, qp.stamp(MEASURED + qp.timedelta(hours=reset_hours))),
+                                 qp.group("gemini", "weekly", .02, qp.stamp(MEASURED + qp.timedelta(days=1)))])
+            with qp.state_folder() as folder:
+                qp.write_json(folder, "quota.json", {"agy": {"default": entry}})
+            with mock.patch.object(qp, "now", return_value=MEASURED):
+                line = qp.status_lines()[0]
+            self.assertEqual("unverified" not in line, fresh)
+            if reset_hours <= 0:
+                self.assertIn("gemini 5h: reset passed at ", line)
+                self.assertNotIn("gemini 5h: 2%", line)
+
+    def test_shape_retry_uses_earliest_future_reset_with_bounds(self):
+        self.configure({"agy": self.fake("agy")})
+        for resets, minutes in (([-1, 90, 120], 90), ([5, 120], 30), ([0, 90], 90), ([400], 300), ([-1], 300), ([], 300)):
+            self.ready()
+            if resets:
+                with qp.state_folder() as folder:
+                    qp.write_json(folder, "quota.json", {"agy": {"default": dict(
+                        measured=qp.stamp(MEASURED - qp.timedelta(hours=2)), source="agy-usage",
+                        groups=[qp.group("gemini", "5h", .02, qp.stamp(MEASURED + qp.timedelta(minutes=n))) for n in resets])}})
+            with mock.patch.object(qp, "now", return_value=MEASURED), mock.patch.object(qp, "command", side_effect=qp.ShapeError()):
+                qp.read_family("agy")
+            with qp.state_folder() as folder:
+                record = qp.read_json(folder, "backoff.json")["agy"]["default"]
+            self.assertEqual(record, dict(error="unverified", retry_after=qp.stamp(MEASURED + qp.timedelta(minutes=minutes))))
+
+    def test_no_limits_requires_configured_label_and_live_retry(self):
+        import review_route
+        self.configure({"claude": self.fake("claude")})
+        self.ready()
+        current = MEASURED
+        for label, minutes, expected in (("removed", 60, False), ("default", -1, False),
+                                          ("default", 0, False), ("default", 60, True)):
+            with self.subTest(label=label, minutes=minutes):
+                with qp.state_folder() as folder:
+                    qp.write_json(folder, "backoff.json", {"claude": {label: {
+                        "error": "no-limits", "retry_after": qp.stamp(current + qp.timedelta(minutes=minutes))}}})
+                    qp.write_json(folder, "quota.json", {"claude": {"default": {
+                        "measured": qp.stamp(current), "source": "claude-usage", "groups": [
+                            qp.group("week-all", "weekly", .02, qp.stamp(current + qp.timedelta(days=1)))]}}})
+                with mock.patch.object(qp, "now", return_value=current):
+                    lines = qp.status_lines()
+                    self.assertEqual(any("no plan limits" in line for line in lines), expected)
+                    self.assertEqual("claude" in review_route.blocked_families(lines, current), not expected)
+
+    def test_valid_claude_without_current_lines_records_no_limits(self):
+        self.configure({"claude": self.fake("claude")})
+        self.ready()
+        with qp.state_folder() as folder:
+            qp.write_json(folder, "quota.json", {"claude": {"default": {
+                "measured": qp.stamp(MEASURED - qp.timedelta(hours=2)), "source": "claude-usage",
+                "groups": [qp.group("week-all", "weekly", .02, qp.stamp(MEASURED + qp.timedelta(days=1)))]}}})
+        reply = dict(type="result", subtype="success", is_error=False, num_turns=0, total_cost_usd=0, result="API billing")
+        with mock.patch.object(qp, "now", return_value=MEASURED), mock.patch.object(qp, "command", return_value=json.dumps(reply)):
+            qp.read_family("claude")
+            self.assertEqual(qp.status_lines(), ["Quota claude/default: no plan limits (no reading)"])
+        with qp.state_folder() as folder:
+            self.assertEqual(qp.read_json(folder, "backoff.json")["claude"]["default"],
+                             dict(error="no-limits", retry_after=qp.stamp(MEASURED + qp.timedelta(days=7))))
+            self.assertEqual(qp.read_cache(folder), {})
+
     def test_cache_display_safe_and_age(self):
         self.configure({"agy": self.fake("agy")})
         self.ready()
@@ -1193,7 +1313,7 @@ class QuotaTest(unittest.TestCase):
             lines = qp.status_lines()
         self.assertIn("measured 2026-11-05T09:00:00Z", lines[0])
         self.assertIn("gemini weekly", lines[0])
-        self.assertIn("unverified: older than 8 hours", lines[0])
+        self.assertIn("unverified: reset passed or future measurement", lines[0])
         self.assertNotIn(str(self.home), lines[0])
 
     def test_scan_and_check_print_cached_measurement_without_probing(self):
@@ -1301,7 +1421,7 @@ class DocumentationTest(unittest.TestCase):
     def test_routing_thresholds_and_advisory(self):
         text = (ROOT / "skills/delegate/references/route.md").read_text()
         step = text.split("4. **Reachability and quota**", 1)[1].split("5. **Effort**", 1)[0]
-        for phrase in ("advisory, agent judgment", "Below 10%", "reset time still ahead", "older than 8 hours",
+        for phrase in ("advisory, agent judgment", "Below 10%", "reset time still ahead", "every group reset still ahead",
                        "excludes nothing", "week-all", "user's own statement", "wins", "state/quota/quota.json"):
             self.assertIn(phrase, step)
 

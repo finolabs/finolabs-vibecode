@@ -67,8 +67,8 @@ when the canonical host config's `## Reviews` section records
 `- Same-family security fallback: yes (YYYY-MM-DD)` (set in setup; owner decision
 17/11/2026, `review-gate` "Who reviews") and all of these hold
 (docs/specs/afk-per-project.md D): <family> is the author's family; every other present family
-has positive evidence of being out (a reading under 8 hours old for every
-configured install, with every pool below the routing floor, or a live rate-limit
+has positive evidence of being out (a fresh reading for every configured install (measured no later than now,
+with every group reset still ahead), with every pool below the routing floor, or a live rate-limit
 marker; no reading or a partial one is no evidence); and each counted
 marker's second line starts with the exact fallback reviewer line. When an
 enforcer script or instruction file changed, each kind also needs approvals at
@@ -132,7 +132,6 @@ ENFORCERS = {'afk.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py'
              'project_store.py', 'project_progress.py', 'afk_overlay.py'}
 INSTRUCTION_FILES = {'claude.md', 'agents.md', 'skill.md'}
 FLOOR = 10  # percent remaining below which a pool is out, as review_route.blocked_families reads it
-FRESH = 8 * 3600
 
 
 def fallback_line(family):
@@ -531,7 +530,9 @@ def out_families(lines, current=None, configured=None):
         body = re.sub(r"; weekly floor \d+%(?= \(|$)", "", match[4])
         pools = [re.fullmatch(r"([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", part)
                  for part in body.split("; ")]
-        depleted = (0 <= age <= FRESH and all(pools)
+        depleted = (age >= 0 and bool(pools) and all(pools)
+                    and quota_probe.fresh({"measured": match[3], "groups": [
+                        {"window": p[2], "reset_time": p[4]} for p in pools]}, current)
                     and all(int(p[3]) < FLOOR and quota_probe.timestamp(p[4]) > current for p in pools))
         installs.setdefault(match[1], {})[match[2]] = installs.get(match[1], {}).get(match[2], True) and depleted
     for agent, labels in installs.items():

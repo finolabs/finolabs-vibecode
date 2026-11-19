@@ -274,6 +274,8 @@ def quota_meters():
             groups = entry.get('groups')
             if measured is None or not isinstance(groups, list):
                 continue
+            resets = [pp.timestamp(g.get('reset_time')) for g in groups if isinstance(g, dict)]
+            stale = measured > current or not resets or any(r is None or r <= current for r in resets)
             for group in groups[:64]:
                 if len(pools) >= 8:
                     break
@@ -291,7 +293,6 @@ def quota_meters():
                     name += ' / ' + window
                 # review_route.py reads only `week-all` of a Claude install.
                 weekly = floor if window == 'weekly' and (family != 'claude' or name == 'week-all') else None
-                stale = not 0 <= (current - measured).total_seconds() <= 28800
                 pools.append(dict(name=name, remaining_fraction=value,
                     resets=reset.isoformat() if reset else None, measured=measured.isoformat(),
                     unverified=stale, floor=weekly,

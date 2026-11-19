@@ -66,7 +66,7 @@ cache text. For generic names (codex/model pools), append the validated `5h`/`we
 to `name` so the closed output schema can distinguish windows and select glyphs. Preserve duplicate
 group names from different entries. Each pool has a compact ten-brick meter: week pools use a calendar-week glyph, five-hour pools a clock, other names at most eight
 visible characters. Tooltips retain the full group name, remaining percent, reset and measured times.
-Readings older than eight hours are hollow with `?`. Missing cache families have empty pools and
+Readings with a future measurement or any group reset that has passed are hollow with `?`. Missing cache families have empty pools and
 one dashed placeholder with “not read; quota probe off or no reading yet; turn on in setup”.
 The disclosure has one row per pool including reset/measured/state metadata. Use existing tokens,
 rich tooltips and SVG helpers; keep the capacity row around two lines at 1280 and cleanly wrapped

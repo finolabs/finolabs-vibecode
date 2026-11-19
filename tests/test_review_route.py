@@ -238,11 +238,26 @@ class RouteTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             route.route("claude", host(("claude",)), depleted)
 
+    def test_quota_view_freshness_follows_earliest_reset(self):
+        now = qp.now()
+        for hours, reset, expected in ((2, -1, {}), (6, 1, {"codex": [{"session", "week"}]}), (9, 1, {"codex": [{"session", "week"}]}), (-1, 1, {})):
+            line = (f"Quota codex/default: measured {qp.stamp(now - timedelta(hours=hours))}; "
+                    f"session 5h: 2% remaining, resets {qp.stamp(now + timedelta(hours=reset))}; "
+                    f"week weekly: 2% remaining, resets {qp.stamp(now + timedelta(days=1))}")
+            self.assertEqual(route.quota_view([line], now), (set(), expected))
+
     def test_stale_and_future_quota_excludes_nothing(self):
         now = qp.now()
-        for measured in (now - timedelta(hours=9), now + timedelta(hours=1)):
+        for measured in (now + timedelta(hours=1),):
             lines = [f"Quota codex/default: measured {qp.stamp(measured)}; primary hour: 0% remaining, resets {qp.stamp(now + timedelta(hours=2))}"]
             self.assertEqual(route.blocked_families(lines, now), set())
+
+    def test_no_limits_install_keeps_claude_eligible(self):
+        now = qp.now()
+        lines = [f"Quota claude/work: measured {qp.stamp(now)}; week-all weekly: 2% remaining, resets {qp.stamp(now + timedelta(days=1))}",
+                 "Quota claude/default: no plan limits (no reading)"]
+        self.assertEqual(route.blocked_families(lines, now), set())
+        self.assertEqual(route.blocked_families(lines[1:], now), set())
 
     def test_multiple_claude_installs_week_all_and_threshold(self):
         now = qp.now()

@@ -380,12 +380,13 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(meter['spec']['sub'], 'pool')
         self.assertNotIn('undefined', meter['tooltip'])
 
-    def test_quota_measured_age_boundary_is_hollow_after_eight_hours(self):
+    def test_quota_reset_boundary_and_future_measurement_are_hollow(self):
         data = self.sample()
         pool = data['running']['quota'][0]['pools'][0]
-        for measured, stale in (('2026-11-06T02:00:00Z', False),
-                                ('2026-11-06T01:59:59Z', True), ('2026-11-06T10:00:01Z', True)):
-            data['running']['quota'] = [dict(agent='claude', pools=[dict(pool, measured=measured, unverified=False)])]
+        for measured, reset, stale in (('2026-11-06T01:00:00Z', '2026-11-06T11:00:00Z', False),
+                                      ('2026-11-06T08:00:00Z', '2026-11-06T10:00:00Z', True),
+                                      ('2026-11-06T10:00:01Z', '2026-11-06T11:00:00Z', True)):
+            data['running']['quota'] = [dict(agent='claude', pools=[dict(pool, measured=measured, resets=reset, unverified=False)])]
             out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
             self.assertEqual('unverified' in self.marks(out, 'quota-bricks')[0]['cls'], stale)
             self.assertEqual(sum('lit' in m['cls'].split() for m in self.marks(out, 'quota-brick')), 0 if stale else 7)
@@ -413,7 +414,7 @@ class DashboardScriptTest(unittest.TestCase):
         data = self.sample()
         fractions = (0, .001, .049, .05, .08, .099, .1, .15, 1)
         data['running']['quota'] = [dict(agent=str(fraction), pools=[dict(name='week-all', remaining_fraction=fraction,
-            resets=None, measured='2026-11-06T10:00:00Z', unverified=False)]) for fraction in fractions]
+            resets='2026-11-07T10:00:00Z', measured='2026-11-06T10:00:00Z', unverified=False)]) for fraction in fractions]
         out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
         bricks = self.marks(out, 'quota-brick')
         for i, (fraction, count) in enumerate(zip(fractions, (0, 1, 1, 1, 1, 1, 1, 2, 10))):
