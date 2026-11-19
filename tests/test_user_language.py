@@ -1,4 +1,6 @@
 """Keep user questions in the user's language, including reference-only asks."""
+# select-tests: reads skills/coding-router/
+# select-tests: reads skills/review-gate/
 
 from pathlib import Path
 import unittest

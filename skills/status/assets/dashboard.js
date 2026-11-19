@@ -161,7 +161,7 @@
       "Lanes show elapsed time against budget and cap.",
       "Ticks mark half budget and budget; red means over budget.",
       "Slots count open dispatches, not identified sessions.",
-      "Quota bricks show cached remaining capacity; ? is unverified.",
+      "Quota bricks show cached remaining capacity; ? is unverified; amber: under your weekly floor.",
       "Processes are machine-wide, current user only; liveness is advisory" +
         (snapshot.reason || !snapshot.time ? "; " + (snapshot.reason || "snapshot unavailable") : ".")
     ]};
@@ -313,19 +313,24 @@
         var fraction = q ? Math.max(0, Math.min(1, Number(q.remaining_fraction) || 0)) : 0;
         var measured = q ? Date.parse(q.measured) : NaN;
         var stale = !q || q.unverified || !Number.isFinite(measured) || Date.now() < measured || (Date.now() - measured) / 1000 > 28800;
-        var meter = h("div", "quota-bricks" + (stale ? " unverified" : "") + (!q ? " unread" : ""));
+        var floor = q && !stale && Number.isInteger(q.floor) && q.floor >= 10 && q.floor <= 95 ? q.floor : null;
+        var resets = q ? Date.parse(q.resets) : NaN;
+        var out = floor !== null && q.below_floor === true && Number.isFinite(resets) && Date.now() < resets;  /* routing stops counting it out at the reset */
+        var meter = h("div", "quota-bricks" + (stale ? " unverified" : "") + (!q ? " unread" : "") + (out ? " below-floor" : ""));
         var lit = fraction > 0 ? Math.max(1, Math.round(fraction * 10)) : 0;
-        for (var i = 0; i < 10; i++) meter.appendChild(brick(stale || i >= lit ? "todo" : fraction <= .1 ? "low" : "done", 14, 7,
+        for (var i = 0; i < 10; i++) meter.appendChild(brick(stale || i >= lit ? "todo" : fraction <= .1 || out ? "low" : "done", 14, 7,
           "quota-brick" + (!stale && i < lit ? " lit" : "")));
         if (stale) meter.appendChild(t("span", "quota-unknown", "?"));
         meter.setAttribute("role", "img"); meter.setAttribute("tabindex", "0");
-        tipOn(meter, q ? {title: family.agent + " quota", sub: (q.name || "pool") + (stale ? " · unverified" : ""),
-          rows: [["remaining", Math.round(fraction * 100) + "%"], ["resets", q.resets ? whenRelative(q.resets) : "unknown"], ["measured", when(q.measured)]],
-          bar: {value: fraction, max: 1, marks: [.1]}} : {title: family.agent + " quota", sub: "not read",
+        tipOn(meter, q ? {title: family.agent + " quota", sub: (q.name || "pool") + (stale ? " · unverified" : "") + (out ? " · below your weekly floor" : ""),
+          rows: [["remaining", Math.round(fraction * 100) + "%"]].concat(floor !== null ? [["weekly floor", floor + "%"]] : [],
+            [["resets", q.resets ? whenRelative(q.resets) : "unknown"], ["measured", when(q.measured)]]),
+          items: out ? ["routing counts this install out of quota until the reset"] : undefined,
+          bar: {value: fraction, max: 1, marks: floor !== null ? [.1, floor / 100] : [.1]}} : {title: family.agent + " quota", sub: "not read",
           items: ["quota probe off or no reading yet; turn on in /setup"]});
         var label = q ? quotaPoolMark(q.name || "pool") : t("span", "quota-pool-name", "—");
         group.appendChild(h("div", "quota-pool", [label, meter]));
-        if (q) quotaRows.push([family.agent, q.name, pct(fraction), q.resets ? whenRelative(q.resets) : "unknown", when(q.measured), stale ? "unverified" : "verified"]);
+        if (q) quotaRows.push([family.agent, q.name, pct(fraction), q.resets ? whenRelative(q.resets) : "unknown", when(q.measured), stale ? "unverified" : out ? "below weekly floor " + floor + "%" : "verified"]);
       });
       capacity.appendChild(h("div", "quota-block capacity-block", [t("div", "capacity-caption", family.agent + " quota"), group]));
     });

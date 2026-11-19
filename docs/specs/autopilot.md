@@ -6,6 +6,8 @@
 
 > Owner decisions of 16/11/2026: [afk-autonomy.md](afk-autonomy.md) changes the path, command, category and fallback rules of this document; where they disagree, it wins once its code ships.
 
+> 0.3.3 (owner decisions, 19/11/2026): [afk-one-mode.md](afk-one-mode.md) removes `strict`, the Merge answer and the work-tree, worktree and merge rules described here; where they disagree, it wins.
+
 Status: accepted; owner decisions recorded on 2026-11-06 and 2026-11-09; release 0.2.1 takes the first slice named under the 2026-11-09 decisions, the rest stays design only. Nothing was built in 0.2.0. Implementation and unresolved host decisions still need owner approval; open questions are listed under "Open".
 
 Idea: owner, 2026-11-06. An agent that, only when the user asks, coordinates the repository's work while the
@@ -221,7 +223,9 @@ a tier; unknown commands and paths are Tier 3.
     HEAD is a full SHA that a `log --kind merge --pr <n> --head <sha>` entry of the current lease recorded; that entry is
     refused unless an allowed `gh pr merge <n> --match-head-commit <sha>` check of the same lease pinned it, and both name the
     repository the merge check verified, so the removal counts only in that repository (from 15/11/2026; the pin is written
-    before the action is reserved, and a full log answers `log-unwritable`) (never forced, the
+    before the action is reserved, and a full log answers `log-unwritable`; from 0.3.3 the worktree rule is gone, the
+    pin and the merge entry keep their repository, a number and head pinned in two repositories is refused, and a log
+    that cannot be written leaves the check's answer as it is but records no pin, so the merge entry is refused) (never forced, the
     main checkout, the current checkout or a worktree that is or holds this install), and `git branch -d [--] <branch>`
     (never `-D`, the current or a default branch). A git verb that changes a work tree, index or HEAD (`merge`, `commit`, `add`, `rm`, `pull`,
     `checkout` and the like) is `protected` when it would run in this install's own checkout, by its working folder or

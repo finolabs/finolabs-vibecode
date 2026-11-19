@@ -31,6 +31,8 @@ Status: implemented; release prepared, not yet tagged.
 | 373 | afk has one mode (owner decisions 1 to 4, 19/11/2026; `docs/specs/afk-one-mode.md`): `strict`, its lists, categories, Merge answer and the per-repository limits are removed; `Lease hours` stays; old `Mode: strict` and limit lines start normally with one notice line each; the stop hook's limit escape is the lease end only; the fallback under a lease needs only the lease, the author's family and the fallback line. Pull request 370 (decision 5, the strict syntax allowlist) closed unmerged. |
 | 375 | afk goals (owner decisions 19/11/2026; `docs/specs/afk-goals.md`): `afk.py goal` keeps a private queue per repository, `log --item` closes items, `idle` is refused while one is open, the stop hook ends a turn only on a current `idle` record for the hook folder's repository, plain `stop` is refused for `stop --all`, `effective` prints `Project settings`, the permission hook allows `goal`, the away line asks a joining session to run `goal`; `/afk start [hours]` wakes coordinators and runs the merge-blocker preflight; the eleventh and twelfth scoped exceptions and three `PRIVACY.md` sections. |
 | 377 | UI review marker, opt-in per repository (`ui-review-gate` decision 4, owner decision 19/11/2026): a base whose `## Agent skills` section names `ui-review-gate` makes the router marker carry `ui=yes` or `ui=no`, and `merge_check.py` requires a `kind=ui` review approving the head for `ui=yes`; `/setup` offers the UI line. |
+| 378 | `status`, `review-gate` and `coding-router` disclose branch-only detail into their `references/` folders, so each `SKILL.md` stays under 10,000 bytes; no rule changes. |
+| 379 | Backlog LOW and docs items (`claude/backlog-lows`): the dashboard shows a weekly pool under its install's recorded weekly floor amber, as routing counts it out (`refresh.py` `floor` and `below_floor`, `PRIVACY.md`, the dashboard spec); `merge-gate.md` and the autopilot spec name the repository scoping of merge pins and what an unwritable afk log does, with a test; `shape` in the skills architecture and the main checkout in the delegation sequence (PNGs and README alt text); the `setup` beginner line names the commands that bring skipped steps back. |
 | this | This release: the drift review below, the Codex hook trust note, the README release section, changelog and manifests. |
 
 The changelog's 0.3.3 section holds the user-facing wording; `update` carries the 0.3.3 upgrade notes. Pull request 358 (the tokenizer implementation) closed unmerged and is not part of 0.3.3.
@@ -111,3 +113,13 @@ Checked against `main` at `b03334c` (after pull request 365), surface by surface
 - The `ui-review-gate` snippets ran only against a fake DOM in node; a run in a live browser remains unverified, and every inline target exception is marked uncertain for a check by eye.
 - A real upgrade from 0.3.2 on a user's machine remains unverified.
 - The `finolabs/plugins` catalog pins move only with the owner's go after the tag.
+- Backlog LOW and docs items checked on `claude/backlog-lows` and closed without a change there:
+  - K1 (`readme_check.py`, an unanchored link outside the repository): already fails as `outside the repository` on main (commit f77bd256, with a test).
+  - PR 302, an end-to-end worktree remove across targets: no code left to test; afk one mode removed the worktree rule. The two-repository refusal already had a test.
+  - P2 (`token_hex(2)` dispatch ids): kept; the id format is read by checks, record and afk, and `new_id` picks an unused id under the finish lock (64 tries).
+  - P5 (receipts not required): settled by the owner on 15/11/2026; `--accept-unverified` needs a reason and prints a warning each time.
+  - A9b (Codex `UserPromptSubmit` nudge coverage): covered by the Codex class of `tests/test_compact_nudge.py`.
+  - L2 (self-attested merge head): fixed earlier; `log --kind merge --head` needs the pin of an allowed merge check of the same lease and repository.
+  - Docs 17, J2 ("silent steps") and K1 (the host-judge branch of `matrix.md`'s migrate paragraph): already reworded on main.
+  - Docs 18, L2 informational (`lease_guard` answers `limit` for a future start before a spent check): moot; one mode has no spent or hourly limit.
+  - Docs 15: `request-to-merge` already showed `shape` and the main checkout.

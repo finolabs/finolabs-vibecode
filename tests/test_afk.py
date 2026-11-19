@@ -646,6 +646,21 @@ class AwayFlowTest(AfkBase):
         status, output = self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)
         self.assertEqual(status, 3, output)
 
+    def test_a_merge_check_with_an_unwritable_log_pins_nothing(self):
+        # merge-gate.md: the check still answers, but a log that cannot be written records no pin, so the merge
+        # entry for that head is refused and the cleanup parks.
+        self.start()
+        self.cwd, _ = self.git_repo('unwritable')
+        head = 'c' * 40
+        log = self.state / 'log.jsonl'
+        log.write_text('[]\n')  # an invalid line makes every append refuse
+        log.chmod(0o600)
+        result = self.invoke('check', '--argv-json', json.dumps(
+            ['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', head, '--repo', 'github.com/example/demo']))
+        self.assertEqual((result[0], json.loads(result[1])['tier']), (0, 1), result)
+        self.assertNotIn('merge-pin', log.read_text())
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)
+
 
 def load_store():
     spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')

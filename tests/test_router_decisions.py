@@ -1,3 +1,4 @@
+# select-tests: reads skills/coding-router/
 import pathlib
 import re
 import unittest
