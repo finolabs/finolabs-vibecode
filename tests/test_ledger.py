@@ -20,13 +20,15 @@ START = ["start", "--project", "demo", "--task", "add parser", "--kind", "implem
          "--grade", "medium", "--agent", "codex", "--model", "m1", "--budget", "40"]
 
 
+# FNL_WORKTREE_CLEAN=manual keeps start and finish from spawning a detached cleaner that writes into the
+# temporary state folder while tearDown removes it (the race test_ledger_worktree_clean.py also avoids).
 class LedgerTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.home = account(self, Path(self.dir.name) / "home")
         self.path = self.home / ".finolabs/vibecode/ledger.jsonl"
         self.path.parent.mkdir(parents=True)
-        self.env = {"HOME": str(self.home), "ORCHESTRATION_LEDGER": str(self.path)}
+        self.env = {"HOME": str(self.home), "ORCHESTRATION_LEDGER": str(self.path), "FNL_WORKTREE_CLEAN": "manual"}
 
     def tearDown(self):
         self.dir.cleanup()
@@ -704,7 +706,7 @@ class LedgerLocationTest(unittest.TestCase):
         self.home.mkdir()
         account(self, self.home)
         env = {k: v for k, v in os.environ.items() if k != "ORCHESTRATION_LEDGER"}
-        self.env = {**env, "HOME": str(self.home), "XDG_STATE_HOME": str(self.xdg)}
+        self.env = {**env, "HOME": str(self.home), "XDG_STATE_HOME": str(self.xdg), "FNL_WORKTREE_CLEAN": "manual"}
 
     def start(self):
         return subprocess.run([sys.executable, "-I", str(LEDGER), *START], capture_output=True, text=True, env=self.env, check=True)
@@ -1311,7 +1313,7 @@ class LedgerReviewFixesTest(unittest.TestCase):
         self.home = account(self, self.base / "home")
         self.path = self.home / ".finolabs/vibecode/ledger.jsonl"
         self.path.parent.mkdir(parents=True)
-        self.env = {"HOME": str(self.home), "PATH": os.environ.get("PATH", "/usr/bin:/bin")}
+        self.env = {"HOME": str(self.home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "FNL_WORKTREE_CLEAN": "manual"}
         spec = importlib.util.spec_from_file_location("review_fixes_ledger", LEDGER)
         self.ledger = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.ledger)

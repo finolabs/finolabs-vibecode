@@ -43,6 +43,7 @@ import parallel_slots as ps  # noqa: E402
 SKILLS = HERE.parent.parent
 PAGE = HERE.parent / "assets/dashboard.html"
 LEDGER = SKILLS / "delegate/scripts/ledger.py"
+QUOTA_PROBE = SKILLS / "delegate/scripts/quota_probe.py"
 WEEKS = 12
 REVIEWS_SHOWN = 12
 NO_CONSENT = "consent not given (run /setup)"
@@ -233,8 +234,26 @@ def live_sessions(events, generated):
     return dict(window_minutes=15, **{family: min(99, len(active[family])) for family in families})
 
 
+def weekly_floors():
+    """{"<family>/<label>": percent} the user recorded under `## Quota probe` `Weekly floor`, read by the delegate
+    skill's own parser (so an invalid section or a probe turned off gives none); {} when delegate is missing."""
+    try:
+        if not QUOTA_PROBE.exists():
+            return {}
+        spec = importlib.util.spec_from_file_location("fnl_quota_probe", QUOTA_PROBE)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        floors = module.weekly_floors()
+        return {k: v for k, v in floors.items() if isinstance(k, str) and type(v) is int and 10 <= v <= 95}
+    except Exception:
+        return {}
+
+
 def quota_meters():
-    """Project bounded pool metadata, preserving all three family placeholders."""
+    """Project bounded pool metadata, preserving all three family placeholders.
+
+    A weekly pool of an install with a recorded weekly floor carries `floor`, and `below_floor` when its remaining
+    whole percent is under it and its reset lies ahead, as review_route.py counts that pool out of quota."""
     try:
         cache = json.loads(fm.dr.read_data('state/quota/quota.json', 262144))
     except (OSError, ValueError):
@@ -243,12 +262,14 @@ def quota_meters():
         cache = {}
     meters = []
     current = fm.now()
+    floors = weekly_floors()
     for family in ('claude', 'codex', 'agy'):
         entries = cache.get(family, {})
         pools = []
-        for entry in list(entries.values())[:4] if isinstance(entries, dict) else []:
+        for label, entry in list(entries.items())[:4] if isinstance(entries, dict) else []:
             if not isinstance(entry, dict):
                 continue
+            floor = floors.get(f'{family}/{label}')
             measured = pp.timestamp(entry.get('measured'))
             groups = entry.get('groups')
             if measured is None or not isinstance(groups, list):
@@ -268,9 +289,16 @@ def quota_meters():
                 # The closed output shape carries the window in the pool display name.
                 if window in ('5h', 'weekly') and not (name.startswith('week') or name in ('session', 'five-hour')):
                     name += ' / ' + window
+                # review_route.py reads only `week-all` of a Claude install.
+                weekly = floor if window == 'weekly' and (family != 'claude' or name == 'week-all') else None
+                stale = not 0 <= (current - measured).total_seconds() <= 28800
                 pools.append(dict(name=name, remaining_fraction=value,
                     resets=reset.isoformat() if reset else None, measured=measured.isoformat(),
-                    unverified=not 0 <= (current - measured).total_seconds() <= 28800))
+                    unverified=stale, floor=weekly,
+                    # The whole percent the status line shows, compared as review_route.py does; a stale reading
+                    # counts for nothing there, so it is never marked.
+                    below_floor=bool(weekly and not stale and int(f'{value:.0%}'[:-1]) < weekly
+                                     and reset and reset > current)))
         meters.append(dict(agent=family, pools=pools))
     return meters
 

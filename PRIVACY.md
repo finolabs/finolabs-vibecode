@@ -31,7 +31,8 @@ in the last 15 minutes, by the fixed Claude/Codex/Antigravity families, capped a
 `window_minutes: 15`. Session ids are transient deduplication keys and are not stored in this block.
 These are recent activity counts, not process counts or an inventory of open sessions; an idle session
 falls out of the window. `running.quota` holds up to eight cached pools per family, each with a pool
-`name` (including a recognised window), `remaining_fraction`, `resets`, `measured` and `unverified`.
+`name` (including a recognised window), `remaining_fraction`, `resets`, `measured` and `unverified`, and from
+0.3.3 `floor` (the weekly floor you recorded for that install, a whole percent) and `below_floor` (true or false).
 Pool names are at most 80 characters before a fixed window suffix; controls are rejected. The reset
 and measurement times are validated timestamps or a missing reset. Quota data older than eight hours
 is unverified. Empty families retain placeholders. These fields stay in overwritten `data.js`, never

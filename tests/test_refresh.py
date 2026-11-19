@@ -667,7 +667,9 @@ class RefreshTest(unittest.TestCase):
             for row in rows:
                 self.assertEqual(set(row), {'agent', 'pools'})
                 for pool in row['pools']:
-                    self.assertEqual(set(pool), {'name', 'remaining_fraction', 'resets', 'measured', 'unverified'})
+                    self.assertEqual(set(pool), {'name', 'remaining_fraction', 'resets', 'measured', 'unverified',
+                                                 'floor', 'below_floor'})
+                    self.assertEqual((pool['floor'], pool['below_floor']), (None, False))
             self.assertNotIn('PRIVATE', json.dumps(rows))
             self.assertEqual(rows[0]['pools'][0]['resets'], (at + timedelta(days=1)).isoformat())
             cache['claude'] = {str(n): entry(['week-all']) for n in range(5)}
@@ -682,6 +684,43 @@ class RefreshTest(unittest.TestCase):
             self.assertEqual([r['pools'] for r in module.quota_meters()], [[], [], []])
             path.unlink()
             self.assertEqual([r['pools'] for r in module.quota_meters()], [[], [], []])
+
+    def test_quota_marks_a_weekly_pool_under_its_recorded_floor_like_review_route(self):
+        module = self.running_module()
+        at = self.at
+        def entry(groups, hours=0):
+            return dict(measured=(at - timedelta(hours=hours)).isoformat(), groups=[
+                dict(name=name, window=window, remaining_fraction=fraction,
+                     reset_time=(at + timedelta(days=days)).isoformat()) for name, window, fraction, days in groups])
+        cache = dict(
+            claude=dict(work=entry([('week-all', 'weekly', .30, 1), ('week-opus', 'weekly', .05, 1),
+                                    ('session', '5h', .05, 1)]),
+                        home=entry([('week-all', 'weekly', .30, 1)]),
+                        old=entry([('week-all', 'weekly', .30, 1)], hours=9)),
+            codex=dict(default=entry([('codex', 'weekly', .395, 1), ('codex', '5h', .2, 1)])),
+            agy=dict(default=entry([('gemini', 'weekly', .1, -1)])))
+        folder = self.dir / 'quota'
+        folder.mkdir(parents=True, mode=0o700)
+        (folder / 'quota.json').write_text(json.dumps(cache))
+        floors = {'claude/work': 40, 'claude/old': 40, 'codex/default': 40, 'agy/default': 40}
+        with mock.patch.dict(os.environ, self.env), mock.patch.object(module.fm, 'now', return_value=at), \
+                mock.patch.object(module, 'weekly_floors', return_value=floors):
+            rows = {r['agent']: r['pools'] for r in module.quota_meters()}
+        marks = {agent: [(q['name'], q['floor'], q['below_floor']) for q in pools] for agent, pools in rows.items()}
+        self.assertEqual(marks['claude'], [
+            ('week-all', 40, True),       # under the floor of this install
+            ('week-opus', None, False),   # review_route reads only week-all of a Claude install
+            ('session', None, False),     # not a weekly pool
+            ('week-all', None, False),    # no floor recorded for this install
+            ('week-all', 40, False)])     # stale reading: counts for nothing
+        # 39.5% shows as 40% in the status line review_route reads, so it is not under a 40% floor.
+        self.assertEqual(marks['codex'], [('codex / weekly', 40, False), ('codex / 5h', None, False)])
+        self.assertEqual(marks['agy'], [('gemini / weekly', 40, False)])  # its reset has passed
+
+    def test_weekly_floors_are_empty_without_the_delegate_parser(self):
+        module = self.running_module()
+        with mock.patch.object(module, 'QUOTA_PROBE', self.dir / 'missing.py'):
+            self.assertEqual(module.weekly_floors(), {})
 
     def snapshot_on(self):
         (self.ledger.parent / "host.md").write_text("## Agent snapshot\n\n- Snapshot: on\n")
