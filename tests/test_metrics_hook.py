@@ -194,6 +194,13 @@ class HookTest(unittest.TestCase):
         got = [(e["event"], e.get("pr"), e.get("verdict")) for e in self.events()]
         self.assertEqual(got, [("router", None, None), ("review", 5, "REWORK"), ("review", 6, "REWORK"), ("review", 7, "APPROVE")])
 
+    def test_a_ui_review_keeps_the_order_of_later_stdin_comments_and_records_nothing(self):
+        self.consent()
+        ui = MARKER.replace("kind=code", "kind=ui")
+        self.post("Bash", {"command": "gh pr comment 8 --body-file - <<'A'\n" + ui + "\nA\ngh pr comment 9 --body-file - <<'B'\n" + MARKER + "\nB"})
+        got = [(e["event"], e.get("pr"), e.get("kind")) for e in self.events() if e["event"] == "review"]
+        self.assertEqual(got, [("review", 9, "code")])
+
     def agy(self, event, call=None):
         """An Antigravity payload in the shape a real `agy` run sent: camelCase, no event name, a toolCall for tool hooks."""
         payload = {"conversationId": "31357bed-2c92-4bc3-ad3d-23c9545c7b3e", "workspacePaths": [str(self.repo)], "modelName": "m",

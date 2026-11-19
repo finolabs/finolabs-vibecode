@@ -145,7 +145,8 @@ class SizeLimitTests(unittest.TestCase):
             self.assertIn(REFS / name, loaded)
         total = sum(len(p.read_bytes()) for p in loaded)
         # 15050: the beginner path and Quick also ask the compaction threshold (owner decision, 17/11/2026).
-        self.assertLessEqual(total, 15050, {str(p.relative_to(SKILL)): p.stat().st_size for p in loaded})
+        # +50 bytes in 0.3.3 for the UI review option of the Agent skills block.
+        self.assertLessEqual(total, 15100, {str(p.relative_to(SKILL)): p.stat().st_size for p in loaded})
 
 
     def test_beginner_threshold_step_budget(self):

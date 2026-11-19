@@ -483,6 +483,11 @@
       "version": "0.3.3",
       "items": [
         {
+          "id": "0.3.3/ui-review-marker",
+          "kind": "info",
+          "text": "Optional: run /setup in a repository to make UI pull requests wait for a posted ui review; the router line then says ui=yes or ui=no."
+        },
+        {
           "id": "0.3.3/coordinator-threshold",
           "kind": "setup",
           "text": "Claude Code: open a coordinator with CLAUDE_CODE_AUTO_COMPACT_WINDOW=<tokens> claude (hooks miss --autocompact); setup can remove per-model values that override your limit.",

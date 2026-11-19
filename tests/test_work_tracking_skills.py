@@ -1,4 +1,5 @@
 """Contracts for scope, consent, interviews and workflow composition in the single setup skill."""
+# select-tests: reads skills/setup/
 import unittest
 from pathlib import Path
 

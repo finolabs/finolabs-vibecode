@@ -20,7 +20,7 @@ A review gate fixes the first two: it reports with evidence, and every constrain
 | 1 | Where it lives | In vibecode, as a gate beside `review-gate` and `security-review-gate` (17/11/2026), not a separate plugin or user skill. |
 | 2 | Name | `ui-review-gate`, following `<field>-review-gate` (17/11/2026). `review-gate` keeps its name. |
 | 3 | Accessibility standard | WCAG 2.2 AA from W3C, kept in the gate's own criteria list; `design:accessibility-review` (WCAG 2.1, design-stage) is an optional companion, not the standard (17/11/2026). |
-| 4 | Enforcer in 0.3.3 | Advisory (agent judgment). The gate writes a receipt and a findings table into the pull request; `merge_check.py` is unchanged. An opt-in `kind=ui` marker that a repository turns on in setup is a later release (18/11/2026). |
+| 4 | Enforcer in 0.3.3 | Advisory (agent judgment), with an opt-in merge marker (owner decision 19/11/2026, replacing "a later release" of 18/11/2026): a repository turns it on in `setup` by naming `ui-review-gate` in its `## Agent skills` section; the router marker then carries `ui=yes` or `ui=no`, and for `ui=yes` `merge_check.py` requires a `kind=ui` review marker that approves the head, posted through `post_review.py`. Without the opt-in `merge_check.py` reads nothing of this gate. |
 | 5 | Measurements | The skill ships small JavaScript measurement snippets the agent evaluates in whatever browser the host exposes, returning JSON; nothing is downloaded and the plugin makes no network call. axe-core runs only when the repository already declares it (and its command is authorized, see Measurements). When it does not, the gate asks the user whether to add it; on a yes it adds `axe-core` as a pinned dev dependency through the repository's own package manager and lockfile, and on a no it runs the snippets only and says the axe pass was skipped (18/11/2026). |
 | 6 | Target size | Below 24 by 24 CSS px (WCAG 2.2 AA 2.5.8, with its spacing and inline exceptions) is a blocking finding; 24 to 43 px is a low finding noting 44 px as Apple's guideline and WCAG AAA (2.5.5) (18/11/2026). |
 | 7 | Default action | Report only, like `review-gate`: findings with severity, screenshots and an Issue / Before / After table. The implementer fixes and the gate runs again. A direct request ("optimise this form", "fix the contrast") fixes at once, still under the constraints (18/11/2026). |
@@ -132,6 +132,6 @@ The implementing pull request updates, per the product-docs rule of [CLAUDE.md](
 
 ## Out of scope
 
-- The `kind=ui` merge marker and its setup question (decision 4, a later release).
+- (Done in 0.3.3: the `kind=ui` merge marker and its setup question, decision 4.)
 - Visual regression baselines kept across pull requests.
 - Performance (`web-perf`) and React code review (`review-gate`).

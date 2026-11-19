@@ -10,7 +10,7 @@ Typed by the user, or loaded by the agent when the task matches.
 
 ## Tips
 
-- It runs beside the code and security reviews, never instead of them, and it is advisory: `merge_check.py` does not read it; a blocking finding goes through `review-gate` finding dispositions.
+- It runs beside the code and security reviews, never instead of them, and it is advisory unless the repository opts in: when `setup` adds `ui-review-gate` to the repository's `## Agent skills` section, a pull request marked `ui=yes` in its router line waits for a posted `kind=ui` review before `merge_check.py` passes. A blocking finding goes through `review-gate` finding dispositions.
 - A target below 24 by 24 CSS px is blocking (WCAG 2.2 AA 2.5.8, with its spacing and inline exceptions); 24 to 43 px is low, since 44 px is Apple's guideline and WCAG AAA.
 - axe-core runs only when your repository already declares it and you authorized the command; otherwise it asks whether to add it as a pinned dev dependency, and on a no it says the axe pass was skipped.
 - With no browser available to the host session the run reports BLOCKED, never PASS; it never launches a browser of its own.
