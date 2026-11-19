@@ -485,7 +485,10 @@ def independent_families(pr):
         # The families routing would pick for this author from the same inputs `review_route` uses (assigned role, else
         # the capability fallback, with cached quota readings); a same-family pick means no other family is present. Who posted a marker stays a caller duty.
         import quota_probe
-        rows = review_route.route(author, review_config.host_text(), quota_probe.status_lines())
+        # A weekly floor is a routing preference, not absence: a family between 10% and its floor can still review, so
+        # strip the floor suffix as `out_families` does, or a posted independent review would block with no way through.
+        lines = [re.sub(r"; weekly floor \d+%(?= \(|$)", "", line) for line in quota_probe.status_lines()]
+        rows = review_route.route(author, review_config.host_text(), lines)
         result = {"author": author, "code": rows[0][0], "security": rows[1][0]}
         if any(value not in review_config.FAMILIES for value in result.values()):
             raise ValueError("unknown family")
