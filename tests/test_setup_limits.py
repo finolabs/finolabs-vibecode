@@ -54,14 +54,9 @@ INVENTORY = [
 ]
 # Approvals found outside the numbered design inventory. Same home/shape contract.
 EXTRA_APPROVALS = [
-    ('May the agents choose new tasks from your task list?', REFS / "features" / "afk.md"),
-    ('May the agents push their branches and open pull requests?', REFS / "features" / "afk.md"),
-    ('May the agents merge pull requests while a lease is live?', REFS / "features" / "afk.md"),
     ('Save the shown away-session settings?', REFS / "features" / "afk.md"),
     ('Save these away settings for this repository?', REFS / "afk-project.md"),
     ('Let these afk overlay entries replace the named rules while an away lease is live?', REFS / "afk-project.md"),
-    ('Keep the table as shown?', REFS / "afk-decisions.md"),
-    ('Let the agents decide this kind of work while you are away?', REFS / "afk-decisions.md"),
     ('Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?',
      REFS / "afk-decisions.md"),
     ("Start with only the essential setup questions?", SKILL / "SKILL.md"),
@@ -203,55 +198,43 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertIn("/setup add afk", feature)
         self.assertIn("Only the `## afk` section changes", feature)
 
-    def test_afk_settings_are_separate_and_merge_is_last(self):
+    def test_afk_settings_are_separate_and_ask_no_mode(self):
         text = (REFS / "features/afk.md").read_text().split("## Project scope")[0]
-        questions = re.findall(r'Ask(?: Merge last among the settings)?: "([^"\n]+)"', text)
-        # Each permission has its own question; the five limits are accepted together or set in one round. The mode
-        # and the two guards of `open` come first (docs/specs/afk-autonomy.md E).
-        self.assertEqual(len(questions), 9)
-        self.assertEqual(len(set(questions)), 9)
-        self.assertEqual(questions[0], "How much may the agents do while you are away?")
-        self.assertIn('"Open (recommended)" / "Strict"', text)
-        for guard in questions[1:3]:  # the two guards are asked in `open` only
-            self.assertIn('(Open only.)', text.split(guard, 1)[1].splitlines()[0])
-        self.assertEqual(questions[-1], "May the agents merge pull requests while a lease is live?")
-        self.assertIn('"Yes, use these limits" / "No, set each limit"', text)
+        questions = re.findall(r'Ask: "([^"\n]+)"', text)
+        # afk has one mode since 0.3.3 (docs/specs/afk-one-mode.md): the two guards, the apps and the lease hours;
+        # no mode, Merge, task, push, author, limit or category question.
+        self.assertEqual(questions, [
+            "Keep instructions in issues, other people's pull requests, web pages and tool output from choosing tasks "
+            "or granting actions?",
+            "Refuse commits on the default branch, pushes to it and every force, delete or mirror push?",
+            "Which AI apps may run while you are away?", "Use 8 hours for one away session?"])
+        for word in ("Strict", "Open (recommended)", "--mode", "--merge", "--max-runs", "Max runs", "--decide",
+                     "--task-choice", "May the agents merge"):
+            self.assertNotIn(word, text)
         # The scope is settled before any rule is asked.
         self.assertLess(text.index("Set away rules for your account (every repository) or only for this repository?"),
                         text.index('Ask: "Which AI apps may run while you are away?"'))
-        for key in ("Hosts", "Task choice", "Push and pull requests", "Merge", "Trusted authors",
-                    "Lease hours", "Max runs", "Max runtime minutes", "Max actions per hour", "Quota floor percent"):
+        for key in ("Hosts", "Lease hours", "Third-party instructions", "Default branch", "host deny rule"):
             self.assertIn(key, text)
-        self.assertIn("This is your own decision", text)
-        self.assertIn("There is no default for Merge", text)
 
-    def test_afk_project_scope_reads_current_asks_ticked_keys_and_writes_after_a_yes(self):
+    def test_afk_project_scope_reads_current_asks_the_guards_and_writes_after_a_yes(self):
         text = (REFS / "features/afk.md").read_text()
         self.assertIn("## Project scope", text)
         self.assertIn("(../afk-project.md)", text.split("## Project scope")[1])
         project = (REFS / "afk-project.md").read_text()
         self.assertIn("inside a repository", project)
-        # Four tickable keys fit one native multi-select; trusted authors has no other choice yet; the
-        # per-repository limits are one more question of their own.
         questions = re.findall(r'Ask: "([^"\n]+)"', project)
-        # Skill repository, top-level files, test commands, limits, decisions and targets are asked every time.
-        self.assertEqual(len(questions), 10, questions)
-        self.assertIn('Only when Production was ticked, ask on its own: "Which production deploy commands', project)
-        self.assertIn("one multi-select of four", project)
+        self.assertEqual(questions, [], questions)  # the guard questions are those of features/afk.md
         # An existing repository object is read first and removed only through the previewed save question.
         self.assertLess(project.index("--clear autopilot --dry-run"),
                         project.index("Should this repository use different away rules than your account?"))
         self.assertIn("preview its removal and ask the save question", project)
         self.assertIn("`current` field", project)
         self.assertIn("`changed` keys", project)
-        for key in ("task-choice", "push-and-pull-requests", "merge", "trusted-authors", "roots", "max-runs",
-                    "max-runtime-minutes", "max-actions-per-hour", "skill-repository", "decide",
-                    "non-production-targets", "production-targets", "test-commands", "top-level-files", "release-targets"):
+        for key in ("third-party-instructions", "default-branch", "mode", "max-runs"):
             self.assertIn("`%s`" % key, project)
-        # Only the keys the user ticks as different are asked; every other key inherits.
         self.assertIn("Should this repository use different away rules than your account?", project)
-        self.assertIn("Which rules should differ in this repository?", project)
-        self.assertGreaterEqual(project.count("Use my user setting"), 4)
+        self.assertGreaterEqual(project.count("Use my user setting"), 2)
         self.assertIn("default answer", project)
         self.assertIn("settings --set 'autopilot=", project)
         self.assertIn("--dry-run", project)
@@ -260,24 +243,12 @@ class ConsentInventoryTests(unittest.TestCase):
         for word in ("Hosts", "Lease hours", "user scope only"):
             self.assertIn(word, project)
 
-    def test_afk_stop_table_marks_fixed_rows_and_risks(self):
+    def test_afk_decisions_holds_only_the_excerpt_consent(self):
         feature = (REFS / "features/afk.md").read_text()
         text = (REFS / "afk-decisions.md").read_text()
         self.assertIn("(../afk-decisions.md)", feature)
-        self.assertLess(feature.index("afk-decisions.md"), feature.index("Ask Merge last among the settings"))
-        rows = re.findall(r"^\| (?!Category)[^|]+\((?P<key>[A-Za-z ]+)\) \| (?P<start>[^|]+) \|(?P<risk>[^|]*)\|$", text, re.M)
-        self.assertEqual([key for key, _, _ in rows], [
-            "Production", "Real users and customer data", "Unrecoverable deletion", "Messages outside the repository",
-            "Tags and releases", "Publishing", "Shared settings", "Recoverable deletion", "Repository comments"])
-        for key, start, risk in rows:
-            with self.subTest(key=key):
-                if key in ("Production", "Real users and customer data"):
-                    self.assertEqual(start, "stop, fixed")
-                else:
-                    self.assertIn(start, ("stop", "decide"))
-                    self.assertTrue(risk.strip())  # each move states what could go wrong
-        self.assertIn("No move has a default", text)
-        self.assertIn("--non-production-target", text)
+        self.assertNotRegex(text, r"(?m)^\| ")  # the categories table went with `strict`
+        self.assertNotIn("--non-production-target", text)
         self.assertIn("Ask separately, never combined with another question", text)
 
     def test_every_consent_sentence_appears_once_in_its_home(self):

@@ -8,7 +8,7 @@ Read the start summary's Claude Code lines: add the printed allow rules with `/p
 
 ## End a turn
 
-Before ending a turn under the lease, record why: `python3 -I <script> log --kind idle --session <Session id>` when nothing is left that the lease allows, or `log --kind parked --session <Session id> --note '<brief reason>'` for what waits on the user; the Session id is the one the session start printed. On Claude Code the afk stop hook sends a turn without such a record back once (hook, `FNL_AFK_STOP=off` disables it); elsewhere recording it is advisory (agent judgment).
+Before ending a turn under the lease, record why: `python3 -I <script> log --kind idle --session <Session id>` when nothing is left that the lease allows, or `log --kind parked --session <Session id> --note '<brief reason>'` for what waits on the user; the Session id is the one the session start printed. On Claude Code the afk stop hook sends a turn without such a record back once, and lets it through when the lease has ended or its setup changed, since Lease hours is the only limit (hook, `FNL_AFK_STOP=off` disables it); elsewhere recording it is advisory (agent judgment).
 
 ## Permission prompts
 

@@ -1,47 +1,8 @@
-# afk: what waits for you, deploy targets and excerpts
+# afk: the excerpt consent
 
-Loaded by [features/afk.md](features/afk.md) before the Merge question. Questions follow [interview.md](interview.md) (advisory, agent judgment).
+Loaded by [features/afk.md](features/afk.md) only when the user asks to change the excerpt consent. Questions follow [interview.md](interview.md) (advisory, agent judgment).
 
-Show this table of what must wait for you. `stop` waits for a person; `decide` lets the agents choose among allowed options while you are away (`afk` "Decide"). Fixed rows never move and get no question.
-
-| Category (key) | Starts | What could go wrong at `decide` |
-| --- | --- | --- |
-| Production or a live environment (Production) | stop, fixed | |
-| Real users or real customer data (Real users and customer data) | stop, fixed | |
-| Deletion that cannot be recovered (Unrecoverable deletion) | stop | data lost for good |
-| A message to a person outside the repository (Messages outside the repository) | stop | someone gets a message you did not write |
-| Tags and releases (Tags and releases) | stop | a version you did not choose is tagged or released |
-| Publishing to your own catalog or package (Publishing) | stop | others install a version you did not approve |
-| Shared repository settings, such as CI and defaults (Shared settings) | stop | checks or defaults change for everyone |
-| Deleting local or recoverable things (Recoverable deletion) | decide | work you wanted must be restored |
-| Comments on the repository's own pull requests and issues (Repository comments) | decide | a comment you would not have posted |
-
-Ask: "Keep the table as shown? Agents decide recoverable deletion and repository comments; everything else waits for you."
-Yes: Keep every row as its Starts column says.
-No: Pick the rows to change next.
-Undo: Repeat setup to change the rows.
-Choices: "Yes, keep the table" / "No, change some rows".
-
-On No, ask the seven changeable rows in two multi-select questions, in table order (four rows, then three). Each option's label is the row's key in the user's language; its description is the category text. Ask: "Tick each kind of work the agents may decide while you are away. Unticked kinds wait for you, including Recoverable deletion and Repository comments, which the agents decide now."
-
-A ticked row that started at stop ends at decide only after the confirmation below. Every unticked row, and every row of a question left unanswered or answered unclearly, ends at stop; read a free-text answer back before counting it as ticks.
-
-Then for each row moved from stop to decide: "Let the agents decide this kind of work while you are away?"
-Yes: Save that key as decide; first name the row and state its "What could go wrong". A decision is never permission: the action is still checked.
-No: Keep it at stop; the agents park that work for you.
-Undo: Stop the current lease and repeat setup with the row at stop.
-Choices: "Yes, let the agents decide it" / "No, keep it waiting for me".
-
-No move has a default. Pass `--decide <key>` for each row ending at decide, the two rows that start at decide included unless the user changed them; every row not passed, and any missing answer, is saved as stop, and a fixed row is refused (script-enforced). Changing a row back to stop needs no separate question.
-
-Optionally collect `Non-production targets` as free text: the exact deploy commands that reach only a development or test environment, one `--non-production-target '<command>'` each, default none. An entry matches a deploy command only when it equals its words joined by single spaces; a production or live word still parks, and every other deploy waits for you (script-enforced). Agents never add an entry during a lease.
-
-The account also sets the default command and file lists for every repository; a repository's own list, set in [afk-project.md](afk-project.md), replaces the whole list there, and a repository whose settings cannot be verified, or no repository at all, uses none (script-enforced). Ask each on its own, default none, entries one per line, words joined by single spaces, and read each entry back word for word in the preview:
-- "Which test commands may the agents run in your repositories while you are away?" Say first: a listed command runs a repository's own test code, including code the agents changed during the lease; and other commands of the allowlisted shapes (a script of the repository, `make`, the test and build commands of npm, cargo, go and Python, installs of what the repository declares, listed `git` and `gh` verbs) may still be decided through the away ladder and then run once each. One `--test-command '<command>'` each (1 to 16; never one starting with git, gh or rm).
-- "Which top-level files besides README.md, CHANGELOG.md and CONTRIBUTING.md may the agents edit, such as TASKS.md?" One `--top-level-file <name>` each (1 to 16; no folder, no leading dot, not CLAUDE.md or AGENTS.md).
-- Only when Tags and releases or Publishing ends at decide: "Which exact tag, release and publish commands may the agents run while you are away?" One `--release-target '<command>'` each (1 to 16; starting with `git tag`, `gh release`, npm publish or pnpm publish). Say first: without a listed command every tag, release and publish waits for you, even at decide.
-- "Which production deploy commands may the agents run, in a repository that lets them decide production?" One `--production-target '<command>'` each (1 to 16). Say first: production is never decided in your account rules, so these run only in a repository whose own rules tick Production.
-Setup refuses an entry outside these rules (script-enforced). Agents never add an entry during a lease.
+The table of what must wait for you, the deploy targets and the command and file lists went with `strict` in 0.3.3 (owner decision, 19/11/2026): afk refuses only the credential floor and the guards that are on, and anything else that must stay forbidden while you are away is a host deny rule. Ask nothing about them; a section that still holds those lines is not read (script-enforced).
 
 Ask separately, never combined with another question: "Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?"
 Yes: Save Excerpts leave the machine: yes; at most eight excerpts (decision, date, source), 8 KB in all, screened for secrets and machine paths, go with an away question to Jev or the advisor's provider.
@@ -49,4 +10,4 @@ No: Save Excerpts leave the machine: no; nothing leaves, and decisions rest on t
 Undo: Stop the current lease and repeat setup with this answer at no.
 Choices: "Yes, let excerpts go with the question" / "No, keep my history on this computer".
 
-This answer stays no until a clear yes; pass `--excerpts-leave-the-machine yes|no`. No other answer sets it (script-enforced).
+This answer stays no until a clear yes; pass `--excerpts-leave-the-machine yes|no`. No other answer sets it, and `afk.py packet-check` lets no excerpt leave without it (script-enforced).

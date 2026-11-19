@@ -516,9 +516,9 @@
           "setup": "/setup add afk"
         },
         {
-          "id": "0.3.3/afk-merge-decide",
-          "kind": "setup",
-          "text": "A repository can let the afk decider merge under any lease, always behind MERGE OK: answer the new merge question in its afk setup.",
+          "id": "0.3.3/afk-one-mode",
+          "kind": "removed",
+          "text": "afk strict mode and the Max runs, runtime and hourly limits are gone; old lines are ignored. Use host deny rules. An old lease: /afk stop, then /afk start.",
           "setup": "/setup add afk"
         },
         {

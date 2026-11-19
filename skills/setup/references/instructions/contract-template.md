@@ -18,7 +18,7 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 - Whether repository or organization ownership grants access by itself (recommended: no).
 - How to handle conflicting instructions (recommended: expose the conflict; a newer instruction does not win by being newer).
 - Other sessions and agents: may the agent message, rename or stop sessions it did not start? (recommended: only with authority).
-- While the user is away: an `afk` lease is the user's standing yes for what its setup records (push and pull requests, merge only when its Merge answer is yes, the decided categories and lists), and every question goes through `afk` "Decide" instead of waiting. Point to `afk` in one line; keep only away preferences the lease cannot record (for example who may be told about parked work). The lease limits, hosts and lists live in `## afk` of the host config (`/setup add afk`), never here.
+- While the user is away: an `afk` lease is the user's standing yes for every action except the credential floor and the guards its setup turns on (blocking anything more is the host's own deny rules), and every question goes through `afk` "Decide" instead of waiting. Point to `afk` in one line; keep only away preferences the lease cannot record (for example who may be told about parked work). The lease hours, hosts and guards live in `## afk` of the host config (`/setup add afk`), never here.
 
 ## 3. Secrets and private data (required)
 
