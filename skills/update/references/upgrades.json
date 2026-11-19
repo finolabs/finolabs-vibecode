@@ -507,7 +507,7 @@
         {
           "id": "0.3.3/afk-strict-no-syntax",
           "kind": "info",
-          "text": "strict afk leases: git status, gh pr view and other commands no rule names now go through Decide and may be approved once; odd push, merge or PR forms park as rule-form."
+          "text": "strict afk leases: git status, gh pr view and other commands no rule names now park and are never approved; odd push, merge or PR forms park as rule-form; unknown paths may be approved once."
         },
         {
           "id": "0.3.3/afk-decider-hooks",
