@@ -88,6 +88,18 @@ def group(name, window, fraction, reset):
             "reset_time": stamp(timestamp(reset))}
 
 
+def reset_within_window(pool, measured):
+    window = timedelta(hours=5) if pool["window"] == "5h" else timedelta(days=7)
+    return timestamp(pool["reset_time"]) - measured <= window + timedelta(minutes=15)
+
+
+def bounded_resets(groups, measured):
+    measured = measured or now()
+    if not all(reset_within_window(pool, measured) for pool in groups):
+        raise ShapeError("reset beyond window")
+    return groups
+
+
 def parse_agy(data, measured=None):
     groups = data["command"]["data"]["groups"]
     if data.get("status") != "SUCCESS" or not isinstance(groups, list) or not groups:
@@ -102,7 +114,7 @@ def parse_agy(data, measured=None):
                 raise ShapeError("window")
             result.append(group(names.get(pool["name"], "other"), bucket["window"],
                                 bucket["remaining_fraction"], bucket["reset_time"]))
-    return result
+    return bounded_resets(result, measured)
 
 
 CLAUDE_LINE = re.compile(
@@ -153,7 +165,7 @@ def parse_claude(data, measured=None):
     names = [item["name"] for item in result]
     if names.count("session") != 1 or names.count("week-all") != 1 or names.count("week-model") < 1:
         raise ShapeError("missing line")
-    return result
+    return bounded_resets(result, measured)
 
 
 def parse_codex(data, measured=None):
@@ -171,7 +183,7 @@ def parse_codex(data, measured=None):
         result.append(group("codex", {300: "5h", 10080: "weekly"}.get(minutes, "unknown"),
                             1 - number(bucket["usedPercent"], 100) / 100,
                             stamp(datetime.fromtimestamp(epoch, timezone.utc))))
-    return result
+    return bounded_resets(result, measured)
 
 
 def parse(agent, raw, measured=None):
@@ -884,7 +896,8 @@ def limited_until(agent, marked, cache, current):
 def fresh(entry, current):
     """An install's reading expires at its earliest group reset, never by fixed age."""
     return (timestamp(entry["measured"]) <= current and bool(entry["groups"])
-            and all(timestamp(g["reset_time"]) > current for g in entry["groups"]))
+            and all(timestamp(g["reset_time"]) > current
+                    and reset_within_window(g, timestamp(entry["measured"])) for g in entry["groups"]))
 
 
 def no_limits(folder):

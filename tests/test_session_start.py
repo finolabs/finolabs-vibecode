@@ -521,7 +521,7 @@ class StateBlockTest(SyntheticStateTest):
 
     def test_quota_freshness_uses_install_earliest_reset(self):
         current = self.qp.now()
-        for hours, reset_hours, expected in ((2, -1, ("unverified", None)), (6, 1, ("out", 2)),
+        for hours, reset_hours, expected in ((2, -1, ("unverified", None)), (3, 1, ("out", 2)),
                                              (-1, 1, ("unverified", None))):
             entry = dict(measured=self.qp.stamp(current - self.qp.timedelta(hours=hours)), groups=[
                 self.qp.group("session", "5h", .02, self.qp.stamp(current + self.qp.timedelta(hours=reset_hours))),

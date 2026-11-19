@@ -531,6 +531,8 @@ def out_families(lines, current=None, configured=None):
         pools = [re.fullmatch(r"([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", part)
                  for part in body.split("; ")]
         depleted = (age >= 0 and bool(pools) and all(pools)
+                    and quota_probe.fresh({"measured": match[3], "groups": [
+                        {"window": p[2], "reset_time": p[4]} for p in pools]}, current)
                     and all(int(p[3]) < FLOOR and quota_probe.timestamp(p[4]) > current for p in pools))
         installs.setdefault(match[1], {})[match[2]] = installs.get(match[1], {}).get(match[2], True) and depleted
     for agent, labels in installs.items():

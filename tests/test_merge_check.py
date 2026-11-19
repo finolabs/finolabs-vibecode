@@ -900,11 +900,19 @@ class SameFamilyFallbackTest(unittest.TestCase):
     def test_fallback_evidence_follows_earliest_reset(self):
         from datetime import datetime, timedelta, timezone
         current = datetime.now(timezone.utc)
-        for hours, reset, expected in ((2, -1, set()), (6, 1, {"codex"}), (9, 1, {"codex"}), (-1, 1, set())):
+        for hours, reset, expected in ((2, -1, set()), (3, 1, {"codex"}), (4, 1, {"codex"}), (-1, 1, set())):
             line = (f"Quota codex/default: measured {(current - timedelta(hours=hours)).isoformat()}; "
                     f"session 5h: 2% remaining, resets {(current + timedelta(hours=reset)).isoformat()}; "
                     f"week weekly: 2% remaining, resets {(current + timedelta(days=1)).isoformat()}")
             self.assertEqual(mc.out_families([line], current, {"codex": {"default"}}), expected)
+
+    def test_far_future_resets_are_not_out_evidence(self):
+        from datetime import datetime, timedelta, timezone
+        current = datetime.now(timezone.utc)
+        line = (f"Quota codex/default: measured {(current - timedelta(days=3)).isoformat()}; "
+                f"codex 5h: 2% remaining, resets {(current + timedelta(days=30)).isoformat()}; "
+                f"codex weekly: 2% remaining, resets {(current + timedelta(days=300)).isoformat()}")
+        self.assertEqual(mc.out_families([line], current, {"codex": {"default"}}), set())
 
     def test_only_positive_evidence_counts_as_out(self):
         iso = self.iso

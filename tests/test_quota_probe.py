@@ -64,16 +64,62 @@ class ParsersTest(unittest.TestCase):
         data = self.fixture("claude")
         data["result"] = "\n".join((
             "You are currently using your subscription to power your Claude Code usage", "",
-            "Current session: 37% used \u00b7 resets Nov 5 at 1:59pm (Asia/Saigon)",
-            "Current week (all models): 5% used \u00b7 resets Nov 15 at 5:59pm (Asia/Saigon)",
-            "Current week (Fable): 0% used \u00b7 resets Nov 15 at 6pm (Asia/Saigon)"))
+            "Current session: 37% used \u00b7 resets Nov 5 at 5:59pm (Asia/Saigon)",
+            "Current week (all models): 5% used \u00b7 resets Nov 9 at 5:59pm (Asia/Saigon)",
+            "Current week (Fable): 0% used \u00b7 resets Nov 9 at 6pm (Asia/Saigon)"))
         groups = qp.parse("claude", json.dumps(data), MEASURED)
         self.assertEqual([item["name"] for item in groups], ["session", "week-all", "week-model"])
-        self.assertEqual(groups[2]["reset_time"], "2026-11-15T11:00:00Z")
+        self.assertEqual(groups[2]["reset_time"], "2026-11-09T11:00:00Z")
         self.assertAlmostEqual(groups[2]["remaining_fraction"], 1.0)
         data["result"] = data["result"].replace("at 6pm", "at 6:5pm")
         with self.assertRaises(qp.ShapeError):
             qp.parse("claude", json.dumps(data), MEASURED)
+
+    def test_provider_resets_are_bounded_by_window_with_slack(self):
+        for window, minutes, hours in (("5h", 300, 5), ("weekly", 10080, 168), ("unknown", 90, 168)):
+            for extra, accepted in ((15, True), (16, False)):
+                reset = MEASURED + qp.timedelta(hours=hours, minutes=extra)
+                codex = self.fixture("codex")
+                codex["result"]["rateLimits"]["primary"].update(
+                    windowDurationMins=minutes, resetsAt=reset.timestamp())
+                payloads = [(qp.parse_codex, codex)]
+                if window != "unknown":
+                    agy = {"status": "SUCCESS", "command": {"data": {"groups": [{
+                        "name": "Gemini Models", "buckets": [{"window": window,
+                        "remaining_fraction": .02, "reset_time": qp.stamp(reset)}]}]}}}
+                    payloads.append((qp.parse_agy, agy))
+                for parser, payload in payloads:
+                    with self.subTest(parser=parser.__name__, window=window, extra=extra):
+                        if accepted:
+                            self.assertTrue(parser(payload, MEASURED))
+                        else:
+                            with self.assertRaises(qp.ShapeError):
+                                parser(payload, MEASURED)
+        codex["result"]["rateLimits"]["primary"]["resetsAt"] = 253402300799
+        with self.assertRaises(qp.ShapeError):
+            qp.parse_codex(codex, MEASURED)
+
+    def test_claude_rejects_resets_beyond_window(self):
+        self.require_claude_zone()
+        for old, new in (("Nov 5 at 5:49pm", "Nov 6 at 5:49pm"),
+                         ("Nov 9 at 3:59pm", "Nov 15 at 3:59pm")):
+            data = self.fixture("claude")
+            data["result"] = data["result"].replace(old, new)
+            with self.subTest(reset=new), self.assertRaises(qp.ShapeError):
+                qp.parse_claude(data, MEASURED)
+
+    def test_fresh_rejects_far_future_and_window_overflow(self):
+        current = MEASURED
+        entry = dict(measured=qp.stamp(current - qp.timedelta(days=3)), groups=[
+            qp.group("codex", "5h", .02, qp.stamp(current + qp.timedelta(days=30))),
+            qp.group("codex", "weekly", .02, qp.stamp(current + qp.timedelta(days=300)))])
+        self.assertFalse(qp.fresh(entry, current))
+        for window, hours in (("5h", 5), ("weekly", 168), ("unknown", 168)):
+            for minutes, expected in ((15, True), (16, False)):
+                entry = dict(measured=qp.stamp(current), groups=[qp.group(
+                    "codex", window, .02, qp.stamp(current + qp.timedelta(hours=hours, minutes=minutes)))])
+                with self.subTest(window=window, minutes=minutes):
+                    self.assertEqual(qp.fresh(entry, current), expected)
 
     def test_strict_shapes_and_prompt(self):
         bad = self.fixture("claude")
@@ -119,8 +165,10 @@ class ParsersTest(unittest.TestCase):
 
     def test_zone_and_year_rollover(self):
         self.require_claude_zone()
-        groups = qp.parse_claude(self.fixture("claude"), qp.timestamp("2026-12-31T00:00:00Z"))
-        self.assertTrue(groups[0]["reset_time"].startswith("2027-11-05"))
+        data = self.fixture("claude")
+        data["result"] = data["result"].replace("Nov 5 at 5:49pm", "Jan 1 at 1am").replace("Nov 9", "Jan 4").replace("Asia/Saigon", "UTC")
+        groups = qp.parse_claude(data, qp.timestamp("2026-12-31T23:00:00Z"))
+        self.assertTrue(groups[0]["reset_time"].startswith("2027-01-01"))
 
     def test_codex_windows_and_discarded_account_data(self):
         data = self.fixture("codex")
@@ -1193,7 +1241,7 @@ class QuotaTest(unittest.TestCase):
 
     def test_reset_freshness_and_passed_pool_display(self):
         self.ready()
-        for hours, reset_hours, fresh in ((2, -1, False), (2, 0, False), (6, 1, True), (9, 1, True), (-1, 1, False)):
+        for hours, reset_hours, fresh in ((2, -1, False), (2, 0, False), (3, 1, True), (4, 1, True), (-1, 1, False)):
             entry = dict(measured=qp.stamp(MEASURED - qp.timedelta(hours=hours)), source="agy-usage",
                          groups=[qp.group("gemini", "5h", .02, qp.stamp(MEASURED + qp.timedelta(hours=reset_hours))),
                                  qp.group("gemini", "weekly", .02, qp.stamp(MEASURED + qp.timedelta(days=1)))])
