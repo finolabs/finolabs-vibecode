@@ -6,7 +6,8 @@ description: Route coding work by depth (MIN, NORMAL, DEEP), gates, proof and wo
 # Coding router
 
 The entry point for coding work in any repository. It sets the depth, the gates and the proof the work needs, and picks the workflow path that carries it: Spec Kit, another workflow skill pack, or none, which has a procedure of its own. The other skills in this plugin own the details it points to. Work that is not code but carries comparable risk (queries on live data, infrastructure configuration, dashboards and reports, predictions and forecasts) reads [references/non-code-work.md](references/non-code-work.md) beside this skill.
-**Advisory (agent judgment):** When the coordinator starts work on a task in a session the user started by hand, run `python3 -I <this skill folder>/scripts/record.py task --id <id>`; the script validates the task id. Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
+
+**Advisory (agent judgment):** When the coordinator starts work on a task in a session the user started by hand, run `python3 -I <this skill folder>/scripts/record.py task --id <id>`; the script validates the task id.
 
 ## 1. Inspect before acting
 
@@ -46,6 +47,8 @@ When the work goes into a pull request, its body carries the same depth and trig
 Done when the depth and its reason are in the receipt, the command above has run, and a pull request's body carries the marker line.
 
 ## 4. Work, then gate
+
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
 
 These hold on every path:
 - A spec or plan asks the user the decisions the user can settle and records the answers as settled decisions with the date; only what the user cannot settle yet stays open, as [references/decisions.md](references/decisions.md) says. Enforcer: agent judgment, advisory.
