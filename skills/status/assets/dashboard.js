@@ -161,7 +161,7 @@
       "Lanes show elapsed time against budget and cap.",
       "Ticks mark half budget and budget; red means over budget.",
       "Slots count open dispatches, not identified sessions.",
-      "Quota bricks show cached remaining capacity; ? is unverified; amber under your weekly floor means routing counts it out.",
+      "Quota bricks show cached remaining capacity; ? is unverified; amber: under your weekly floor.",
       "Processes are machine-wide, current user only; liveness is advisory" +
         (snapshot.reason || !snapshot.time ? "; " + (snapshot.reason || "snapshot unavailable") : ".")
     ]};
