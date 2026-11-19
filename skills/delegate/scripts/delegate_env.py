@@ -88,9 +88,10 @@ def environment(family, source=None, host_text=None, config_dir=None):
         raise ValueError('refused config directory')
     explicit = {'CLAUDE_CONFIG_DIR': config_dir} if config_dir is not None else {}
     if family == 'claude':
-        # A headless child is not a lease session: its coordinator keeps the lease, so the afk stop and permission
-        # hooks stay off in it (owner decision, 19/11/2026); otherwise each run spends an extra model turn.
-        explicit.update(FNL_AFK_STOP='off', FNL_AFK_PERMIT='off')
+        # A headless child is not a lease session: its coordinator keeps the lease and checks its work, so the afk stop
+        # and permission hooks and the proof nudge stay off in it (owner decision, 19/11/2026); a Stop hook that fires
+        # in a child spends an extra model turn and replaces the run's final report with its answer.
+        explicit.update(FNL_AFK_STOP='off', FNL_AFK_PERMIT='off', FNL_PROOF_NUDGE='off')
     return run_env.environment(source, names, explicit)
 
 

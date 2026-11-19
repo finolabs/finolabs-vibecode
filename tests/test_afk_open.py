@@ -170,7 +170,7 @@ class OpenBase(AfkBase):
         self.start(OPEN)
 
     def restart(self, text):
-        self.invoke('stop')
+        self.invoke('stop', '--all')
         self.start(text)
 
     def verdict(self, argv):
@@ -280,7 +280,8 @@ class ModeTest(AfkBase):
     def effective(self):
         status, output = self.invoke('effective')
         self.assertEqual(status, 0, output)
-        return json.loads(output)
+        self.assertEqual(output.splitlines()[1], 'Project settings: none')  # no repository afk object here
+        return json.loads(output.splitlines()[0])
 
     def test_start_shows_the_guards_first_and_effective_has_no_mode(self):
         self.setup_config(OPEN)
@@ -294,7 +295,7 @@ class ModeTest(AfkBase):
     def test_any_mode_value_is_not_read(self):
         for value in ('strict', 'open', 'closed', 'OPEN'):
             with self.subTest(value=value):
-                self.invoke('stop')
+                self.invoke('stop', '--all')
                 self.setup_config(OPEN + f'- Mode: {value}\n')
                 status, output = self.invoke('start')
                 self.assertEqual(status, 0, output)
@@ -314,7 +315,7 @@ class ModeTest(AfkBase):
 
     def test_the_lease_still_ends(self):
         self.start(OPEN)
-        self.invoke('stop')
+        self.invoke('stop', '--all')
         self.check(['git', 'status'], tier=3, code='stopped')
 
 

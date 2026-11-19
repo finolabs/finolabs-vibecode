@@ -465,5 +465,18 @@ class NamedTokenStanceTest(unittest.TestCase):
                 self.assert_flagged(text)
 
 
+
+class GluedPrefixTest(unittest.TestCase):
+    """A key prefix glued to the text before it still matches (19/11/2026: a word boundary was tried and dropped,
+    because it missed keys after an escaped newline in raw JSON or %20 in a URL; a plain word such as `ask-...`
+    may be read as a key, which fails closed)."""
+
+    def test_glued_keys_still_match(self):
+        for key in ("sk-" + "A1b2C3d4E5f6G7h8J9k0", "ghp_" + "abcdefghijklmnopqrstuvwxyzABCDEFGHIJ"):
+            for text in (key, "\\n" + key, "%20" + key, "a" + key):
+                with self.subTest(text=text[:6]):
+                    self.assertTrue(sp.PREFIX.search(text))
+
 if __name__ == '__main__':
     unittest.main()
+

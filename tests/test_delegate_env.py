@@ -142,5 +142,5 @@ class AfkHooksOffInChildrenTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {'PATH': '/usr/bin:/bin', 'FNL_AFK_STOP': 'on'}, clear=True):
             claude = delegate_env.environment('claude', host_text='')
             codex = delegate_env.environment('codex', host_text='')
-        self.assertEqual((claude['FNL_AFK_STOP'], claude['FNL_AFK_PERMIT']), ('off', 'off'))
+        self.assertEqual((claude['FNL_AFK_STOP'], claude['FNL_AFK_PERMIT'], claude['FNL_PROOF_NUDGE']), ('off', 'off', 'off'))
         self.assertNotIn('FNL_AFK_PERMIT', codex)
