@@ -97,8 +97,8 @@ class ChecksRunTest(unittest.TestCase):
     def mark(self, name, exit_code=0):
         return [sys.executable, 'mark.py', str(self.marks), name, str(exit_code)]
 
-    def store(self, *checks, receipt=False):
-        self.store_file(*checks, receipt=receipt)
+    def store(self, *checks, receipt=False, light=()):
+        self.store_file(*checks, receipt=receipt, light=light)
 
     def legacy(self, *checks, receipt=False):
         """A `## Checks` section as 0.2.4 wrote it in host.md; it is never read."""
@@ -196,12 +196,12 @@ class ChecksRunTest(unittest.TestCase):
 
     # The project file
 
-    def store_file(self, *checks, receipt=False, approve=True):
+    def store_file(self, *checks, receipt=False, approve=True, light=()):
         """Write the project file as checks_setup.py apply does: 0700 folders, a 0600 file, its approved digest and
         the exclude line that keeps it out of the working tree's status."""
         import hashlib
         reader = load('checks_list_store', SCRIPTS / 'checks_list.py')
-        raw = reader.render_project([[name, argv] for name, argv in checks], receipt)
+        raw = reader.render_project([[name, argv] for name, argv in checks], receipt, frozenset(light))
         folder = self.repo / '.finolabs/vibecode'
         folder.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(self.repo / '.finolabs', 0o700)
@@ -738,8 +738,171 @@ class ChecksRunTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertFalse(self.verification(ident).exists())
 
+    # Light checks: outside the heavy-job lock
+
+    def hold_lock(self, hr):
+        """Take the machine-wide heavy-job lock in this test's synthetic account; returns a release function."""
+        import fcntl
+        fd = hr.open_lock()
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        state = {'fd': fd}
+
+        def release():
+            if state['fd'] is not None:
+                os.close(state['fd'])
+                state['fd'] = None
+        self.addCleanup(release)
+        return release
+
+    def test_a_light_check_runs_at_once_while_the_lock_is_held_and_a_heavy_check_queues(self):
+        self.store(('unit', self.mark('unit')), ('e2e', self.mark('e2e')), light=['unit'])
+        module = self.module()
+        module.HEAVY = SCRIPTS / 'heavy_run.py'  # the real wrapper, run in this process so it sees the test account
+        hr = module.hr
+        release = self.hold_lock(hr)
+        self.assertEqual(hr.lock_state(), 'held')
+        real, waited = subprocess.run, []
+
+        def launch(argv, **kwargs):
+            if argv[:3] == [sys.executable, '-I', str(module.HEAVY)]:
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    code = hr.main(['--poll', '0.05', argv[3], '--wait-seconds', '0.5', *argv[4:]])
+                waited.append(err.getvalue())
+                return subprocess.CompletedProcess(argv, code)
+            return real(argv, **kwargs)
+
+        def attempt():
+            # Load and memory gates pass, so only the lock decides; the light path never reads them.
+            with mock.patch.object(hr, 'resource_wait', return_value=None), \
+                    mock.patch.object(hr, 'read_pressure', return_value='normal'), \
+                    mock.patch.object(hr, 'pause_active', return_value=False), \
+                    mock.patch.object(hr.signal, 'signal'), \
+                    mock.patch.object(module.subprocess, 'run', side_effect=launch):
+                return self.run_cli(module, 'run')
+
+        code, out, err = attempt()
+        self.assertEqual(code, 1, err)
+        self.assertEqual(self.marked(), ['unit'])  # the light check ran; the heavy one never started
+        self.assertIn('check unit (light, outside the heavy-job lock):', out)
+        self.assertIn('another heavy job holds the lock', waited[0])
+        self.assertIn('check e2e failed with exit code 75', out)
+        release()
+        code, out, err = attempt()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.marked(), ['unit', 'unit', 'e2e'])
+
+    def test_only_heavy_checks_go_through_heavy_run(self):
+        self.store(('unit', self.mark('unit')), ('e2e', self.mark('e2e')), ('more', self.mark('more')),
+                   light=['unit', 'more'])
+        module = self.module()
+        with mock.patch.object(module.hr, 'memory_gates_available', return_value=False):
+            code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.marked(), ['unit', 'e2e', 'more'])
+        self.assertEqual([args[:4] for args in self.launched()], [['run', '--label', 'check e2e', '--']])
+        _, shown, _ = self.run_cli(module, 'show')
+        self.assertIn('unit = ', shown)
+        self.assertIn('(light)', shown.split('unit = ')[1].splitlines()[0])
+        self.assertNotIn('(light)', shown.split('e2e = ')[1].splitlines()[0])
+
+    def test_a_light_check_waits_only_while_memory_pressure_is_critical(self):
+        self.store(('unit', self.mark('unit')), light=['unit'])
+        module = self.module()
+        module.LIGHT_POLL = 0
+        readings = iter(['critical', 'critical', 'warning'])
+        with mock.patch.object(module.hr, 'memory_gates_available', return_value=True), \
+                mock.patch.object(module.hr, 'read_pressure', side_effect=lambda: next(readings)):
+            code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.marked(), ['unit'])
+        self.assertEqual(list(readings), [])  # it polled until the reading left critical; warning does not wait
+
+    def test_a_light_check_gives_up_at_the_wait_cap_or_during_a_pause_and_runs_nothing(self):
+        self.store(('unit', self.mark('unit')), ('later', self.mark('later')), light=['unit', 'later'])
+        module = self.module()
+        module.LIGHT_POLL = 0
+        limits = dict(module.hr.DEFAULTS, wait_minutes=0)
+        with mock.patch.object(module.hr, 'memory_gates_available', return_value=True), \
+                mock.patch.object(module.hr, 'read_pressure', return_value='critical'), \
+                mock.patch.object(module.hr, 'limits', return_value=limits):
+            code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 1)
+        self.assertIn('memory pressure stayed critical', err)
+        self.assertIn('check unit failed with exit code 75', out)
+        with mock.patch.object(module.hr, 'pause_active', return_value=True):
+            code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 1)
+        self.assertIn('a pause is active', err)
+        self.assertIn('exit code 77', out)
+        self.assertEqual(self.marked(), [])
+
+    def test_a_pause_that_starts_during_the_pressure_wait_stops_the_light_check(self):
+        self.store(('unit', self.mark('unit')), light=['unit'])
+        module = self.module()
+        module.LIGHT_POLL = 0
+        readings = iter(['critical', 'normal'])
+        with mock.patch.object(module.hr, 'memory_gates_available', return_value=True), \
+                mock.patch.object(module.hr, 'read_pressure', side_effect=lambda: next(readings)), \
+                mock.patch.object(module.hr, 'pause_active', side_effect=[False, True]):
+            code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 1)
+        self.assertIn('a pause is active', err)
+        self.assertIn('exit code 77', out)
+        self.assertEqual(self.marked(), [])
+
+    def worker_check(self, parent_seconds, worker_seconds):
+        """A light check whose program starts a worker in its own process group and exits after `parent_seconds`;
+        the worker records its pid, then its mark after `worker_seconds`."""
+        (self.repo / 'spawn.py').write_text(
+            "import subprocess, sys, time\n"
+            "subprocess.Popen([sys.executable, 'worker.py', *sys.argv[1:]])\n"
+            "time.sleep(float(sys.argv[3]))\n")
+        (self.repo / 'worker.py').write_text(
+            "import os, sys, time\n"
+            "open(sys.argv[2], 'w').write(str(os.getpid()))\n"
+            "time.sleep(float(sys.argv[4]))\n"
+            "open(sys.argv[1], 'a').write('worker\\n')\n")
+        self.git('add', 'spawn.py', 'worker.py')
+        self.commit('Add worker fixture')
+        pid_file = self.marks.parent / 'worker.pid'
+        self.store(('spawn', [sys.executable, 'spawn.py', str(self.marks), str(pid_file), str(parent_seconds),
+                              str(worker_seconds)]), light=['spawn'])
+        return pid_file
+
+    def test_a_light_run_waits_for_a_worker_its_check_left_behind(self):
+        self.worker_check(0, 0.5)
+        module = self.module()
+        with mock.patch.object(module.hr, 'memory_gates_available', return_value=False):
+            code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.marked(), ['worker'])  # the run did not return before the worker finished
+
+    def test_the_maximum_run_time_stops_the_whole_light_process_group(self):
+        pid_file = self.worker_check(30, 30)
+        module = self.module()
+        module.LIGHT_GRACE = 0.2
+        limits = dict(module.hr.DEFAULTS, max_minutes=0.02)
+        with mock.patch.object(module.hr, 'memory_gates_available', return_value=False), \
+                mock.patch.object(module.hr, 'limits', return_value=limits):
+            code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 1)
+        self.assertIn('stopped after the maximum run time', err)
+        self.assertIn('exit code 124', out)
+        worker = int(pid_file.read_text())
+        import time
+        for _ in range(100):
+            try:
+                os.kill(worker, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+        else:
+            self.fail('the worker outlived the light check')
+        self.assertEqual(self.marked(), [])
+
     def test_every_launch_uses_the_allowlisted_environment(self):
-        self.store(('a', self.mark('a')))
+        self.store(('a', self.mark('a')), ('b', self.mark('b')), light=['b'])
         module = self.module()
         seen = []
         real = subprocess.run

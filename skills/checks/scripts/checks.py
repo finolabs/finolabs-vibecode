@@ -9,8 +9,12 @@ Usage, from inside the repository:
                                              summarise CI runs and minutes from files; no network, no process
 
 Each check is an argument array from the repository's approved check file (written only by setup's
-`checks_setup.py`), launched through `heavy_run.py`'s canonical form with no shell and an allowlisted environment;
-the checks' own output streams through. `--changed` keeps only the checks the change since the base touches: a
+`checks_setup.py`), run with no shell and an allowlisted environment; the checks' own output streams through. A heavy
+check (the default) is launched through `heavy_run.py`'s canonical form and queues for the machine-wide lock. A check
+the approved file marks `"heavy": false` runs directly, outside the lock and the load gate: it refuses while a pause is
+active (exit 77), waits only while macOS memory pressure reads critical (up to the heavy-job wait cap, then exit 75)
+runs in its own process group until every member is gone, and that group is stopped after the maximum job time (exit
+124). `--changed` keeps only the checks the change since the base touches: a
 `python -m unittest discover -s tests` check keeps its discovery and gets one `--pattern <file>` run per module
 `select_tests.py` names, only when the tests folder is flat (see `layout_covered`); every other check, unittest form
 and layout runs whole.
@@ -33,10 +37,12 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import checks_list as cl
+import heavy_run as hr
 import project_progress as pp
 import run_env
 import select_tests
@@ -60,6 +66,82 @@ def launch_argv(name, argv):
 def run_one(name, argv, root):
     done = subprocess.run(launch_argv(name, argv), cwd=root, env=run_env.environment(), check=False)
     return done.returncode
+
+
+LIGHT_POLL = 15.0
+LIGHT_GRACE = 10.0  # seconds between SIGTERM and SIGKILL, and after SIGKILL, as heavy_run.py waits
+
+
+def light_wait():
+    """None when a light check may start now, else (exit code, reason). It never takes the heavy-job lock or reads
+    the load: a light check refuses during a pause, checked again at every poll and right before the start, and waits
+    only while memory pressure reads critical; an unreadable reading does not wait (the heavy gate's stricter rule is
+    for heavy jobs)."""
+    if hr.pause_active():
+        return 77, 'a pause is active'
+    if not hr.memory_gates_available():
+        return None
+    deadline = time.monotonic() + hr.limits()['wait_minutes'] * 60
+    while hr.read_pressure() == 'critical':
+        if time.monotonic() >= deadline:
+            return 75, 'memory pressure stayed critical until the wait cap'
+        time.sleep(LIGHT_POLL)
+        if hr.pause_active():
+            return 77, 'a pause is active'
+    return None
+
+
+def run_light(argv, root):
+    """Run one light check in its own process group and wait until that whole group is gone, so a worker the check
+    left behind holds the run like the check itself; after `Max job minutes` the group gets SIGTERM, then SIGKILL."""
+    import signal
+    blocked = light_wait()
+    if blocked is not None:
+        print(f'checks: light check not started: {blocked[1]}', file=sys.stderr, flush=True)
+        return blocked[0]
+    max_seconds = hr.limits()['max_minutes'] * 60
+    try:
+        child = subprocess.Popen(list(argv), cwd=root, env=run_env.environment(), start_new_session=True)
+    except OSError:
+        print('checks: could not start the light check', file=sys.stderr, flush=True)
+        return 127
+
+    def forward(number, _frame):
+        try:
+            os.killpg(child.pid, number)
+        except OSError:
+            pass
+
+    previous = {number: signal.signal(number, forward) for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
+    limit = time.monotonic() + max_seconds
+    timed_out, kill_at, status = False, None, None
+    try:
+        while True:
+            if status is None:
+                status = child.poll()
+            if status is not None and not hr.group_alive(child.pid):
+                break
+            now = time.monotonic()
+            if not timed_out and now >= limit:
+                timed_out, kill_at = True, now + LIGHT_GRACE
+                forward(signal.SIGTERM, None)
+            elif timed_out and now >= kill_at:
+                forward(signal.SIGKILL, None)
+                if now >= kill_at + LIGHT_GRACE:
+                    break
+            time.sleep(0.05)
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+        if status is None:
+            try:
+                child.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+    if timed_out:
+        print('checks: light check stopped after the maximum run time', file=sys.stderr, flush=True)
+        return 124
+    return status if status >= 0 else 128 - status
 
 
 def git(root, *args):
@@ -224,7 +306,7 @@ def run(changed, base, dispatch=None):
             remove_verification(dispatch)
         except (OSError, ValueError):
             raise Refused('the earlier verification receipt could not be removed; nothing was run') from None
-    checks, reason = cl.checks_for(code, root=root)
+    checks, light, reason = cl.light_for(code, root=root)
     if reason == cl.CHANGED:
         print(f'Repository {code}: no checks (the check file {reason}); nothing was run. To use it, {cl.AGAIN}.',
               file=sys.stderr)
@@ -234,17 +316,17 @@ def run(changed, base, dispatch=None):
               file=sys.stderr)
         return 3 if reason in ('invalid', 'unreadable') else 2
     if changed:
-        return run_list(root, code, checks, changed, base)
+        return run_list(root, code, checks, changed, base, light=light)
     # One full run per repository at a time, separate from (and never inside) the heavy-job lock: taken before the
     # old receipt is removed and the first heavy_run launch, released after the new receipt is written or declined.
     lock = full_run_lock(code)
     try:
-        return run_list(root, code, checks, changed, base, dispatch)
+        return run_list(root, code, checks, changed, base, dispatch, light)
     finally:
         os.close(lock)
 
 
-def run_list(root, code, checks, changed, base, dispatch=None):
+def run_list(root, code, checks, changed, base, dispatch=None, light=frozenset()):
     digest = cl.list_digest(checks)
     mode = cl.receipt_mode(code, root=root)
     start_head, start_clean = (head(root), clean(root)) if (mode or dispatch) and not changed else (None, False)
@@ -265,8 +347,10 @@ def run_list(root, code, checks, changed, base, dispatch=None):
     for name, why in skipped:
         print(f'skipped {name}: {why}')
     for name, argv in plan:
-        print(f'check {name}: {cl.check_argv(list(argv))}', flush=True)
-        result = run_one(name, argv, root)
+        outside = name in light
+        print(f'check {name}' + (' (light, outside the heavy-job lock)' if outside else '')
+              + f': {cl.check_argv(list(argv))}', flush=True)
+        result = run_light(argv, root) if outside else run_one(name, argv, root)
         if result != 0:
             print(f'check {name} failed with exit code {result}; later checks were not run.', flush=True)
             if mode:
@@ -319,14 +403,14 @@ def run_list(root, code, checks, changed, base, dispatch=None):
 
 def show():
     root, code = repository()
-    checks, reason = cl.checks_for(code, root=root)
+    checks, light, reason = cl.light_for(code, root=root)
     if reason:
         print(f'Repository {code}: no checks ({reason}).' + (f' Nothing runs; {cl.AGAIN}.'
                                                               if reason == cl.CHANGED else ''))
         return 3 if reason in ('invalid', 'unreadable', cl.CHANGED) else 0
     print(f'Repository {code}:')
     for name, argv in checks:
-        print(f'{name} = {cl.check_argv(list(argv))}')
+        print(f'{name} = {cl.check_argv(list(argv))}' + (' (light)' if name in light else ''))
     print('local receipt: ' + ('on' if cl.receipt_mode(code, root=root) else 'off'))
     return 0
 

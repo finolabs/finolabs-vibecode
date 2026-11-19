@@ -18,7 +18,7 @@ Say plainly that this cannot be complete: a program may start a shell itself (np
 
 ## Save the list
 
-Run `checks_setup.py preview --check '<name>=<JSON array>'`, one `--check` per check in order, each safely quoted. Show it, then ask: "Save this list of checks for this repository?"
+Run `checks_setup.py preview --check '<name>=<JSON array>'`, one `--check` per check in order, each safely quoted. Named unittest modules save light (no heavy-job lock); `--heavy <name>` overrides. Show it, then ask: "Save this list of checks for this repository?"
 Yes: Save the list in this repository's .finolabs/vibecode/checks.json and record its approval in your private state folder. The checks run this repository's own code on your computer, as cloud CI does, so use them only on code you are willing to run. Nothing runs now.
 No: Leave the checks unchanged; ask later with /setup add checks.
 Undo: Run checks_setup.py remove for this repository and approve its preview.
